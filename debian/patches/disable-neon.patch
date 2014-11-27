@@ -1,0 +1,28 @@
+Description: Disable neon 
+ -no-neon no longer seems to work, so edit configure instead
+Author: Peter Michael Green <plugwash@raspbian.org>
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: http://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
+
+--- qtbase-opensource-src-5.3.0+dfsg.orig/configure
++++ qtbase-opensource-src-5.3.0+dfsg/configure
+@@ -683,7 +683,7 @@ CFG_REDUCE_RELOCATIONS=auto
+ CFG_ACCESSIBILITY=auto
+ CFG_ACCESSIBILITY_ATSPI_BRIDGE=no # will be enabled depending on dbus and accessibility being enabled
+ CFG_IWMMXT=no
+-CFG_NEON=auto
++CFG_NEON=no
+ CFG_MIPS_DSP=auto
+ CFG_MIPS_DSPR2=auto
+ CFG_CLOCK_GETTIME=auto
