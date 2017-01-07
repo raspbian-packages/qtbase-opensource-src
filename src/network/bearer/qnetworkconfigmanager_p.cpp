@@ -83,6 +83,7 @@ QNetworkConfigurationManagerPrivate::~QNetworkConfigurationManagerPrivate()
     QMutexLocker locker(&mutex);
 
     qDeleteAll(sessionEngines);
+    sessionEngines.clear();
     if (bearerThread)
         bearerThread->quit();
 }
