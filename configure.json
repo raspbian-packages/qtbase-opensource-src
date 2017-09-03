@@ -894,6 +894,14 @@
                 { "type": "define", "name": "QT_COMPILER_SUPPORTS_MIPS_DSPR2", "value": 1 }
             ]
         },
+        "neon": {
+            "label": "NEON",
+            "condition": "(arch.arm || arch.arm64) && tests.neon",
+            "output": [
+                "privateConfig",
+                { "type": "define", "name": "QT_COMPILER_SUPPORTS_NEON", "value": 1 }
+            ]
+        },
         "mremap": {
             "label": "mremap()",
             "condition": "tests.mremap",

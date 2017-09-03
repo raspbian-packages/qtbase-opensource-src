@@ -9,4 +9,3 @@ link_fbclient.diff
 gnukfreebsd_cloexec.diff
 armv4.diff
 nonlinux_utime.diff
-auto-5.9.1+dfsg-9+rpi1-9305cb3d174b9347b18735f7fbb6412e1e99c75c-1504443823
