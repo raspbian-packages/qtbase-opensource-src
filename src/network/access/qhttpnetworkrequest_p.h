@@ -50,9 +50,12 @@
 //
 // We mean it.
 //
+#include <QtNetwork/private/qtnetworkglobal_p.h>
+
 #ifndef QT_NO_HTTP
 
 #include <private/qhttpnetworkheader_p.h>
+#include <QtNetwork/qnetworkrequest.h>
 #include <qmetatype.h>
 
 QT_BEGIN_NAMESPACE
@@ -115,6 +118,9 @@ public:
     bool isSPDYAllowed() const;
     void setSPDYAllowed(bool b);
 
+    bool isHTTP2Allowed() const;
+    void setHTTP2Allowed(bool b);
+
     bool withCredentials() const;
     void setWithCredentials(bool b);
 
@@ -125,7 +131,8 @@ public:
     void setPreConnect(bool preConnect);
 
     bool isFollowRedirects() const;
-    void setFollowRedirects(bool followRedirect);
+    void setRedirectPolicy(QNetworkRequest::RedirectPolicy policy);
+    QNetworkRequest::RedirectPolicy redirectPolicy() const;
 
     int redirectCount() const;
     void setRedirectCount(int count);
@@ -142,6 +149,7 @@ private:
     friend class QHttpNetworkConnectionPrivate;
     friend class QHttpNetworkConnectionChannel;
     friend class QHttpProtocolHandler;
+    friend class QHttp2ProtocolHandler;
     friend class QSpdyProtocolHandler;
 };
 
@@ -163,11 +171,12 @@ public:
     bool autoDecompress;
     bool pipeliningAllowed;
     bool spdyAllowed;
+    bool http2Allowed;
     bool withCredentials;
     bool ssl;
     bool preConnect;
-    bool followRedirect;
     int redirectCount;
+    QNetworkRequest::RedirectPolicy redirectPolicy;
 };
 
 

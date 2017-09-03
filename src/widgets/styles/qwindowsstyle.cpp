@@ -40,9 +40,8 @@
 #include "qwindowsstyle_p.h"
 #include "qwindowsstyle_p_p.h"
 
-#if !defined(QT_NO_STYLE_WINDOWS) || defined(QT_PLUGIN)
+#if QT_CONFIG(style_windows) || defined(QT_PLUGIN)
 
-#include <private/qsystemlibrary_p.h>
 #include "qapplication.h"
 #include "qbitmap.h"
 #include "qdrawutil.h" // for now
@@ -91,26 +90,7 @@ QT_END_INCLUDE_NAMESPACE
 #    define COLOR_GRADIENTINACTIVECAPTION   28
 #  endif
 
-
-typedef struct
-{
-    DWORD cbSize;
-    HICON hIcon;
-    int   iSysImageIndex;
-    int   iIcon;
-    WCHAR szPath[MAX_PATH];
-} QSHSTOCKICONINFO;
-
-#define _SHGFI_SMALLICON         0x000000001
-#define _SHGFI_LARGEICON         0x000000000
-#define _SHGFI_ICON              0x000000100
-#define _SIID_SHIELD             77
-
-typedef HRESULT (WINAPI *PtrSHGetStockIconInfo)(int siid, int uFlags, QSHSTOCKICONINFO *psii);
-static PtrSHGetStockIconInfo pSHGetStockIconInfo = 0;
-
 Q_GUI_EXPORT HICON qt_pixmapToWinHICON(const QPixmap &);
-Q_GUI_EXPORT QPixmap qt_pixmapFromWinHICON(HICON icon);
 #endif //Q_OS_WIN
 
 QT_BEGIN_INCLUDE_NAMESPACE
@@ -126,13 +106,6 @@ enum QSliderDirection { SlUp, SlDown, SlLeft, SlRight };
 QWindowsStylePrivate::QWindowsStylePrivate()
     : alt_down(false), menuBarTimer(0)
 {
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
-    if ((QSysInfo::WindowsVersion >= QSysInfo::WV_VISTA
-        && (QSysInfo::WindowsVersion & QSysInfo::WV_NT_based))) {
-        QSystemLibrary shellLib(QLatin1String("shell32"));
-        pSHGetStockIconInfo = (PtrSHGetStockIconInfo)shellLib.resolve("SHGetStockIconInfo");
-    }
-#endif
 }
 
 qreal QWindowsStylePrivate::appDevicePixelRatio()
@@ -309,25 +282,15 @@ int QWindowsStylePrivate::pixelMetricFromSystemDp(QStyle::PixelMetric pm, const 
 #if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     switch (pm) {
     case QStyle::PM_DockWidgetFrameWidth:
-#  ifndef Q_OS_WINCE
         return GetSystemMetrics(SM_CXFRAME);
-#  else
-        return GetSystemMetrics(SM_CXDLGFRAME);
-#  endif
-        break;
 
     case QStyle::PM_TitleBarHeight:
         if (widget && (widget->windowType() == Qt::Tool)) {
             // MS always use one less than they say
-#  ifndef Q_OS_WINCE
             return GetSystemMetrics(SM_CYSMCAPTION) - 1;
-#  else
-            return GetSystemMetrics(SM_CYCAPTION) - 1;
-#  endif
         }
         return GetSystemMetrics(SM_CYCAPTION) - 1;
 
-#  ifndef Q_OS_WINCE
     case QStyle::PM_ScrollBarExtent:
         {
             NONCLIENTMETRICS ncm;
@@ -336,14 +299,9 @@ int QWindowsStylePrivate::pixelMetricFromSystemDp(QStyle::PixelMetric pm, const 
                 return qMax(ncm.iScrollHeight, ncm.iScrollWidth);
         }
         break;
-#  endif // !Q_OS_WINCE
 
     case  QStyle::PM_MdiSubWindowFrameWidth:
-#  ifndef Q_OS_WINCE
         return GetSystemMetrics(SM_CYFRAME);
-#  else
-        return GetSystemMetrics(SM_CYDLGFRAME);
-#  endif
 
     default:
         break;
@@ -521,7 +479,7 @@ int QWindowsStyle::pixelMetric(PixelMetric pm, const QStyleOption *opt, const QW
 QPixmap QWindowsStyle::standardPixmap(StandardPixmap standardPixmap, const QStyleOption *opt,
                                       const QWidget *widget) const
 {
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE) && !defined(Q_OS_WINRT)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
     QPixmap desktopIcon;
     switch(standardPixmap) {
     case SP_DriveCDIcon:
@@ -560,7 +518,7 @@ QPixmap QWindowsStyle::standardPixmap(StandardPixmap standardPixmap, const QStyl
     if (!desktopIcon.isNull()) {
         return desktopIcon;
     }
-#endif // Q_OS_WIN && !Q_OS_WINCE && !Q_OS_WINRT
+#endif // Q_OS_WIN && !Q_OS_WINRT
     return QCommonStyle::standardPixmap(standardPixmap, opt, widget);
 }
 
@@ -637,12 +595,12 @@ int QWindowsStyle::styleHint(StyleHint hint, const QStyleOption *opt, const QWid
 #endif // Q_OS_WIN && !Q_OS_WINRT
     case SH_Menu_SubMenuSloppyCloseTimeout:
     case SH_Menu_SubMenuPopupDelay: {
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE) && !defined(Q_OS_WINRT)
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
         DWORD delay;
         if (SystemParametersInfo(SPI_GETMENUSHOWDELAY, 0, &delay, 0))
             ret = delay;
         else
-#endif // Q_OS_WIN && !Q_OS_WINCE && !Q_OS_WINRT
+#endif // Q_OS_WIN && !Q_OS_WINRT
             ret = 400;
         break;
     }
@@ -850,12 +808,14 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
             p->setPen(opt->palette.dark().color());
         else
             p->setPen(opt->palette.text().color());
-        } // Fall through!
+        }
+        Q_FALLTHROUGH();
     case PE_IndicatorViewItemCheck:
         if (!doRestore) {
             p->save();
             doRestore = true;
         }
+#if QT_CONFIG(itemviews)
         if (pe == PE_IndicatorViewItemCheck) {
             const QStyleOptionViewItem *itemViewOpt = qstyleoption_cast<const QStyleOptionViewItem *>(opt);
             p->setPen(itemViewOpt
@@ -867,6 +827,7 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
                 p->setBrush(opt->palette.brush(QPalette::Button));
             p->drawRect(opt->rect.x() + 1, opt->rect.y() + 1, 11, 11);
         }
+#endif // QT_CONFIG(itemviews)
         if (!(opt->state & State_Off)) {
             QLineF lines[7];
             int i, xx, yy;
@@ -1768,10 +1729,14 @@ void QWindowsStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPai
 
                 int step = 0;
                 int chunkCount = w / unit_width + 1;
+#if QT_CONFIG(animation)
                 if (QProgressStyleAnimation *animation = qobject_cast<QProgressStyleAnimation*>(d->animation(opt->styleObject)))
                     step = (animation->animationStep() / 3) % chunkCount;
                 else
                     d->startAnimation(new QProgressStyleAnimation(d->animationFps, opt->styleObject));
+#else
+                Q_UNUSED(d);
+#endif
                 int chunksInRow = 5;
                 int myY = pbBits.rect.y();
                 int myHeight = pbBits.rect.height();
@@ -1805,7 +1770,9 @@ void QWindowsStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPai
                 p->restore(); //restore state
             }
             else {
+#if QT_CONFIG(animation)
                 d->stopAnimation(opt->styleObject);
+#endif
                 QCommonStyle::drawControl(ce, opt, p, widget);
             }
         }
@@ -2425,7 +2392,7 @@ QSize QWindowsStyle::sizeFromContents(ContentsType ct, const QStyleOption *opt,
     case CT_ToolButton:
         if (qstyleoption_cast<const QStyleOptionToolButton *>(opt))
             return sz += QSize(7, 6);
-        // Otherwise, fall through
+        Q_FALLTHROUGH();
 
     default:
         sz = QCommonStyle::sizeFromContents(ct, opt, csz, widget);
@@ -2448,4 +2415,4 @@ QT_END_NAMESPACE
 
 #include "moc_qwindowsstyle_p.cpp"
 
-#endif // QT_NO_STYLE_WINDOWS
+#endif // style_windows

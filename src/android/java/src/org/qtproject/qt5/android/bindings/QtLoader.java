@@ -73,7 +73,7 @@ public abstract class QtLoader {
     public final static int MINISTRO_INSTALL_REQUEST_CODE = 0xf3ee; // request code used to know when Ministro instalation is finished
     public static final int MINISTRO_API_LEVEL = 5; // Ministro api level (check IMinistro.aidl file)
     public static final int NECESSITAS_API_LEVEL = 2; // Necessitas api level used by platform plugin
-    public static final int QT_VERSION = 0x050100; // This app requires at least Qt version 5.1.0
+    public static final int QT_VERSION = 0x050700; // This app requires at least Qt version 5.7.0
 
     public static final String ERROR_CODE_KEY = "error.code";
     public static final String ERROR_MESSAGE_KEY = "error.message";
@@ -608,9 +608,11 @@ public abstract class QtLoader {
                 if (!(new File(stylePath)).exists() && !extractOption.equals("none")) {
                     loaderParams.putString(EXTRACT_STYLE_KEY, stylePath);
                     loaderParams.putBoolean(EXTRACT_STYLE_MINIMAL_KEY, extractOption.equals("minimal"));
-                    if (extractOption.equals("full"))
-                        ENVIRONMENT_VARIABLES += "\tQT_USE_ANDROID_NATIVE_STYLE=1";
                 }
+
+                if (extractOption.equals("full"))
+                    ENVIRONMENT_VARIABLES += "\tQT_USE_ANDROID_NATIVE_STYLE=1";
+
                 ENVIRONMENT_VARIABLES += "\tMINISTRO_ANDROID_STYLE_PATH=" + stylePath
                         + "\tQT_ANDROID_THEMES_ROOT_PATH=" + themePath;
 

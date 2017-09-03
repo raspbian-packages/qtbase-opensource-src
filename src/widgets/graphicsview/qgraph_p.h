@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <QtCore/QHash>
 #include <QtCore/QQueue>
 #include <QtCore/QString>
@@ -249,7 +250,7 @@ public:
             }
             strVertices += QString::fromLatin1("\"%1\" [label=\"%2\"]\n").arg(v->toString()).arg(v->toString());
         }
-        return QString::fromLatin1("%1\n%2\n").arg(strVertices).arg(edges);
+        return QString::fromLatin1("%1\n%2\n").arg(strVertices, edges);
     }
 #endif
 

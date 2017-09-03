@@ -44,7 +44,7 @@
 #include <qstring.h>
 #include <qstringlist.h>
 #include <qshareddata.h>
-#ifndef QT_BOOTSTRAPPED
+#if QT_CONFIG(process)
 # include <qprocess.h>
 #else
 # include <qiodevice.h>
@@ -176,7 +176,7 @@ public:
 
     void setTemplate();
 
-    ProStringList split_value_list(const QString &vals, const ProFile *source = 0);
+    ProStringList split_value_list(const QStringRef &vals, const ProFile *source = 0);
     VisitReturn expandVariableReferences(const ushort *&tokPtr, int sizeHint, ProStringList *ret, bool joined);
 
     QString currentFileName() const;
@@ -212,10 +212,10 @@ public:
     VisitReturn evaluateExpandFunction(const ProKey &function, const ushort *&tokPtr, ProStringList *ret);
     VisitReturn evaluateConditionalFunction(const ProKey &function, const ushort *&tokPtr);
 
-    ProStringList evaluateBuiltinExpand(int func_t, const ProKey &function, const ProStringList &args);
+    VisitReturn evaluateBuiltinExpand(int func_t, const ProKey &function, const ProStringList &args, ProStringList &ret);
     VisitReturn evaluateBuiltinConditional(int func_t, const ProKey &function, const ProStringList &args);
 
-    VisitReturn evaluateConditional(const QString &cond, const QString &where, int line = -1);
+    VisitReturn evaluateConditional(const QStringRef &cond, const QString &where, int line = -1);
 #ifdef PROEVALUATOR_FULL
     VisitReturn checkRequirements(const ProStringList &deps);
 #endif
@@ -223,7 +223,7 @@ public:
     void updateMkspecPaths();
     void updateFeaturePaths();
 
-    bool isActiveConfig(const QString &config, bool regex = false);
+    bool isActiveConfig(const QStringRef &config, bool regex = false);
 
     void populateDeps(
             const ProStringList &deps, const ProString &prefix, const ProStringList &suffixes,
@@ -231,12 +231,16 @@ public:
             QHash<ProKey, QSet<ProKey> > &dependencies, ProValueMap &dependees,
             QMultiMap<int, ProString> &rootSet) const;
 
+    bool getMemberArgs(const ProKey &name, int srclen, const ProStringList &args,
+                       int *start, int *end);
+    VisitReturn parseJsonInto(const QByteArray &json, const QString &into, ProValueMap *value);
+
     VisitReturn writeFile(const QString &ctx, const QString &fn, QIODevice::OpenMode mode,
                           bool exe, const QString &contents);
-#ifndef QT_BOOTSTRAPPED
+#if QT_CONFIG(process)
     void runProcess(QProcess *proc, const QString &command) const;
 #endif
-    QByteArray getCommandOutput(const QString &args) const;
+    QByteArray getCommandOutput(const QString &args, int *exitCode) const;
 
     QMakeEvaluator *m_caller;
 #ifdef PROEVALUATOR_CUMULATIVE

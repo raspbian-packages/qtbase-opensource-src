@@ -90,14 +90,9 @@ namespace QtPrivate {
         explicit ApplyReturnValue(void *data_) : data(data_) {}
     };
     template<typename T, typename U>
-    void operator,(const T &value, const ApplyReturnValue<U> &container) {
-        if (container.data)
-            *reinterpret_cast<U*>(container.data) = value;
-    }
-    template<typename T, typename U>
     void operator,(T &&value, const ApplyReturnValue<U> &container) {
         if (container.data)
-            *reinterpret_cast<U*>(container.data) = value;
+            *reinterpret_cast<U *>(container.data) = std::forward<T>(value);
     }
     template<typename T>
     void operator,(T, const ApplyReturnValue<void> &) {}
@@ -147,6 +142,20 @@ namespace QtPrivate {
             (o->*f)((*reinterpret_cast<typename RemoveRef<SignalArgs>::Type *>(arg[II+1]))...), ApplyReturnValue<R>(arg[0]);
         }
     };
+#if defined(__cpp_noexcept_function_type) && __cpp_noexcept_function_type >= 201510
+    template <int... II, typename... SignalArgs, typename R, typename... SlotArgs, typename SlotRet, class Obj>
+    struct FunctorCall<IndexesList<II...>, List<SignalArgs...>, R, SlotRet (Obj::*)(SlotArgs...) noexcept> {
+        static void call(SlotRet (Obj::*f)(SlotArgs...) noexcept, Obj *o, void **arg) {
+            (o->*f)((*reinterpret_cast<typename RemoveRef<SignalArgs>::Type *>(arg[II+1]))...), ApplyReturnValue<R>(arg[0]);
+        }
+    };
+    template <int... II, typename... SignalArgs, typename R, typename... SlotArgs, typename SlotRet, class Obj>
+    struct FunctorCall<IndexesList<II...>, List<SignalArgs...>, R, SlotRet (Obj::*)(SlotArgs...) const noexcept> {
+        static void call(SlotRet (Obj::*f)(SlotArgs...) const noexcept, Obj *o, void **arg) {
+            (o->*f)((*reinterpret_cast<typename RemoveRef<SignalArgs>::Type *>(arg[II+1]))...), ApplyReturnValue<R>(arg[0]);
+        }
+    };
+#endif
 
     template<class Obj, typename Ret, typename... Args> struct FunctionPointer<Ret (Obj::*) (Args...)>
     {
@@ -185,12 +194,97 @@ namespace QtPrivate {
         }
     };
 
+#if defined(__cpp_noexcept_function_type) && __cpp_noexcept_function_type >= 201510
+    template<class Obj, typename Ret, typename... Args> struct FunctionPointer<Ret (Obj::*) (Args...) noexcept>
+    {
+        typedef Obj Object;
+        typedef List<Args...>  Arguments;
+        typedef Ret ReturnType;
+        typedef Ret (Obj::*Function) (Args...) noexcept;
+        enum {ArgumentCount = sizeof...(Args), IsPointerToMemberFunction = true};
+        template <typename SignalArgs, typename R>
+        static void call(Function f, Obj *o, void **arg) {
+            FunctorCall<typename Indexes<ArgumentCount>::Value, SignalArgs, R, Function>::call(f, o, arg);
+        }
+    };
+    template<class Obj, typename Ret, typename... Args> struct FunctionPointer<Ret (Obj::*) (Args...) const noexcept>
+    {
+        typedef Obj Object;
+        typedef List<Args...>  Arguments;
+        typedef Ret ReturnType;
+        typedef Ret (Obj::*Function) (Args...) const noexcept;
+        enum {ArgumentCount = sizeof...(Args), IsPointerToMemberFunction = true};
+        template <typename SignalArgs, typename R>
+        static void call(Function f, Obj *o, void **arg) {
+            FunctorCall<typename Indexes<ArgumentCount>::Value, SignalArgs, R, Function>::call(f, o, arg);
+        }
+    };
+
+    template<typename Ret, typename... Args> struct FunctionPointer<Ret (*) (Args...) noexcept>
+    {
+        typedef List<Args...> Arguments;
+        typedef Ret ReturnType;
+        typedef Ret (*Function) (Args...) noexcept;
+        enum {ArgumentCount = sizeof...(Args), IsPointerToMemberFunction = false};
+        template <typename SignalArgs, typename R>
+        static void call(Function f, void *, void **arg) {
+            FunctorCall<typename Indexes<ArgumentCount>::Value, SignalArgs, R, Function>::call(f, arg);
+        }
+    };
+#endif
+
     template<typename Function, int N> struct Functor
     {
         template <typename SignalArgs, typename R>
         static void call(Function &f, void *, void **arg) {
             FunctorCall<typename Indexes<N>::Value, SignalArgs, R, Function>::call(f, arg);
         }
+    };
+
+    /*
+        Logic that checks if the underlying type of an enum is signed or not.
+        Needs an external, explicit check that E is indeed an enum. Works
+        around the fact that it's undefined behavior to instantiate
+        std::underlying_type on non-enums (cf. §20.13.7.6 [meta.trans.other]).
+    */
+    template<typename E, typename Enable = void>
+    struct IsEnumUnderlyingTypeSigned : std::false_type
+    {
+    };
+
+    template<typename E>
+    struct IsEnumUnderlyingTypeSigned<E, typename std::enable_if<std::is_enum<E>::value>::type>
+            : std::integral_constant<bool, std::is_signed<typename std::underlying_type<E>::type>::value>
+    {
+    };
+
+    /*
+       Logic that checks if the argument of the slot does not narrow the
+       argument of the signal when used in list initialization. Cf. §8.5.4.7
+       [dcl.init.list] for the definition of narrowing.
+       For incomplete From/To types, there's no narrowing.
+    */
+    template<typename From, typename To, typename Enable = void>
+    struct AreArgumentsNarrowedBase : std::false_type
+    {
+    };
+
+    template<typename From, typename To>
+    struct AreArgumentsNarrowedBase<From, To, typename std::enable_if<sizeof(From) && sizeof(To)>::type>
+        : std::integral_constant<bool,
+              (std::is_floating_point<From>::value && std::is_integral<To>::value) ||
+              (std::is_floating_point<From>::value && std::is_floating_point<To>::value && sizeof(From) > sizeof(To)) ||
+              ((std::is_integral<From>::value || std::is_enum<From>::value) && std::is_floating_point<To>::value) ||
+              (std::is_integral<From>::value && std::is_integral<To>::value
+               && (sizeof(From) > sizeof(To)
+                   || (std::is_signed<From>::value ? !std::is_signed<To>::value
+                       : (std::is_signed<To>::value && sizeof(From) == sizeof(To))))) ||
+              (std::is_enum<From>::value && std::is_integral<To>::value
+               && (sizeof(From) > sizeof(To)
+                   || (IsEnumUnderlyingTypeSigned<From>::value ? !std::is_signed<To>::value
+                       : (std::is_signed<To>::value && sizeof(From) == sizeof(To)))))
+              >
+    {
     };
 
     /*
@@ -203,6 +297,10 @@ namespace QtPrivate {
         static char test(...);
         static const typename RemoveRef<A1>::Type &dummy();
         enum { value = sizeof(test(dummy())) == sizeof(int) };
+#ifdef QT_NO_NARROWING_CONVERSIONS_IN_CONNECT
+        using AreArgumentsNarrowed = AreArgumentsNarrowedBase<typename RemoveRef<A1>::Type, typename RemoveRef<A2>::Type>;
+        Q_STATIC_ASSERT_X(!AreArgumentsNarrowed::value, "Signal and slot arguments are not compatible (narrowing)");
+#endif
     };
     template<typename A1, typename A2> struct AreArgumentsCompatible<A1, A2&> { enum { value = false }; };
     template<typename A> struct AreArgumentsCompatible<A&, A&> { enum { value = true }; };

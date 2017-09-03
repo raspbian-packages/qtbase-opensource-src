@@ -149,15 +149,9 @@ QT_BEGIN_NAMESPACE
 
 QWindowsOpengl32DLL QOpenGLStaticContext::opengl32;
 
-PROC QWindowsOpengl32DLL::resolve(const char *name)
+FARPROC QWindowsOpengl32DLL::resolve(const char *name)
 {
-#ifndef Q_OS_WINCE
-    PROC proc = m_lib ? ::GetProcAddress(m_lib, name) : 0;
-#else
-    PROC proc = m_lib ? ::GetProcAddress(m_lib, (const wchar_t *) QString::fromLatin1(name).utf16()) : 0;
-#endif
-
-    return proc;
+    return m_lib ? ::GetProcAddress(m_lib, name) : nullptr;
 }
 
 bool QWindowsOpengl32DLL::init(bool softwareRendering)
@@ -830,13 +824,6 @@ static inline QOpenGLContextData createDummyWindowOpenGLContextData()
     \internal
     \ingroup qt-lighthouse-win
 */
-
-QWindowsOpenGLContextFormat::QWindowsOpenGLContextFormat() :
-    profile(QSurfaceFormat::NoProfile),
-    version(0),
-    options(0)
-{
-}
 
 QWindowsOpenGLContextFormat QWindowsOpenGLContextFormat::current()
 {

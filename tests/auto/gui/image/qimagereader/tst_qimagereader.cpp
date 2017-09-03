@@ -133,6 +133,9 @@ private slots:
     void gifImageCount();
     void gifLoopCount();
 
+    void ppmMaxval_data();
+    void ppmMaxval();
+
     void readCorruptImage_data();
     void readCorruptImage();
     void readCorruptBmp();
@@ -190,7 +193,7 @@ void tst_QImageReader::getSetCheck()
 }
 
 tst_QImageReader::tst_QImageReader() :
-    m_temporaryDir(QStringLiteral("tst_qimagereaderXXXXXX"))
+    m_temporaryDir(QDir::tempPath() + QStringLiteral("/tst_qimagereaderXXXXXX"))
 {
     m_temporaryDir.setAutoRemove(true);
 }
@@ -725,13 +728,15 @@ void tst_QImageReader::imageFormatBeforeRead()
 
     SKIP_IF_UNSUPPORTED(format);
 
-    QImageReader reader(fileName);
+    QImageReader reader(prefix + fileName);
+    QVERIFY(reader.canRead());
     if (reader.supportsOption(QImageIOHandler::ImageFormat)) {
         QImage::Format fileFormat = reader.imageFormat();
         QCOMPARE(fileFormat, imageFormat);
         QSize size = reader.size();
         QImage image(size, fileFormat);
         QVERIFY(reader.read(&image));
+        QEXPECT_FAIL("bmp-3", "Semi-transparent BMPs not predicted", Continue);
         QCOMPARE(image.format(), fileFormat);
     }
 }
@@ -953,6 +958,79 @@ void tst_QImageReader::gifLoopCount()
     {
         QImageReader io(":images/qt-gif-noanim.gif");
         QCOMPARE(io.loopCount(), 0); // no loop
+    }
+}
+
+void tst_QImageReader::ppmMaxval_data()
+{
+    QTest::addColumn<bool>("hasColor");
+    QTest::addColumn<QByteArray>("bytes");
+
+    QTest::newRow("PGM plain  8bit full") << false << QByteArray("P2 3 1   255   255 0   127\n");
+    QTest::newRow("PGM plain  8bit lim.") << false << QByteArray("P2 3 1    50    50 0    25\n");
+    QTest::newRow("PGM plain 16bit full") << false << QByteArray("P2 3 1 65535 65535 0 32767\n");
+    QTest::newRow("PGM plain 16bit lim.") << false << QByteArray("P2 3 1  5000  5000 0  2500\n");
+    QTest::newRow("PGM raw    8bit full") << false << QByteArray("P5 3 1   255 \xff\x00\x7f", 13 + 3);
+    QTest::newRow("PGM raw    8bit lim.") << false << QByteArray("P5 3 1    50 \x32\x00\x19", 13 + 3);
+    QTest::newRow("PGM raw   16bit full") << false << QByteArray("P5 3 1 65535 \xff\xff\x00\x00\x7f\xff", 13 + 3 * 2);
+    QTest::newRow("PGM raw   16bit lim.") << false << QByteArray("P5 3 1  5000 \x13\x88\x00\x00\x09\xc4", 13 + 3 * 2);
+
+    QTest::newRow("PPM plain  8bit full") << true  << QByteArray("P3 3 2   255 "
+                                                                 "255 255 255   0   0   0 127 127 127 "
+                                                                 "255   0   0   0 255   0   0   0 255\n");
+
+    QTest::newRow("PPM plain  8bit lim.") << true  << QByteArray("P3 3 2    50 "
+                                                                 " 50  50  50   0   0   0  25  25  25 "
+                                                                 " 50   0   0   0  50   0   0   0  50\n");
+
+    QTest::newRow("PPM plain 16bit full") << true  << QByteArray("P3 3 2 65535 "
+                                                                 "65535 65535 65535     0     0     0 32767 32767 32767 "
+                                                                 "65535     0     0     0 65535     0     0     0 65535\n");
+
+    QTest::newRow("PPM plain 16bit lim.") << true  << QByteArray("P3 3 2  5000 "
+                                                                 " 5000  5000  5000     0     0     0  2500  2500  2500 "
+                                                                 " 5000     0     0     0  5000     0     0     0  5000\n");
+
+    QTest::newRow("PPM raw    8bit full") << true  << QByteArray("P6 3 2   255 "
+                                                                 "\xff\xff\xff\x00\x00\x00\x7f\x7f\x7f"
+                                                                 "\xff\x00\x00\x00\xff\x00\x00\x00\xff", 13 + 6 * 3);
+
+    QTest::newRow("PPM raw    8bit lim.") << true  << QByteArray("P6 3 2    50 "
+                                                                 "\x32\x32\x32\x00\x00\x00\x19\x19\x19"
+                                                                 "\x32\x00\x00\x00\x32\x00\x00\x00\x32", 13 + 6 * 3);
+
+    QTest::newRow("PPM raw   16bit full") << true  << QByteArray("P6 3 2 65535 "
+                                                                 "\xff\xff\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x7f\xff\x7f\xff\x7f\xff"
+                                                                 "\xff\xff\x00\x00\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00\x00\x00\xff\xff", 13 + 6 * 3 * 2);
+
+    QTest::newRow("PPM raw   16bit lim.") << true  << QByteArray("P6 3 2  5000 "
+                                                                 "\x13\x88\x13\x88\x13\x88\x00\x00\x00\x00\x00\x00\x09\xc4\x09\xc4\x09\xc4"
+                                                                 "\x13\x88\x00\x00\x00\x00\x00\x00\x13\x88\x00\x00\x00\x00\x00\x00\x13\x88", 13 + 6 * 3 * 2);
+}
+
+void tst_QImageReader::ppmMaxval()
+{
+    SKIP_IF_UNSUPPORTED("ppm");
+
+    QFETCH(bool, hasColor);
+    QFETCH(QByteArray, bytes);
+
+    QImage img;
+    img.loadFromData(bytes);
+    QVERIFY(!img.isNull());
+    QCOMPARE(img.width(), 3);
+    QCOMPARE(img.height(), hasColor ? 2 : 1);
+
+    QCOMPARE(img.pixel(0,0), qRgb(0xff, 0xff, 0xff));
+    QCOMPARE(img.pixel(1,0), qRgb(0, 0, 0));
+    QRgb gray = img.pixel(2,0);
+    QVERIFY(qIsGray(gray));
+    QVERIFY(qRed(gray) > 0x70 && qRed(gray) < 0x90 );
+
+    if (hasColor) {
+        QCOMPARE(img.pixel(0,1), qRgb(0xff, 0, 0));
+        QCOMPARE(img.pixel(1,1), qRgb(0, 0xff, 0));
+        QCOMPARE(img.pixel(2,1), qRgb(0, 0, 0xff));
     }
 }
 

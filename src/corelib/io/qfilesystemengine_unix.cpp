@@ -1,5 +1,6 @@
 /****************************************************************************
 **
+** Copyright (C) 2017 Intel Corporation.
 ** Copyright (C) 2016 The Qt Company Ltd.
 ** Copyright (C) 2013 Samuel Gaist <samuel.gaist@edeltech.ch>
 ** Contact: https://www.qt.io/licensing/
@@ -61,8 +62,15 @@
 #include <CoreServices/CoreServices.h>
 #endif
 
-#ifdef Q_OS_IOS
+#if defined(QT_PLATFORM_UIKIT)
 #include <MobileCoreServices/MobileCoreServices.h>
+#endif
+
+#if defined(Q_OS_DARWIN)
+// We cannot include <Foundation/Foundation.h> (it's an Objective-C header), but
+// we need these declarations:
+Q_FORWARD_DECLARE_OBJC_CLASS(NSString);
+extern "C" NSString *NSTemporaryDirectory();
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -101,13 +109,13 @@ static bool isPackage(const QFileSystemMetaData &data, const QFileSystemEntry &e
 
     if (suffix.length() > 0) {
         // First step: is the extension known ?
-        QCFType<CFStringRef> extensionRef = QCFString::toCFStringRef(suffix);
+        QCFType<CFStringRef> extensionRef = suffix.toCFString();
         QCFType<CFStringRef> uniformTypeIdentifier = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, extensionRef, NULL);
         if (UTTypeConformsTo(uniformTypeIdentifier, kUTTypeBundle))
             return true;
 
         // Second step: check if an application knows the package type
-        QCFType<CFStringRef> path = QCFString::toCFStringRef(entry.filePath());
+        QCFType<CFStringRef> path = entry.filePath().toCFString();
         QCFType<CFURLRef> url = CFURLCreateWithFileSystemPath(0, path, kCFURLPOSIXPathStyle, true);
 
         UInt32 type, creator;
@@ -115,18 +123,15 @@ static bool isPackage(const QFileSystemMetaData &data, const QFileSystemEntry &e
         if (CFBundleGetPackageInfoInDirectory(url, &type, &creator))
             return true;
 
-#ifdef Q_OS_OSX
+#ifdef Q_OS_MACOS
         // Find if an application other than Finder claims to know how to handle the package
-        QCFType<CFURLRef> application;
-        LSGetApplicationForURL(url,
-                               kLSRolesEditor|kLSRolesViewer,
-                               NULL,
-                               &application);
+        QCFType<CFURLRef> application = LSCopyDefaultApplicationURLForURL(url,
+            kLSRolesEditor | kLSRolesViewer, nullptr);
 
         if (application) {
             QCFType<CFBundleRef> bundle = CFBundleCreate(kCFAllocatorDefault, application);
             CFStringRef identifier = CFBundleGetIdentifier(bundle);
-            QString applicationId = QCFString::toQString(identifier);
+            QString applicationId = QString::fromCFString(identifier);
             if (applicationId != QLatin1String("com.apple.finder"))
                 return true;
         }
@@ -182,8 +187,9 @@ QFileSystemEntry QFileSystemEngine::getLinkTarget(const QFileSystemEntry &link, 
 #endif
 
         if (!ret.startsWith(QLatin1Char('/'))) {
-            if (link.filePath().startsWith(QLatin1Char('/'))) {
-                ret.prepend(link.filePath().left(link.filePath().lastIndexOf(QLatin1Char('/')))
+            const QString linkFilePath = link.filePath();
+            if (linkFilePath.startsWith(QLatin1Char('/'))) {
+                ret.prepend(linkFilePath.leftRef(linkFilePath.lastIndexOf(QLatin1Char('/')))
                             + QLatin1Char('/'));
             } else {
                 ret.prepend(QDir::currentPath() + QLatin1Char('/'));
@@ -221,7 +227,7 @@ QFileSystemEntry QFileSystemEngine::getLinkTarget(const QFileSystemEntry &link, 
         if (!cfstr)
             return QFileSystemEntry();
 
-        return QFileSystemEntry(QCFString::toQString(cfstr));
+        return QFileSystemEntry(QString::fromCFString(cfstr));
     }
 #endif
     return QFileSystemEntry();
@@ -282,7 +288,7 @@ QFileSystemEntry QFileSystemEngine::canonicalName(const QFileSystemEntry &entry,
     if (ret) {
         data.knownFlagsMask |= QFileSystemMetaData::ExistsAttribute;
         data.entryFlags |= QFileSystemMetaData::ExistsAttribute;
-        QString canonicalPath = QDir::cleanPath(QString::fromLocal8Bit(ret));
+        QString canonicalPath = QDir::cleanPath(QFile::decodeName(ret));
         free(ret);
         return QFileSystemEntry(canonicalPath);
     } else if (errno == ENOENT) { // file doesn't exist
@@ -411,7 +417,7 @@ QString QFileSystemEngine::bundleName(const QFileSystemEntry &entry)
     if (QCFType<CFDictionaryRef> dict = CFBundleCopyInfoDictionaryForURL(url)) {
         if (CFTypeRef name = (CFTypeRef)CFDictionaryGetValue(dict, kCFBundleNameKey)) {
             if (CFGetTypeID(name) == CFStringGetTypeID())
-                return QCFString::toQString((CFStringRef)name);
+                return QString::fromCFString((CFStringRef)name);
         }
     }
     return QString();
@@ -548,45 +554,57 @@ bool QFileSystemEngine::fillMetaData(const QFileSystemEntry &entry, QFileSystemM
     return data.hasFlags(what);
 }
 
+// Note: if \a shouldMkdirFirst is false, we assume the caller did try to mkdir
+// before calling this function.
+static bool createDirectoryWithParents(const QByteArray &nativeName, bool shouldMkdirFirst = true)
+{
+    // helper function to check if a given path is a directory, since mkdir can
+    // fail if the dir already exists (it may have been created by another
+    // thread or another process)
+    const auto isDir = [](const QByteArray &nativeName) {
+        QT_STATBUF st;
+        return QT_STAT(nativeName.constData(), &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR;
+    };
+
+    if (shouldMkdirFirst && QT_MKDIR(nativeName, 0777) == 0)
+        return true;
+    if (errno == EEXIST)
+        return isDir(nativeName);
+    if (errno != ENOENT)
+        return false;
+
+    // mkdir failed because the parent dir doesn't exist, so try to create it
+    int slash = nativeName.lastIndexOf('/');
+    if (slash < 1)
+        return false;
+
+    QByteArray parentNativeName = nativeName.left(slash);
+    if (!createDirectoryWithParents(parentNativeName))
+        return false;
+
+    // try again
+    if (QT_MKDIR(nativeName, 0777) == 0)
+        return true;
+    return errno == EEXIST && isDir(nativeName);
+}
+
 //static
 bool QFileSystemEngine::createDirectory(const QFileSystemEntry &entry, bool createParents)
 {
     QString dirName = entry.filePath();
-    if (createParents) {
-        dirName = QDir::cleanPath(dirName);
-        for (int oldslash = -1, slash=0; slash != -1; oldslash = slash) {
-            slash = dirName.indexOf(QDir::separator(), oldslash+1);
-            if (slash == -1) {
-                if (oldslash == dirName.length())
-                    break;
-                slash = dirName.length();
-            }
-            if (slash) {
-                const QByteArray chunk = QFile::encodeName(dirName.left(slash));
-                if (QT_MKDIR(chunk.constData(), 0777) != 0) {
-                    if (errno == EEXIST
-#if defined(Q_OS_QNX)
-                        // On QNX the QNet (VFS paths of other hosts mounted under a directory
-                        // such as /net) mountpoint returns ENOENT, despite existing. stat()
-                        // on the QNet mountpoint returns successfully and reports S_IFDIR.
-                        || errno == ENOENT
-#endif
-                    ) {
-                        QT_STATBUF st;
-                        if (QT_STAT(chunk.constData(), &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR)
-                            continue;
-                    }
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-#if defined(Q_OS_DARWIN)  // Mac X doesn't support trailing /'s
-    if (dirName.endsWith(QLatin1Char('/')))
+
+    // Darwin doesn't support trailing /'s, so remove for everyone
+    while (dirName.size() > 1 && dirName.endsWith(QLatin1Char('/')))
         dirName.chop(1);
-#endif
-    return (QT_MKDIR(QFile::encodeName(dirName).constData(), 0777) == 0);
+
+    // try to mkdir this directory
+    QByteArray nativeName = QFile::encodeName(dirName);
+    if (QT_MKDIR(nativeName, 0777) == 0)
+        return true;
+    if (!createParents)
+        return false;
+
+    return createDirectoryWithParents(nativeName, false);
 }
 
 //static
@@ -702,8 +720,17 @@ QString QFileSystemEngine::tempPath()
     return QLatin1String(QT_UNIX_TEMP_PATH_OVERRIDE);
 #else
     QString temp = QFile::decodeName(qgetenv("TMPDIR"));
-    if (temp.isEmpty())
-        temp = QLatin1String("/tmp");
+    if (temp.isEmpty()) {
+#if defined(Q_OS_DARWIN) && !defined(QT_BOOTSTRAPPED)
+        if (NSString *nsPath = NSTemporaryDirectory()) {
+            temp = QString::fromCFString((CFStringRef)nsPath);
+        } else {
+#else
+        {
+#endif
+            temp = QLatin1String("/tmp");
+        }
+    }
     return QDir::cleanPath(temp);
 #endif
 }

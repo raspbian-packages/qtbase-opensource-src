@@ -37,9 +37,10 @@
 **
 ****************************************************************************/
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qstyleoption.h"
 #include "qapplication.h"
-#ifdef Q_OS_MAC
+#if QT_CONFIG(style_mac)
 # include "qmacstyle_mac_p.h"
 #endif
 #include <qdebug.h>
@@ -199,12 +200,12 @@ void QStyleOption::init(const QWidget *widget)
         state |= QStyle::State_Active;
     if (widget->isWindow())
         state |= QStyle::State_Window;
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     extern bool qt_mac_can_clickThrough(const QWidget *w); //qwidget_mac.cpp
     if (!(state & QStyle::State_Active) && !qt_mac_can_clickThrough(widget))
         state &= ~QStyle::State_Enabled;
 #endif
-#if defined(Q_OS_OSX) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
     switch (QMacStyle::widgetSizePolicy(widget)) {
     case QMacStyle::SizeSmall:
         state |= QStyle::State_Small;

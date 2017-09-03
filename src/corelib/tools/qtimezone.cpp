@@ -54,11 +54,11 @@ QT_BEGIN_NAMESPACE
 static QTimeZonePrivate *newBackendTimeZone()
 {
 #ifdef QT_NO_SYSTEMLOCALE
-#ifdef QT_USE_ICU
+#if QT_CONFIG(icu)
     return new QIcuTimeZonePrivate();
 #else
     return new QUtcTimeZonePrivate();
-#endif // QT_USE_ICU
+#endif
 #else
 #if defined Q_OS_MAC
     return new QMacTimeZonePrivate();
@@ -69,7 +69,7 @@ static QTimeZonePrivate *newBackendTimeZone()
     // Registry based timezone backend not available on WinRT
 #elif defined Q_OS_WIN
     return new QWinTimeZonePrivate();
-#elif defined QT_USE_ICU
+#elif QT_CONFIG(icu)
     return new QIcuTimeZonePrivate();
 #else
     return new QUtcTimeZonePrivate();
@@ -81,11 +81,11 @@ static QTimeZonePrivate *newBackendTimeZone()
 static QTimeZonePrivate *newBackendTimeZone(const QByteArray &ianaId)
 {
 #ifdef QT_NO_SYSTEMLOCALE
-#ifdef QT_USE_ICU
+#if QT_CONFIG(icu)
     return new QIcuTimeZonePrivate(ianaId);
 #else
     return new QUtcTimeZonePrivate(ianaId);
-#endif // QT_USE_ICU
+#endif
 #else
 #if defined Q_OS_MAC
     return new QMacTimeZonePrivate(ianaId);
@@ -96,7 +96,7 @@ static QTimeZonePrivate *newBackendTimeZone(const QByteArray &ianaId)
     // Registry based timezone backend not available on WinRT
 #elif defined Q_OS_WIN
     return new QWinTimeZonePrivate(ianaId);
-#elif defined QT_USE_ICU
+#elif QT_CONFIG(icu)
     return new QIcuTimeZonePrivate(ianaId);
 #else
     return new QUtcTimeZonePrivate(ianaId);
@@ -218,28 +218,8 @@ Q_GLOBAL_STATIC(QTimeZoneSingleton, global_tz);
     \section2 License
 
     This class includes data obtained from the CLDR data files under the terms
-    of the Unicode license.
-
-    \legalese
-    COPYRIGHT AND PERMISSION NOTICE
-
-    Copyright © 1991-2012 Unicode, Inc. All rights reserved. Distributed under
-    the Terms of Use in http://www.unicode.org/copyright.html.
-
-    Permission is hereby granted, free of charge, to any person obtaining a
-    copy of the Unicode data files and any associated documentation (the "Data
-    Files") or Unicode software and any associated documentation (the "Software")
-    to deal in the Data Files or Software without restriction, including without
-    limitation the rights to use, copy, modify, merge, publish, distribute, and/or
-    sell copies of the Data Files or Software, and to permit persons to whom the
-    Data Files or Software are furnished to do so, provided that (a) the above
-    copyright notice(s) and this permission notice appear with all copies of the
-    Data Files or Software, (b) both the above copyright notice(s) and this
-    permission notice appear in associated documentation, and (c) there is clear
-    notice in each modified Data File or in the Software as well as in the
-    documentation associated with the Data File(s) or Software that the data or
-    software has been modified.
-    \endlegalese
+    of the Unicode Data Files and Software License. See
+    \l{Unicode CLDR (Unicode Common Locale Data Repository)} for the details.
 
     \sa QDateTime
 */
@@ -694,9 +674,9 @@ bool QTimeZone::isDaylightTime(const QDateTime &atDateTime) const
 QTimeZone::OffsetData QTimeZone::offsetData(const QDateTime &forDateTime) const
 {
     if (hasTransitions())
-        return d->toOffsetData(d->data(forDateTime.toMSecsSinceEpoch()));
+        return QTimeZonePrivate::toOffsetData(d->data(forDateTime.toMSecsSinceEpoch()));
     else
-        return d->invalidOffsetData();
+        return QTimeZonePrivate::invalidOffsetData();
 }
 
 /*!
@@ -732,9 +712,9 @@ bool QTimeZone::hasTransitions() const
 QTimeZone::OffsetData QTimeZone::nextTransition(const QDateTime &afterDateTime) const
 {
     if (hasTransitions())
-        return d->toOffsetData(d->nextTransition(afterDateTime.toMSecsSinceEpoch()));
+        return QTimeZonePrivate::toOffsetData(d->nextTransition(afterDateTime.toMSecsSinceEpoch()));
     else
-        return d->invalidOffsetData();
+        return QTimeZonePrivate::invalidOffsetData();
 }
 
 /*!
@@ -753,9 +733,9 @@ QTimeZone::OffsetData QTimeZone::nextTransition(const QDateTime &afterDateTime) 
 QTimeZone::OffsetData QTimeZone::previousTransition(const QDateTime &beforeDateTime) const
 {
     if (hasTransitions())
-        return d->toOffsetData(d->previousTransition(beforeDateTime.toMSecsSinceEpoch()));
+        return QTimeZonePrivate::toOffsetData(d->previousTransition(beforeDateTime.toMSecsSinceEpoch()));
     else
-        return d->invalidOffsetData();
+        return QTimeZonePrivate::invalidOffsetData();
 }
 
 /*!
@@ -775,7 +755,7 @@ QTimeZone::OffsetDataList QTimeZone::transitions(const QDateTime &fromDateTime,
                                                                 toDateTime.toMSecsSinceEpoch());
         list.reserve(plist.count());
         for (const QTimeZonePrivate::Data &pdata : plist)
-            list.append(d->toOffsetData(pdata));
+            list.append(QTimeZonePrivate::toOffsetData(pdata));
     }
     return list;
 }
@@ -981,7 +961,13 @@ QDataStream &operator>>(QDataStream &ds, QTimeZone &tz)
         int country;
         QString comment;
         ds >> ianaId >> utcOffset >> name >> abbreviation >> country >> comment;
-        tz = QTimeZone(ianaId.toUtf8(), utcOffset, name, abbreviation, (QLocale::Country) country, comment);
+        // Try creating as a system timezone, which succeeds (producing a valid
+        // zone) iff ianaId is valid; we can then ignore the other data.
+        tz = QTimeZone(ianaId.toUtf8());
+        // If not, then construct a custom timezone using all the saved values:
+        if (!tz.isValid())
+            tz = QTimeZone(ianaId.toUtf8(), utcOffset, name, abbreviation,
+                           QLocale::Country(country), comment);
     } else {
         tz = QTimeZone(ianaId.toUtf8());
     }

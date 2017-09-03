@@ -39,12 +39,15 @@
 
 #include <EGL/egl.h>
 #include <EGL/eglvivante.h>
-#include <GLES2/gl2.h>
 
 int main(int, char **)
 {
+#if defined(__INTEGRITY)
+    fbGetDisplay();
+#else
     // Do not rely on fbGetDisplay() since the signature has changed over time.
     // Stick to fbGetDisplayByIndex().
     fbGetDisplayByIndex(0);
+#endif
     return 0;
 }

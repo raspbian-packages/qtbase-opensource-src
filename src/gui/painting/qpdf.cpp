@@ -1078,9 +1078,8 @@ void QPdfEngine::updateState(const QPaintEngineState &state)
     } else if (flags & DirtyClipRegion) {
         d->clipEnabled = true;
         QPainterPath path;
-        QVector<QRect> rects = state.clipRegion().rects();
-        for (int i = 0; i < rects.size(); ++i)
-            path.addRect(rects.at(i));
+        for (const QRect &rect : state.clipRegion())
+            path.addRect(rect);
         updateClipPath(path, state.clipOperation());
         flags |= DirtyClipPath;
     } else if (flags & DirtyClipEnabled) {
@@ -1505,16 +1504,25 @@ void QPdfEnginePrivate::writeInfo()
     printString(creator);
     xprintf("\n/Producer ");
     printString(QString::fromLatin1("Qt " QT_VERSION_STR));
-    QDateTime now = QDateTime::currentDateTimeUtc();
+    QDateTime now = QDateTime::currentDateTime();
     QTime t = now.time();
     QDate d = now.date();
-    xprintf("\n/CreationDate (D:%d%02d%02d%02d%02d%02d)\n",
+    xprintf("\n/CreationDate (D:%d%02d%02d%02d%02d%02d",
             d.year(),
             d.month(),
             d.day(),
             t.hour(),
             t.minute(),
             t.second());
+    int offset = now.offsetFromUtc();
+    int hours  = (offset / 60) / 60;
+    int mins   = (offset / 60) % 60;
+    if (offset < 0)
+        xprintf("-%02d'%02d')\n", -hours, -mins);
+    else if (offset > 0)
+        xprintf("+%02d'%02d')\n", hours , mins);
+    else
+        xprintf("Z)\n");
     xprintf(">>\n"
             "endobj\n");
 }
@@ -1925,7 +1933,7 @@ int QPdfEnginePrivate::writeCompressed(const char *src, int len)
 }
 
 int QPdfEnginePrivate::writeImage(const QByteArray &data, int width, int height, int depth,
-                                  int maskObject, int softMaskObject, bool dct)
+                                  int maskObject, int softMaskObject, bool dct, bool isMono)
 {
     int image = addXrefEntry(-1);
     xprintf("<<\n"
@@ -1935,8 +1943,13 @@ int QPdfEnginePrivate::writeImage(const QByteArray &data, int width, int height,
             "/Height %d\n", width, height);
 
     if (depth == 1) {
-        xprintf("/ImageMask true\n"
-                "/Decode [1 0]\n");
+        if (!isMono) {
+            xprintf("/ImageMask true\n"
+                    "/Decode [1 0]\n");
+        } else {
+            xprintf("/BitsPerComponent 1\n"
+                    "/ColorSpace /DeviceGray\n");
+        }
     } else {
         xprintf("/BitsPerComponent 8\n"
                 "/ColorSpace %s\n", (depth == 32) ? "/DeviceRGB" : "/DeviceGray");
@@ -2069,7 +2082,8 @@ int QPdfEnginePrivate::createShadingFunction(const QGradient *gradient, int from
         for (int i = 0; i < gradientBounds.size(); ++i)
             s << gradientBounds.at(i).function << "0 R ";
         s << "]\n"
-             ">>\n";
+             ">>\n"
+             "endobj\n";
         write(data);
     } else {
         function = functions.at(0);
@@ -2092,7 +2106,7 @@ int QPdfEnginePrivate::generateLinearGradientShader(const QLinearGradient *gradi
         break;
     case QGradient::ReflectSpread:
         reflect = true;
-        // fall through
+        Q_FALLTHROUGH();
     case QGradient::RepeatSpread: {
         // calculate required bounds
         QRectF pageRect = m_pageLayout.fullRectPixels(resolution);
@@ -2155,7 +2169,7 @@ int QPdfEnginePrivate::generateRadialGradientShader(const QRadialGradient *gradi
         break;
     case QGradient::ReflectSpread:
         reflect = true;
-        // fall through
+        Q_FALLTHROUGH();
     case QGradient::RepeatSpread: {
         Q_ASSERT(qFuzzyIsNull(r0)); // QPainter emulates if this is not 0
 
@@ -2454,7 +2468,7 @@ int QPdfEnginePrivate::addImage(const QImage &img, bool *bitmap, qint64 serial_n
             memcpy(rawdata, image.constScanLine(y), bytesPerLine);
             rawdata += bytesPerLine;
         }
-        object = writeImage(data, w, h, d, 0, 0);
+        object = writeImage(data, w, h, d, 0, 0, false, is_monochrome(img.colorTable()));
     } else {
         QByteArray softMaskData;
         bool dct = false;
@@ -2551,6 +2565,7 @@ void QPdfEnginePrivate::drawTextItem(const QPointF &p, const QTextItemInt &ti)
         qreal size = ti.fontEngine->fontDef.pixelSize;
         int synthesized = ti.fontEngine->synthesized();
         qreal stretch = synthesized & QFontEngine::SynthesizedStretch ? ti.fontEngine->fontDef.stretch/100. : 1.;
+        Q_ASSERT(stretch > qreal(0));
 
         QTransform trans;
         // Build text rendering matrix (Trm). We need it to map the text area to user
@@ -2627,6 +2642,7 @@ void QPdfEnginePrivate::drawTextItem(const QPointF &p, const QTextItemInt &ti)
         return;
     int synthesized = ti.fontEngine->synthesized();
     qreal stretch = synthesized & QFontEngine::SynthesizedStretch ? ti.fontEngine->fontDef.stretch/100. : 1.;
+    Q_ASSERT(stretch > qreal(0));
 
     *currentPage << "BT\n"
                  << "/F" << font->object_id << size << "Tf "

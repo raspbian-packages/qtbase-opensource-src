@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qlabel.h"
 
 #include "private/qtextdocumentlayout_p.h"
@@ -58,7 +59,9 @@
 #include "qtextdocumentfragment.h"
 #include "qframe_p.h"
 #include "qtextdocument.h"
+#if QT_CONFIG(movie)
 #include "qmovie.h"
+#endif
 #include "qimage.h"
 #include "qbitmap.h"
 #include "qpicture.h"
@@ -78,7 +81,7 @@ public:
     void updateLabel();
     QSize sizeForWidth(int w) const;
 
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
     void _q_movieUpdated(const QRect&);
     void _q_movieResized(const QSize&);
 #endif
@@ -115,7 +118,7 @@ public:
 #ifndef QT_NO_PICTURE
     QPicture *picture;
 #endif
-#ifndef QT_NO_MOVIE
+#if QT_CONFIG(movie)
     QPointer<QMovie> movie;
 #endif
     mutable QWidgetTextControl *control;

@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "private/qabstractscrollarea_p.h"
 #include "QtGui/qtextdocumentfragment.h"
 #include "QtWidgets/qscrollbar.h"
@@ -59,10 +60,11 @@
 #include "QtWidgets/qmenu.h"
 #include "QtGui/qabstracttextdocumentlayout.h"
 #include "QtCore/qbasictimer.h"
-#include "private/qwidgettextcontrol_p.h"
 #include "qplaintextedit.h"
 
 #ifndef QT_NO_TEXTEDIT
+
+#include "private/qwidgettextcontrol_p.h"
 
 QT_BEGIN_NAMESPACE
 

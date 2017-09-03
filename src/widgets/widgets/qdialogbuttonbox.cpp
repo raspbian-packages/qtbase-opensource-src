@@ -410,14 +410,9 @@ QPushButton *QDialogButtonBoxPrivate::createButton(QDialogButtonBox::StandardBut
         qWarning("QDialogButtonBox::createButton: Invalid ButtonRole, button not added");
     else
         addButton(button, static_cast<QDialogButtonBox::ButtonRole>(role), doLayout);
-
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
-    // Since mnemonics is off by default on Mac, we add a Cmd-D
-    // shortcut here to e.g. make the "Don't Save" button work nativly:
-    if (sbutton == QDialogButtonBox::Discard)
-        button->setShortcut(QKeySequence(QLatin1String("Ctrl+D")));
+#if QT_CONFIG(shortcut)
+    button->setShortcut(QGuiApplicationPrivate::platformTheme()->standardButtonShortcut(sbutton));
 #endif
-
     return button;
 }
 
@@ -462,9 +457,8 @@ void QDialogButtonBoxPrivate::retranslateStrings()
     \sa orientation, addButton()
 */
 QDialogButtonBox::QDialogButtonBox(QWidget *parent)
-    : QWidget(*new QDialogButtonBoxPrivate(Qt::Horizontal), parent, 0)
+    : QDialogButtonBox(Qt::Horizontal, parent)
 {
-    d_func()->initLayout();
 }
 
 /*!
@@ -487,10 +481,8 @@ QDialogButtonBox::QDialogButtonBox(Qt::Orientation orientation, QWidget *parent)
     \sa orientation, addButton()
 */
 QDialogButtonBox::QDialogButtonBox(StandardButtons buttons, QWidget *parent)
-    : QWidget(*new QDialogButtonBoxPrivate(Qt::Horizontal), parent, 0)
+    : QDialogButtonBox(buttons, Qt::Horizontal, parent)
 {
-    d_func()->initLayout();
-    d_func()->createStandardButtons(buttons);
 }
 
 /*!
@@ -501,9 +493,8 @@ QDialogButtonBox::QDialogButtonBox(StandardButtons buttons, QWidget *parent)
 */
 QDialogButtonBox::QDialogButtonBox(StandardButtons buttons, Qt::Orientation orientation,
                                    QWidget *parent)
-    : QWidget(*new QDialogButtonBoxPrivate(orientation), parent, 0)
+    : QDialogButtonBox(orientation, parent)
 {
-    d_func()->initLayout();
     d_func()->createStandardButtons(buttons);
 }
 
@@ -720,8 +711,7 @@ void QDialogButtonBox::removeButton(QAbstractButton *button)
         return;
 
     // Remove it from the standard button hash first and then from the roles
-    if (QPushButton *pushButton = qobject_cast<QPushButton *>(button))
-        d->standardButtonHash.remove(pushButton);
+    d->standardButtonHash.remove(reinterpret_cast<QPushButton *>(button));
     for (int i = 0; i < NRoles; ++i) {
         QList<QAbstractButton *> &list = d->buttonLists[i];
         for (int j = 0; j < list.count(); ++j) {
@@ -887,7 +877,7 @@ void QDialogButtonBoxPrivate::_q_handleButtonDestroyed()
     Q_Q(QDialogButtonBox);
     if (QObject *object = q->sender()) {
         QBoolBlocker skippy(internalRemove);
-        q->removeButton(static_cast<QAbstractButton *>(object));
+        q->removeButton(reinterpret_cast<QAbstractButton *>(object));
     }
 }
 

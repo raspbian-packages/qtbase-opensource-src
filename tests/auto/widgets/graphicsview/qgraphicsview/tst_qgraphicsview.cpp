@@ -56,8 +56,9 @@
 #include <private/qgraphicsview_p.h>
 #include "../../../shared/platforminputcontext.h"
 #include <private/qinputmethod_p.h>
+#include <private/qguiapplication_p.h>
+#include <qpa/qplatformintegration.h>
 
-#include "../../../qtest-config.h"
 #include "tst_qgraphicsview.h"
 
 Q_DECLARE_METATYPE(ExpectedValueDescription)
@@ -146,7 +147,6 @@ public:
         : platformName(QGuiApplication::platformName().toLower())
     { }
 private slots:
-    void initTestCase();
     void cleanup();
     void construction();
     void renderHints();
@@ -202,7 +202,7 @@ private slots:
 #ifndef QT_NO_WHEELEVENT
     void wheelEvent();
 #endif
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
     void cursor();
     void cursor2();
 #endif
@@ -266,7 +266,7 @@ private slots:
     void QTBUG_4151_clipAndIgnore_data();
     void QTBUG_4151_clipAndIgnore();
     void QTBUG_5859_exposedRect();
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
     void QTBUG_7438_cursor();
 #endif
     void hoverLeave();
@@ -278,13 +278,6 @@ public slots:
 private:
     QString platformName;
 };
-
-void tst_QGraphicsView::initTestCase()
-{
-#ifdef Q_OS_WINCE_WM
-    qApp->setAutoMaximizeThreshold(-1);
-#endif
-}
 
 void tst_QGraphicsView::cleanup()
 {
@@ -498,7 +491,7 @@ void tst_QGraphicsView::scene()
         QCOMPARE(view.scene(), &scene);
     }
 
-    QCOMPARE(view.scene(), (QGraphicsScene *)0);
+    QCOMPARE(view.scene(), nullptr);
 }
 
 void tst_QGraphicsView::setScene()
@@ -538,9 +531,9 @@ void tst_QGraphicsView::deleteScene()
     QGraphicsView view3(scene);
     view3.show();
     delete scene;
-    QCOMPARE(view1.scene(), (QGraphicsScene *)0);
-    QCOMPARE(view2.scene(), (QGraphicsScene *)0);
-    QCOMPARE(view3.scene(), (QGraphicsScene *)0);
+    QCOMPARE(view1.scene(), nullptr);
+    QCOMPARE(view2.scene(), nullptr);
+    QCOMPARE(view3.scene(), nullptr);
 }
 
 void tst_QGraphicsView::sceneRect()
@@ -673,6 +666,9 @@ void tst_QGraphicsView::viewport()
 #ifndef QT_NO_OPENGL
 void tst_QGraphicsView::openGLViewport()
 {
+    if (!QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::OpenGL))
+        QSKIP("QOpenGL is not supported on this platform.");
+
     QGraphicsScene scene;
     scene.setBackgroundBrush(Qt::white);
     scene.addText("GraphicsView");
@@ -739,7 +735,7 @@ void tst_QGraphicsView::dragMode_scrollHand()
 
         for (int i = 0; i < 2; ++i) {
             // ScrollHandDrag
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
             Qt::CursorShape cursorShape = view.viewport()->cursor().shape();
 #endif
             int horizontalScrollBarValue = view.horizontalScrollBar()->value();
@@ -758,7 +754,7 @@ void tst_QGraphicsView::dragMode_scrollHand()
             QTRY_VERIFY(item->isSelected());
 
             for (int k = 0; k < 4; ++k) {
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
                 QCOMPARE(view.viewport()->cursor().shape(), Qt::ClosedHandCursor);
 #endif
                 {
@@ -801,7 +797,7 @@ void tst_QGraphicsView::dragMode_scrollHand()
             QTRY_VERIFY(item->isSelected());
             QCOMPARE(view.horizontalScrollBar()->value(), horizontalScrollBarValue - 10);
             QCOMPARE(view.verticalScrollBar()->value(), verticalScrollBarValue - 10);
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
             QCOMPARE(view.viewport()->cursor().shape(), cursorShape);
 #endif
 
@@ -861,7 +857,7 @@ void tst_QGraphicsView::dragMode_rubberBand()
 
     for (int i = 0; i < 2; ++i) {
         // RubberBandDrag
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
         Qt::CursorShape cursorShape = view.viewport()->cursor().shape();
 #endif
         int horizontalScrollBarValue = view.horizontalScrollBar()->value();
@@ -875,7 +871,7 @@ void tst_QGraphicsView::dragMode_rubberBand()
             QApplication::sendEvent(view.viewport(), &event);
             QVERIFY(event.isAccepted());
         }
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
         QCOMPARE(view.viewport()->cursor().shape(), cursorShape);
 #endif
 
@@ -923,7 +919,7 @@ void tst_QGraphicsView::dragMode_rubberBand()
         }
         QCOMPARE(view.horizontalScrollBar()->value(), horizontalScrollBarValue);
         QCOMPARE(view.verticalScrollBar()->value(), verticalScrollBarValue);
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
         QCOMPARE(view.viewport()->cursor().shape(), cursorShape);
 #endif
 
@@ -1428,20 +1424,9 @@ void tst_QGraphicsView::fitInView()
     items[0]->setTransform(QTransform().rotate(30), true);
     items[1]->setTransform(QTransform().rotate(-30), true);
 
-#if defined(Q_OS_WINCE)
-    //Is the standard scrollbar size
-    int scrollbarSize = qApp->style()->pixelMetric(QStyle::PM_ScrollBarExtent) - 13;
-#endif
-
     QGraphicsView view(&scene);
     view.setSceneRect(-400, -400, 800, 800);
-
-#if defined(Q_OS_WINCE)
-    //We need to take in account the scrollbar size for the WindowsMobilStyle
-    view.setFixedSize(400 + scrollbarSize, 200 + scrollbarSize);
-#else
     view.setFixedSize(400, 200);
-#endif
 
     view.showNormal();
     view.fitInView(scene.itemsBoundingRect(), Qt::IgnoreAspectRatio);
@@ -1855,11 +1840,7 @@ void tst_QGraphicsView::mapToScene()
     QGraphicsView view(&topLevel);
     view.setScene(&scene);
     view.setSceneRect(-500, -500, 1000, 1000);
-#if defined(Q_OS_WINCE)
-    QSize viewSize(200,200);
-#else
     QSize viewSize(300,300);
-#endif
 
     view.setFixedSize(viewSize);
     topLevel.show();
@@ -2266,7 +2247,7 @@ void tst_QGraphicsView::wheelEvent()
 }
 #endif // !QT_NO_WHEELEVENT
 
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
 void tst_QGraphicsView::cursor()
 {
     QGraphicsScene scene;
@@ -2290,7 +2271,7 @@ void tst_QGraphicsView::cursor()
 }
 #endif
 
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
 void tst_QGraphicsView::cursor2()
 {
     QGraphicsScene scene;
@@ -2909,7 +2890,7 @@ public:
 
 void tst_QGraphicsView::scrollBarRanges()
 {
-    QFETCH(QString, style);
+    QFETCH(QByteArray, style);
     QFETCH(QSize, viewportSize);
     QFETCH(QRectF, sceneRect);
     QFETCH(ScrollBarCount, sceneRectOffsetFactors);
@@ -2922,18 +2903,22 @@ void tst_QGraphicsView::scrollBarRanges()
     QFETCH(ExpectedValueDescription, vmax);
     QFETCH(bool, useStyledPanel);
 
-    if (useStyledPanel && style == QStringLiteral("Macintosh") && platformName == QStringLiteral("cocoa"))
+    if (useStyledPanel && style == "Macintosh" && platformName == QStringLiteral("cocoa"))
         QSKIP("Insignificant on OSX");
+
+    QScopedPointer<QStyle> stylePtr;
+
     QGraphicsScene scene;
     QGraphicsView view(&scene);
     view.setRenderHint(QPainter::Antialiasing);
     view.setTransform(transform);
     view.setFrameStyle(useStyledPanel ? QFrame::StyledPanel : QFrame::NoFrame);
 
-    if (style == QString("motif"))
-        view.setStyle(new FauxMotifStyle);
+    if (style == "motif")
+        stylePtr.reset(new FauxMotifStyle);
     else
-        view.setStyle(QStyleFactory::create(style));
+        stylePtr.reset(QStyleFactory::create(QLatin1String(style)));
+    view.setStyle(stylePtr.data());
     view.setStyleSheet(" "); // enables style propagation ;-)
 
     int adjust = 0;
@@ -3500,7 +3485,7 @@ void tst_QGraphicsView::task245469_itemsAtPointWithClip()
 static QGraphicsView *createSimpleViewAndScene()
 {
     QGraphicsView *view = new QGraphicsView;
-    QGraphicsScene *scene = new QGraphicsScene;
+    QGraphicsScene *scene = new QGraphicsScene(view);
     view->setScene(scene);
 
     view->setBackgroundBrush(Qt::blue);
@@ -3628,7 +3613,7 @@ void tst_QGraphicsView::moveItemWhileScrolling()
         MoveItemScrollView()
         {
             setWindowFlags(Qt::X11BypassWindowManagerHint);
-            setScene(new QGraphicsScene(0, 0, 1000, 1000));
+            setScene(new QGraphicsScene(0, 0, 1000, 1000, this));
             rect = scene()->addRect(0, 0, 10, 10);
             rect->setPos(50, 50);
             rect->setPen(QPen(Qt::black, 0));
@@ -3694,7 +3679,7 @@ void tst_QGraphicsView::centerOnDirtyItem()
     toplevel.setWindowFlags(view.windowFlags() | Qt::WindowStaysOnTopHint);
     view.resize(200, 200);
 
-    QGraphicsScene *scene = new QGraphicsScene;
+    QGraphicsScene *scene = new QGraphicsScene(&view);
     view.setScene(scene);
     view.setSceneRect(-1000, -1000, 2000, 2000);
 
@@ -3785,7 +3770,7 @@ void tst_QGraphicsView::mouseTracking()
         QGraphicsView view(&scene);
 
         QGraphicsRectItem *item = new QGraphicsRectItem(10, 10, 10, 10);
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
         item->setCursor(Qt::CrossCursor);
 #endif
         scene.addItem(item);
@@ -3795,7 +3780,7 @@ void tst_QGraphicsView::mouseTracking()
         // Adding an item to the scene before the scene is set on the view.
         QGraphicsScene scene(-10000, -10000, 20000, 20000);
         QGraphicsRectItem *item = new QGraphicsRectItem(10, 10, 10, 10);
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
         item->setCursor(Qt::CrossCursor);
 #endif
         scene.addItem(item);
@@ -3812,7 +3797,7 @@ void tst_QGraphicsView::mouseTracking()
         QGraphicsView view3(&scene);
 
         QGraphicsRectItem *item = new QGraphicsRectItem(10, 10, 10, 10);
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
         item->setCursor(Qt::CrossCursor);
 #endif
         scene.addItem(item);
@@ -4573,9 +4558,6 @@ void tst_QGraphicsView::task253415_reconnectUpdateSceneOnSceneChanged()
 
 void tst_QGraphicsView::task255529_transformationAnchorMouseAndViewportMargins()
 {
-#if defined(Q_OS_WINCE)
-    QSKIP("Qt/CE does not implement mouse tracking at this point");
-#endif
     QGraphicsScene scene(-100, -100, 200, 200);
     scene.addRect(QRectF(-50, -50, 100, 100), QPen(Qt::black), QBrush(Qt::blue));
 
@@ -4767,7 +4749,7 @@ void tst_QGraphicsView::QTBUG_5859_exposedRect()
     QCOMPARE(item.lastExposedRect, scene.lastBackgroundExposedRect);
 }
 
-#ifndef QTEST_NO_CURSOR
+#ifndef QT_NO_CURSOR
 void tst_QGraphicsView::QTBUG_7438_cursor()
 {
     QGraphicsScene scene;
@@ -4822,8 +4804,12 @@ public:
 
 void tst_QGraphicsView::hoverLeave()
 {
-    if (platformName == QStringLiteral("cocoa"))
+    if (platformName == QStringLiteral("cocoa")) {
         QSKIP("Insignificant on OSX");
+    } else if (platformName == QStringLiteral("minimal")
+        || (platformName == QStringLiteral("offscreen"))) {
+        QSKIP("Fails in minimal/offscreen platforms if forwardMouseDoubleClick has been run");
+    }
     const QRect availableGeometry = QGuiApplication::primaryScreen()->availableGeometry();
     QGraphicsScene scene;
     QGraphicsView view(&scene);

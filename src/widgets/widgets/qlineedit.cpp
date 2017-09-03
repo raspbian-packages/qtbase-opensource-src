@@ -64,6 +64,8 @@
 #include "qdebug.h"
 #include "qtextedit.h"
 #include <private/qtextedit_p.h>
+#include <private/qwidgettextcontrol_p.h>
+
 #ifndef QT_NO_ACCESSIBILITY
 #include "qaccessible.h"
 #endif
@@ -87,7 +89,7 @@
 
 QT_BEGIN_NAMESPACE
 
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
 extern void qt_mac_secure_keyboard(bool); //qapplication_mac.cpp
 #endif
 
@@ -126,6 +128,8 @@ void QLineEdit::initStyleOption(QStyleOptionFrame *option) const
     \ingroup basicwidgets
     \inmodule QtWidgets
 
+    \image windows-lineedit.png
+
     A line edit allows the user to enter and edit a single line of
     plain text with a useful collection of editing functions,
     including undo and redo, cut and paste, and drag and drop (see
@@ -139,7 +143,6 @@ void QLineEdit::initStyleOption(QStyleOptionFrame *option) const
     inputMask(), or both. When switching between a validator and an input mask
     on the same line edit, it is best to clear the validator or input mask to
     prevent undefined behavior.
-
 
     A related class is QTextEdit which allows multi-line, rich text
     editing.
@@ -200,15 +203,6 @@ void QLineEdit::initStyleOption(QStyleOptionFrame *option) const
     Any other key sequence that represents a valid character, will
     cause the character to be inserted into the line edit.
 
-    \table 100%
-    \row \li \inlineimage macintosh-lineedit.png Screenshot of a Macintosh style line edit
-         \li A line edit shown in the \l{Macintosh Style Widget Gallery}{Macintosh widget style}.
-    \row \li \inlineimage windowsvista-lineedit.png Screenshot of a Windows Vista style line edit
-         \li A line edit shown in the \l{Windows Vista Style Widget Gallery}{Windows Vista widget style}.
-    \row \li \inlineimage fusion-lineedit.png Screenshot of a Fusion style line edit
-         \li A line edit shown in the \l{Fusion Style Widget Gallery}{Fusion widget style}.
-    \endtable
-
     \sa QTextEdit, QLabel, QComboBox, {fowler}{GUI Design Handbook: Field, Entry}, {Line Edits Example}
 */
 
@@ -260,10 +254,8 @@ void QLineEdit::initStyleOption(QStyleOptionFrame *option) const
     \sa setText(), setMaxLength()
 */
 QLineEdit::QLineEdit(QWidget* parent)
-    : QWidget(*new QLineEditPrivate, parent,0)
+    : QLineEdit(QString(), parent)
 {
-    Q_D(QLineEdit);
-    d->init(QString());
 }
 
 /*!
@@ -439,6 +431,7 @@ bool QLineEdit::hasFrame() const
     \since 5.2
 */
 
+#if QT_CONFIG(action)
 /*!
     \overload
 
@@ -468,7 +461,7 @@ QAction *QLineEdit::addAction(const QIcon &icon, ActionPosition position)
     addAction(result, position);
     return result;
 }
-
+#endif // QT_CONFIG(action)
 /*!
     \property QLineEdit::clearButtonEnabled
     \brief Whether the line edit displays a clear button when it is not empty.
@@ -485,6 +478,7 @@ static const char clearButtonActionNameC[] = "_q_qlineeditclearaction";
 
 void QLineEdit::setClearButtonEnabled(bool enable)
 {
+#if QT_CONFIG(action)
     Q_D(QLineEdit);
     if (enable == isClearButtonEnabled())
         return;
@@ -499,11 +493,16 @@ void QLineEdit::setClearButtonEnabled(bool enable)
         d->removeAction(clearAction);
         delete clearAction;
     }
+#endif // QT_CONFIG(action)
 }
 
 bool QLineEdit::isClearButtonEnabled() const
 {
+#if QT_CONFIG(action)
     return findChild<QAction *>(QLatin1String(clearButtonActionNameC));
+#else
+    return false;
+#endif
 }
 
 void QLineEdit::setFrame(bool enable)
@@ -575,7 +574,7 @@ void QLineEdit::setEchoMode(EchoMode mode)
     setInputMethodHints(imHints);
     d->control->setEchoMode(mode);
     update();
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     if (hasFocus())
         qt_mac_secure_keyboard(mode == Password || mode == NoEcho);
 #endif
@@ -605,7 +604,7 @@ const QValidator * QLineEdit::validator() const
     The initial setting is to have no input validator (i.e. any input
     is accepted up to maxLength()).
 
-    \sa validator(), QIntValidator, QDoubleValidator, QRegExpValidator
+    \sa validator(), hasAcceptableInput(), QIntValidator, QDoubleValidator, QRegExpValidator
 */
 
 void QLineEdit::setValidator(const QValidator *v)
@@ -739,10 +738,10 @@ void QLineEdit::setCursorPosition(int pos)
     d->control->setCursorPosition(pos);
 }
 
+// ### What should this do if the point is outside of contentsRect? Currently returns 0.
 /*!
     Returns the cursor position under the point \a pos.
 */
-// ### What should this do if the point is outside of contentsRect? Currently returns 0.
 int QLineEdit::cursorPositionAt(const QPoint &pos)
 {
     Q_D(QLineEdit);
@@ -1434,8 +1433,10 @@ bool QLineEdit::event(QEvent * e)
                 || style()->styleHint(QStyle::SH_BlinkCursorWhenTextSelected, &opt, this))
                 d->setCursorVisible(true);
         }
+#if QT_CONFIG(action)
     } else if (e->type() == QEvent::ActionRemoved) {
         d->removeAction(static_cast<QActionEvent *>(e)->action());
+#endif
     } else if (e->type() == QEvent::Resize) {
         d->positionSideWidgets();
     }
@@ -1812,7 +1813,7 @@ void QLineEdit::focusInEvent(QFocusEvent *e)
     if((!hasSelectedText() && d->control->preeditAreaText().isEmpty())
        || style()->styleHint(QStyle::SH_BlinkCursorWhenTextSelected, &opt, this))
         d->setCursorVisible(true);
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     if (d->control->echoMode() == Password || d->control->echoMode() == NoEcho)
         qt_mac_secure_keyboard(true);
 #endif
@@ -1860,7 +1861,7 @@ void QLineEdit::focusOutEvent(QFocusEvent *e)
             if (hasAcceptableInput() || d->control->fixup())
                 emit editingFinished();
     }
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     if (d->control->echoMode() == Password || d->control->echoMode() == NoEcho)
         qt_mac_secure_keyboard(false);
 #endif
@@ -1911,13 +1912,19 @@ void QLineEdit::paintEvent(QPaintEvent *)
 
     if (d->shouldShowPlaceholderText()) {
         if (!d->placeholderText.isEmpty()) {
+            const Qt::LayoutDirection layoutDir = d->placeholderText.isRightToLeft() ? Qt::RightToLeft : Qt::LeftToRight;
+            const Qt::Alignment alignPhText = QStyle::visualAlignment(layoutDir, QFlag(d->alignment));
             QColor col = pal.text().color();
             col.setAlpha(128);
             QPen oldpen = p.pen();
             p.setPen(col);
-            QString elidedText = fm.elidedText(d->placeholderText, Qt::ElideRight, lineRect.width());
-            p.drawText(lineRect, va, elidedText);
+            Qt::LayoutDirection oldLayoutDir = p.layoutDirection();
+            p.setLayoutDirection(layoutDir);
+
+            const QString elidedText = fm.elidedText(d->placeholderText, Qt::ElideRight, lineRect.width());
+            p.drawText(lineRect, alignPhText, elidedText);
             p.setPen(oldpen);
+            p.setLayoutDirection(oldLayoutDir);
         }
     }
 
@@ -2191,10 +2198,12 @@ void QLineEdit::changeEvent(QEvent *ev)
         update();
         break;
     case QEvent::LayoutDirectionChange:
+#if QT_CONFIG(toolbutton)
         for (const auto &e : d->trailingSideWidgets) { // Refresh icon to show arrow in right direction.
             if (e.flags & QLineEditPrivate::SideWidgetClearButton)
                 static_cast<QLineEditIconButton *>(e.widget)->setIcon(d->clearButtonIcon());
         }
+#endif
         d->positionSideWidgets();
         break;
     default:

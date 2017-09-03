@@ -111,10 +111,7 @@ QMakeGlobals::ArgumentReturn QMakeGlobals::addCommandLineArguments(
         QString arg = args.at(*pos);
         switch (argState) {
         case ArgConfig:
-            if (state.after)
-                state.postconfigs << arg;
-            else
-                state.preconfigs << arg;
+            state.configs[state.phase] << arg;
             break;
         case ArgSpec:
             qmakespec = args[*pos] = cleanSpec(state, arg);
@@ -136,8 +133,19 @@ QMakeGlobals::ArgumentReturn QMakeGlobals::addCommandLineArguments(
             break;
         default:
             if (arg.startsWith(QLatin1Char('-'))) {
-                if (arg == QLatin1String("-after"))
-                    state.after = true;
+                if (arg == QLatin1String("--")) {
+                    state.extraargs = args.mid(*pos + 1);
+                    args.erase(args.begin() + *pos, args.end());
+                    return ArgumentsOk;
+                }
+                if (arg == QLatin1String("-early"))
+                    state.phase = QMakeEvalEarly;
+                else if (arg == QLatin1String("-before"))
+                    state.phase = QMakeEvalBefore;
+                else if (arg == QLatin1String("-after"))
+                    state.phase = QMakeEvalAfter;
+                else if (arg == QLatin1String("-late"))
+                    state.phase = QMakeEvalLate;
                 else if (arg == QLatin1String("-config"))
                     argState = ArgConfig;
                 else if (arg == QLatin1String("-nocache"))
@@ -161,10 +169,7 @@ QMakeGlobals::ArgumentReturn QMakeGlobals::addCommandLineArguments(
                 else
                     return ArgumentUnknown;
             } else if (arg.contains(QLatin1Char('='))) {
-                if (state.after)
-                    state.postcmds << arg;
-                else
-                    state.precmds << arg;
+                state.cmds[state.phase] << arg;
             } else {
                 return ArgumentUnknown;
             }
@@ -179,12 +184,17 @@ QMakeGlobals::ArgumentReturn QMakeGlobals::addCommandLineArguments(
 
 void QMakeGlobals::commitCommandLineArguments(QMakeCmdLineParserState &state)
 {
-    if (!state.preconfigs.isEmpty())
-        state.precmds << (fL1S("CONFIG += ") + state.preconfigs.join(QLatin1Char(' ')));
-    precmds = state.precmds.join(QLatin1Char('\n'));
-    if (!state.postconfigs.isEmpty())
-        state.postcmds << (fL1S("CONFIG += ") + state.postconfigs.join(QLatin1Char(' ')));
-    postcmds = state.postcmds.join(QLatin1Char('\n'));
+    if (!state.extraargs.isEmpty()) {
+        QString extra = fL1S("QMAKE_EXTRA_ARGS =");
+        for (const QString &ea : qAsConst(state.extraargs))
+            extra += QLatin1Char(' ') + QMakeEvaluator::quoteValue(ProString(ea));
+        state.cmds[QMakeEvalBefore] << extra;
+    }
+    for (int p = 0; p < 4; p++) {
+        if (!state.configs[p].isEmpty())
+            state.cmds[p] << (fL1S("CONFIG += ") + state.configs[p].join(QLatin1Char(' ')));
+        extra_cmds[p] = state.cmds[p].join(QLatin1Char('\n'));
+    }
 
     if (xqmakespec.isEmpty())
         xqmakespec = qmakespec;

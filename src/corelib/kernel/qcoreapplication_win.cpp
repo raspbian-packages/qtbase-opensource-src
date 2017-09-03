@@ -51,26 +51,19 @@
 #include <ctype.h>
 #include <qt_windows.h>
 
+#ifdef Q_OS_WINRT
+#include <qfunctions_winrt.h>
+#include <wrl.h>
+#include <Windows.ApplicationModel.core.h>
+#include <windows.foundation.h>
+using namespace ABI::Windows::ApplicationModel;
+using namespace Microsoft::WRL;
+using namespace Microsoft::WRL::Wrappers;
+#endif
+
 QT_BEGIN_NAMESPACE
 
 int appCmdShow = 0;
-
-// GetModuleFileName only exists for MSVC2015 and upwards for WinRT, meaning
-// Windows 10 (Mobile). Hence take the first argument passed to the
-// QCoreApplication contructor for older versions as a fallback on older platforms.
-#if defined(Q_OS_WINRT) && _MSC_VER < 1900
-
-Q_CORE_EXPORT QString qAppFileName()
-{
-    return QFileInfo(QCoreApplication::arguments().constFirst()).filePath();
-}
-
-QString QCoreApplicationPrivate::appName() const
-{
-    return QFileInfo(QCoreApplication::arguments().constFirst()).baseName();
-}
-
-#else // !(defined(Q_OS_WINRT) && _MSC_VER < 1900)
 
 Q_CORE_EXPORT QString qAppFileName()                // get application file name
 {
@@ -118,10 +111,67 @@ QString QCoreApplicationPrivate::appName() const
     return QFileInfo(qAppFileName()).baseName();
 }
 
-#endif // !(defined(Q_OS_WINRT) && _MSC_VER < 1900)
+QString QCoreApplicationPrivate::appVersion() const
+{
+    QString applicationVersion;
+#ifndef QT_BOOTSTRAPPED
+#  ifdef Q_OS_WINRT
+    HRESULT hr;
+
+    ComPtr<IPackageStatics> packageFactory;
+    hr = RoGetActivationFactory(
+        HString::MakeReference(RuntimeClass_Windows_ApplicationModel_Package).Get(),
+        IID_PPV_ARGS(&packageFactory));
+    RETURN_IF_FAILED("Failed to create package instance", return QString());
+
+    ComPtr<IPackage> package;
+    packageFactory->get_Current(&package);
+    RETURN_IF_FAILED("Failed to get current application package", return QString());
+
+    ComPtr<IPackageId> packageId;
+    package->get_Id(&packageId);
+    RETURN_IF_FAILED("Failed to get current application package ID", return QString());
+
+    PackageVersion version;
+    packageId->get_Version(&version);
+    RETURN_IF_FAILED("Failed to get current application package version", return QString());
+
+    applicationVersion = QStringLiteral("%1.%2.%3.%4")
+            .arg(version.Major)
+            .arg(version.Minor)
+            .arg(version.Build)
+            .arg(version.Revision);
+#  else
+    const QString appFileName = qAppFileName();
+    QVarLengthArray<wchar_t> buffer(appFileName.size() + 1);
+    buffer[appFileName.toWCharArray(buffer.data())] = 0;
+
+    DWORD versionInfoSize = GetFileVersionInfoSize(buffer.data(), nullptr);
+    if (versionInfoSize) {
+        QVarLengthArray<BYTE> info(static_cast<int>(versionInfoSize));
+        if (GetFileVersionInfo(buffer.data(), 0, versionInfoSize, info.data())) {
+            UINT size;
+            DWORD *fi;
+
+            if (VerQueryValue(info.data(), __TEXT("\\"),
+                              reinterpret_cast<void **>(&fi), &size) && size) {
+                const VS_FIXEDFILEINFO *verInfo = reinterpret_cast<const VS_FIXEDFILEINFO *>(fi);
+                applicationVersion = QStringLiteral("%1.%2.%3.%4")
+                        .arg(HIWORD(verInfo->dwProductVersionMS))
+                        .arg(LOWORD(verInfo->dwProductVersionMS))
+                        .arg(HIWORD(verInfo->dwProductVersionLS))
+                        .arg(LOWORD(verInfo->dwProductVersionLS));
+            }
+        }
+    }
+#  endif
+#endif
+    return applicationVersion;
+}
 
 #ifndef Q_OS_WINRT
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 Q_CORE_EXPORT HINSTANCE qWinAppInst()                // get Windows app handle
 {
     return GetModuleHandle(0);
@@ -145,56 +195,7 @@ Q_CORE_EXPORT int qWinAppCmdShow()                        // get main window sho
         : SW_SHOWDEFAULT;
 #endif
 }
-
-/*****************************************************************************
-  qWinMain() - Initializes Windows. Called from WinMain() in qtmain_win.cpp
- *****************************************************************************/
-
-#if !defined(Q_OS_WINCE) && !defined(Q_OS_WINRT)
-
-// ### Qt6: FIXME: Consider removing this function. It is here for Active Qt
-// servers and for binary for compatibility to applications built with Qt 5.3
-// using qtmain.lib which calls it In Qt 5.4, qtmain.lib was changed to use
-// CommandLineToArgvW() without calling into Qt5Core.
-Q_CORE_EXPORT
-void qWinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR cmdParam,
-              int cmdShow, int &argc, QVector<char *> &argv)
-{
-    Q_UNUSED(instance)
-    Q_UNUSED(prevInstance)
-    Q_UNUSED(cmdShow)
-
-    const QStringList wArgv = qWinCmdArgs(QString::fromLocal8Bit(cmdParam));
-    argv.clear();
-    argc = wArgv.size();
-    for (const QString &wArg : wArgv)
-        argv.append(_strdup(wArg.toLocal8Bit().constData()));
-}
-
-#elif defined(Q_OS_WINCE)
-
-Q_CORE_EXPORT void __cdecl qWinMain(HINSTANCE instance, HINSTANCE prevInstance, LPSTR cmdParam,
-               int cmdShow, int &argc, QVector<char *> &argv)
-{
-    static bool already_called = false;
-
-    if (already_called) {
-        qWarning("Qt: Internal error: qWinMain should be called only once");
-        return;
-    }
-    already_called = true;
-
-    // Create command line
-    argv = qWinCmdLine<char>(cmdParam, int(strlen(cmdParam)), argc);
-
-    appCmdShow = cmdShow;
-
-    // Ignore Windows parameters
-    Q_UNUSED(instance);
-    Q_UNUSED(prevInstance);
-}
-
-#endif // Q_OS_WINCE
+#endif
 
 #ifndef QT_NO_QOBJECT
 
@@ -211,11 +212,6 @@ QT_END_INCLUDE_NAMESPACE
 #if !defined(GET_X_LPARAM)
 #  define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
 #  define GET_Y_LPARAM(lp) ((int)(short)HIWORD(lp))
-#endif
-#ifdef _WIN32_WCE
-#  ifndef WM_NCACTIVATE
-#    define WM_NCACTIVATE 0x86
-#  endif
 #endif
 
 // The values below should never change. Note that none of the usual

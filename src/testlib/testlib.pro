@@ -14,6 +14,7 @@ QMAKE_DOCS = $$PWD/doc/qttestlib.qdocconf
 HEADERS = qbenchmark.h \
     qbenchmark_p.h \
     qbenchmarkmeasurement_p.h \
+    qbenchmarktimemeasurers_p.h \
     qbenchmarkvalgrind_p.h \
     qbenchmarkevent_p.h \
     qbenchmarkperfevents_p.h \
@@ -28,6 +29,7 @@ HEADERS = qbenchmark.h \
     qtesteventloop.h \
     qtest_global.h \
     qtest_gui.h \
+    qtest_network.h \
     qtest_widgets.h \
     qtest.h \
     qtestkeyboard.h \
@@ -67,13 +69,6 @@ DEFINES *= QT_NO_CAST_TO_ASCII \
     QT_NO_FOREACH \
     QT_NO_DATASTREAM
 embedded:QMAKE_CXXFLAGS += -fno-rtti
-wince: LIBS += \
-    ole32.lib \
-    oleaut32.lib \
-    uuid.lib \
-    commctrl.lib \
-    coredll.lib \
-    winsock.lib
 
 mac {
     LIBS += -framework Security
@@ -115,5 +110,7 @@ mac {
 }
 
 !qtHaveModule(widgets): HEADERSCLEAN_EXCLUDE += qtest_widgets.h
+
+!qtHaveModule(network): HEADERSCLEAN_EXCLUDE += qtest_network.h
 
 load(qt_module)

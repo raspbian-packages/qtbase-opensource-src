@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtCore/private/qglobal_p.h>
 #include <QtCore/qstring.h>
 
 QT_BEGIN_NAMESPACE
@@ -72,7 +73,7 @@ public:
     static bool isNameChar(const QChar c);
     static bool isLetter(const QChar c);
     static bool isNCName(const QStringRef &ncName);
-    static inline bool isNCName(const QString &ncName) { return isNCName(&ncName); }
+    static inline bool isNCName(const QString &ncName) { return isNCName(QStringRef(&ncName)); }
     static bool isPublicID(const QString &candidate);
 
 private:

@@ -569,7 +569,7 @@ void QQnxWindow::requestActivateWindow()
         for (int i = 1; i < windowList.size(); ++i)
             windowList.at(i-1)->setFocus(windowList.at(i)->nativeHandle());
 
-        windowList.last()->setFocus(windowList.last()->nativeHandle());
+        windowList.last()->setFocus(windowList.constLast()->nativeHandle());
     }
 
     screen_flush_context(m_screenContext, 0);
@@ -694,7 +694,7 @@ void QQnxWindow::initWindow()
 void QQnxWindow::createWindowGroup()
 {
     // Generate a random window group name
-    m_windowGroupName = QUuid::createUuid().toString().toLatin1();
+    m_windowGroupName = QUuid::createUuid().toByteArray();
 
     // Create window group so child windows can be parented by container window
     Q_SCREEN_CHECKERROR(screen_create_window_group(m_window, m_windowGroupName.constData()),

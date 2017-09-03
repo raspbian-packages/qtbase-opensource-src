@@ -44,6 +44,7 @@
 #include "qpa/qplatformdrag.h"
 #include "private/qevent_p.h"
 #include "qfile.h"
+#include "qhashfunctions.h"
 #include "qmetaobject.h"
 #include "qmimedata.h"
 #include "private/qdnd_p.h"
@@ -289,7 +290,7 @@ QMouseEvent::QMouseEvent(Type type, const QPointF &localPos, Qt::MouseButton but
 QMouseEvent::QMouseEvent(Type type, const QPointF &localPos, const QPointF &screenPos,
                          Qt::MouseButton button, Qt::MouseButtons buttons,
                          Qt::KeyboardModifiers modifiers)
-    : QInputEvent(type, modifiers), l(localPos), w(localPos), s(screenPos), b(button), mouseState(buttons), caps(0)
+    : QMouseEvent(type, localPos, localPos, screenPos, button, buttons, modifiers)
 {}
 
 /*!
@@ -342,7 +343,7 @@ QMouseEvent::QMouseEvent(Type type, const QPointF &localPos, const QPointF &wind
 QMouseEvent::QMouseEvent(QEvent::Type type, const QPointF &localPos, const QPointF &windowPos, const QPointF &screenPos,
                          Qt::MouseButton button, Qt::MouseButtons buttons,
                          Qt::KeyboardModifiers modifiers, Qt::MouseEventSource source)
-    : QInputEvent(type, modifiers), l(localPos), w(windowPos), s(screenPos), b(button), mouseState(buttons), caps(0)
+    : QMouseEvent(type, localPos, windowPos, screenPos, button, buttons, modifiers)
 {
     QGuiApplicationPrivate::setMouseEventSource(this, source);
 }
@@ -402,6 +403,18 @@ Qt::MouseEventFlags QMouseEvent::flags() const
     motion.
 
     \sa x(), y(), windowPos(), screenPos()
+*/
+
+/*!
+    \fn void QMouseEvent::setLocalPos(const QPointF &localPosition)
+
+    \since 5.8
+
+    \internal
+
+    Sets the local position in the mouse event to \a localPosition. This allows to re-use one event
+    when sending it to a series of receivers that expect the local pos in their
+    respective local coordinates.
 */
 
 /*!
@@ -829,9 +842,8 @@ QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos, int delta
 QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos,
             QPoint pixelDelta, QPoint angleDelta, int qt4Delta, Qt::Orientation qt4Orientation,
             Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers)
-    : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), pixelD(pixelDelta),
-      angleD(angleDelta), qt4D(qt4Delta), qt4O(qt4Orientation), mouseState(buttons), ph(Qt::NoScrollPhase),
-      src(Qt::MouseEventNotSynthesized), invertedScrolling(false)
+    : QWheelEvent(pos, globalPos, pixelDelta, angleDelta, qt4Delta, qt4Orientation,
+                  buttons, modifiers, Qt::NoScrollPhase)
 {}
 
 /*!
@@ -860,9 +872,8 @@ QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos,
 QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos,
             QPoint pixelDelta, QPoint angleDelta, int qt4Delta, Qt::Orientation qt4Orientation,
             Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers, Qt::ScrollPhase phase)
-    : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), pixelD(pixelDelta),
-      angleD(angleDelta), qt4D(qt4Delta), qt4O(qt4Orientation), mouseState(buttons), ph(phase),
-      src(Qt::MouseEventNotSynthesized), invertedScrolling(false)
+    : QWheelEvent(pos, globalPos, pixelDelta, angleDelta, qt4Delta, qt4Orientation,
+                  buttons, modifiers, phase, Qt::MouseEventNotSynthesized)
 {}
 
 /*!
@@ -896,9 +907,8 @@ QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos,
 QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos,
             QPoint pixelDelta, QPoint angleDelta, int qt4Delta, Qt::Orientation qt4Orientation,
             Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers, Qt::ScrollPhase phase, Qt::MouseEventSource source)
-    : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), pixelD(pixelDelta),
-      angleD(angleDelta), qt4D(qt4Delta), qt4O(qt4Orientation), mouseState(buttons), ph(phase), src(source),
-      invertedScrolling(false)
+    : QWheelEvent(pos, globalPos, pixelDelta, angleDelta, qt4Delta, qt4Orientation,
+                  buttons, modifiers, phase, source, false)
 {}
 
 /*!
@@ -1658,7 +1668,7 @@ QResizeEvent::~QResizeEvent()
     The event handler QWidget::closeEvent() receives close events. The
     default implementation of this event handler accepts the close
     event. If you do not want your widget to be hidden, or want some
-    special handing, you should reimplement the event handler and
+    special handling, you should reimplement the event handler and
     ignore() the event.
 
     The \l{mainwindows/application#close event handler}{closeEvent() in the
@@ -1767,7 +1777,7 @@ QIconDragEvent::~QIconDragEvent()
     coordinates.
 */
 QContextMenuEvent::QContextMenuEvent(Reason reason, const QPoint &pos, const QPoint &globalPos)
-    : QInputEvent(ContextMenu), p(pos), gp(globalPos), reas(reason)
+    : QContextMenuEvent(reason, pos, globalPos, Qt::NoModifier)
 {}
 
 /*!
@@ -2062,6 +2072,16 @@ QContextMenuEvent::QContextMenuEvent(Reason reason, const QPoint &pos)
     Constructs an input method attribute. \a type specifies the type
     of attribute, \a start and \a length the position of the
     attribute, and \a value the value of the attribute.
+*/
+
+/*!
+    \fn QInputMethodEvent::Attribute::Attribute(AttributeType type, int start, int length)
+    \overload
+    \since 5.7
+
+    Constructs an input method attribute with no value. \a type
+    specifies the type of attribute, and \a start and \a length
+    the position of the attribute.
 */
 
 /*!
@@ -2440,19 +2460,8 @@ QTabletEvent::QTabletEvent(Type type, const QPointF &pos, const QPointF &globalP
                            int device, int pointerType,
                            qreal pressure, int xTilt, int yTilt, qreal tangentialPressure,
                            qreal rotation, int z, Qt::KeyboardModifiers keyState, qint64 uniqueID)
-    : QInputEvent(type, keyState),
-      mPos(pos),
-      mGPos(globalPos),
-      mDev(device),
-      mPointerType(pointerType),
-      mXT(xTilt),
-      mYT(yTilt),
-      mZ(z),
-      mPress(pressure),
-      mTangential(tangentialPressure),
-      mRot(rotation),
-      mUnique(uniqueID),
-      mExtra(new QTabletEventPrivate(Qt::NoButton, Qt::NoButton))
+    : QTabletEvent(type, pos, globalPos, device, pointerType, pressure, xTilt, yTilt,
+                   tangentialPressure, rotation, z, keyState, uniqueID, Qt::NoButton, Qt::NoButton)
 {
 }
 
@@ -2930,6 +2939,7 @@ QDragMoveEvent::~QDragMoveEvent()
     type information.
 */
 
+// ### pos is in which coordinate system?
 /*!
     Constructs a drop event of a certain \a type corresponding to a
     drop at the point specified by \a pos in the destination widget's
@@ -2940,7 +2950,7 @@ QDragMoveEvent::~QDragMoveEvent()
 
     The states of the mouse buttons and keyboard modifiers at the time of
     the drop are specified by \a buttons and \a modifiers.
-*/ // ### pos is in which coordinate system?
+*/
 QDropEvent::QDropEvent(const QPointF& pos, Qt::DropActions actions, const QMimeData *data,
                        Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers, Type type)
     : QEvent(type), p(pos), mouseState(buttons),
@@ -3879,12 +3889,15 @@ QDebug operator<<(QDebug dbg, const QTouchEvent::TouchPoint &tp)
 {
     QDebugStateSaver saver(dbg);
     dbg.nospace();
-    dbg << "TouchPoint(" << tp.id() << " (";
-    QtDebugUtils::formatQRect(dbg, tp.rect());
+    dbg << "TouchPoint(" << hex << tp.id() << dec << " (";
+    QtDebugUtils::formatQPoint(dbg, tp.pos());
     dbg << ") ";
     QtDebugUtils::formatQEnum(dbg, tp.state());
-    dbg << " press " << tp.pressure() << " vel " << tp.velocity()
-        << " start (";
+    dbg << " pressure " << tp.pressure() << " ellipse ("
+        << tp.ellipseDiameters().width() << " x " << tp.ellipseDiameters().height()
+        << " angle " << tp.rotation() << ") vel (";
+    QtDebugUtils::formatQPoint(dbg, tp.velocity().toPointF());
+    dbg << ") start (";
     QtDebugUtils::formatQPoint(dbg, tp.startPos());
     dbg << ") last (";
     QtDebugUtils::formatQPoint(dbg, tp.lastPos());
@@ -3967,6 +3980,7 @@ QDebug operator<<(QDebug dbg, const QEvent *e)
         dbg << ')';
     }
         break;
+#ifndef QT_NO_SHORTCUT
     case QEvent::Shortcut: {
         const QShortcutEvent *se = static_cast<const QShortcutEvent *>(e);
         dbg << "QShortcutEvent(" << se->key().toString() << ", id=" << se->shortcutId();
@@ -3975,6 +3989,7 @@ QDebug operator<<(QDebug dbg, const QEvent *e)
         dbg << ')';
     }
         break;
+#endif
     case QEvent::FocusAboutToChange:
     case QEvent::FocusIn:
     case QEvent::FocusOut:
@@ -4074,6 +4089,20 @@ QDebug operator<<(QDebug dbg, const QEvent *e)
             break;
         }
         dbg << ')';
+        break;
+    case QEvent::ScrollPrepare: {
+        const QScrollPrepareEvent *se = static_cast<const QScrollPrepareEvent *>(e);
+        dbg << "QScrollPrepareEvent(viewportSize=" << se->viewportSize()
+            << ", contentPosRange=" << se->contentPosRange()
+            << ", contentPos=" << se->contentPos() << ')';
+    }
+        break;
+    case QEvent::Scroll: {
+        const QScrollEvent *se = static_cast<const QScrollEvent *>(e);
+        dbg << "QScrollEvent(contentPos=" << se->contentPos()
+            << ", overshootDistance=" << se->overshootDistance()
+            << ", scrollState=" << se->scrollState() << ')';
+    }
         break;
     default:
         dbg << eventClassName(type) << '(';
@@ -4407,6 +4436,8 @@ QTouchEvent::~QTouchEvent()
     \brief The TouchPoint class provides information about a touch point in a QTouchEvent.
     \since 4.6
     \inmodule QtGui
+
+    \image touchpoint-metrics.png
 */
 
 /*! \enum TouchPoint::InfoFlag
@@ -4414,6 +4445,7 @@ QTouchEvent::~QTouchEvent()
     The values of this enum describe additional information about a touch point.
 
     \value Pen Indicates that the contact has been made by a designated pointing device (e.g. a pen) instead of a finger.
+    \value Token Indicates that the contact has been made by a fiducial object (e.g. a knob or other token) instead of a finger.
 */
 
 /*!
@@ -4460,6 +4492,22 @@ int QTouchEvent::TouchPoint::id() const
 }
 
 /*!
+    \since 5.8
+    Returns the unique ID of this touch point or token, if any.
+
+    It is normally invalid (see \l {QPointingDeviceUniqueId::isValid()} {isValid()}),
+    because touchscreens cannot uniquely identify fingers. But when the
+    \l {TouchPoint::InfoFlag} {Token} flag is set, it is expected to uniquely
+    identify a specific token (fiducial object).
+
+    \sa flags
+*/
+QPointingDeviceUniqueId QTouchEvent::TouchPoint::uniqueId() const
+{
+    return d->uniqueId;
+}
+
+/*!
     Returns the current state of this touch point.
 */
 Qt::TouchPointState QTouchEvent::TouchPoint::state() const
@@ -4475,7 +4523,7 @@ Qt::TouchPointState QTouchEvent::TouchPoint::state() const
 */
 QPointF QTouchEvent::TouchPoint::pos() const
 {
-    return d->rect.center();
+    return d->pos;
 }
 
 /*!
@@ -4490,7 +4538,7 @@ QPointF QTouchEvent::TouchPoint::pos() const
 */
 QPointF QTouchEvent::TouchPoint::scenePos() const
 {
-    return d->sceneRect.center();
+    return d->scenePos;
 }
 
 /*!
@@ -4500,7 +4548,7 @@ QPointF QTouchEvent::TouchPoint::scenePos() const
 */
 QPointF QTouchEvent::TouchPoint::screenPos() const
 {
-    return d->screenRect.center();
+    return d->screenPos;
 }
 
 /*!
@@ -4623,10 +4671,19 @@ QPointF QTouchEvent::TouchPoint::lastNormalizedPos() const
     around the point returned by pos().
 
     \note This function returns an empty rect if the device does not report touch point sizes.
+
+    \obsolete This function is deprecated in 5.9 because it returns the outer bounds
+    of the touchpoint regardless of rotation, whereas a touchpoint is more correctly
+    modeled as an ellipse at position pos() with ellipseDiameters()
+    which are independent of rotation().
+
+    \sa scenePos(), ellipseDiameters()
 */
 QRectF QTouchEvent::TouchPoint::rect() const
 {
-    return d->rect;
+    QRectF ret(QPointF(), d->ellipseDiameters);
+    ret.moveCenter(d->pos);
+    return ret;
 }
 
 /*!
@@ -4634,11 +4691,18 @@ QRectF QTouchEvent::TouchPoint::rect() const
 
     \note This function returns an empty rect if the device does not report touch point sizes.
 
-    \sa scenePos(), rect()
+    \obsolete This function is deprecated in 5.9 because it returns the outer bounds
+    of the touchpoint regardless of rotation, whereas a touchpoint is more correctly
+    modeled as an ellipse at position scenePos() with ellipseDiameters()
+    which are independent of rotation().
+
+    \sa scenePos(), ellipseDiameters()
 */
 QRectF QTouchEvent::TouchPoint::sceneRect() const
 {
-    return d->sceneRect;
+    QRectF ret(QPointF(), d->ellipseDiameters);
+    ret.moveCenter(d->scenePos);
+    return ret;
 }
 
 /*!
@@ -4646,11 +4710,18 @@ QRectF QTouchEvent::TouchPoint::sceneRect() const
 
     \note This function returns an empty rect if the device does not report touch point sizes.
 
-    \sa screenPos(), rect()
+    \obsolete This function is deprecated because it returns the outer bounds of the
+    touchpoint regardless of rotation, whereas a touchpoint is more correctly
+    modeled as an ellipse at position screenPos() with ellipseDiameters()
+    which are independent of rotation().
+
+    \sa screenPos(), ellipseDiameters()
 */
 QRectF QTouchEvent::TouchPoint::screenRect() const
 {
-    return d->screenRect;
+    QRectF ret(QPointF(), d->ellipseDiameters);
+    ret.moveCenter(d->screenPos);
+    return ret;
 }
 
 /*!
@@ -4660,6 +4731,32 @@ QRectF QTouchEvent::TouchPoint::screenRect() const
 qreal QTouchEvent::TouchPoint::pressure() const
 {
     return d->pressure;
+}
+
+/*!
+    \since 5.8
+    Returns the angular orientation of this touch point. The return value is in degrees,
+    where zero (the default) indicates the finger or token is pointing upwards,
+    a negative angle means it's rotated to the left, and a positive angle means
+    it's rotated to the right. Most touchscreens do not detect rotation, so
+    zero is the most common value.
+*/
+qreal QTouchEvent::TouchPoint::rotation() const
+{
+    return d->rotation;
+}
+
+/*!
+    \since 5.9
+    Returns the width and height of the bounding ellipse of this touch point.
+    The return value is in logical pixels. Most touchscreens do not detect the
+    shape of the contact point, so a null size is the most common value.
+    In other cases the diameters may be nonzero and equal (the ellipse is
+    approximated as a circle).
+*/
+QSizeF QTouchEvent::TouchPoint::ellipseDiameters() const
+{
+    return d->ellipseDiameters;
 }
 
 /*!
@@ -4713,6 +4810,14 @@ void QTouchEvent::TouchPoint::setId(int id)
 }
 
 /*! \internal */
+void QTouchEvent::TouchPoint::setUniqueId(qint64 uid)
+{
+    if (d->ref.load() != 1)
+        d = d->detach();
+    d->uniqueId = QPointingDeviceUniqueId::fromNumericId(uid);
+}
+
+/*! \internal */
 void QTouchEvent::TouchPoint::setState(Qt::TouchPointStates state)
 {
     if (d->ref.load() != 1)
@@ -4725,7 +4830,7 @@ void QTouchEvent::TouchPoint::setPos(const QPointF &pos)
 {
     if (d->ref.load() != 1)
         d = d->detach();
-    d->rect.moveCenter(pos);
+    d->pos = pos;
 }
 
 /*! \internal */
@@ -4733,7 +4838,7 @@ void QTouchEvent::TouchPoint::setScenePos(const QPointF &scenePos)
 {
     if (d->ref.load() != 1)
         d = d->detach();
-    d->sceneRect.moveCenter(scenePos);
+    d->scenePos = scenePos;
 }
 
 /*! \internal */
@@ -4741,7 +4846,7 @@ void QTouchEvent::TouchPoint::setScreenPos(const QPointF &screenPos)
 {
     if (d->ref.load() != 1)
         d = d->detach();
-    d->screenRect.moveCenter(screenPos);
+    d->screenPos = screenPos;
 }
 
 /*! \internal */
@@ -4816,28 +4921,32 @@ void QTouchEvent::TouchPoint::setLastNormalizedPos(const QPointF &lastNormalized
     d->lastNormalizedPos = lastNormalizedPos;
 }
 
-/*! \internal */
+// ### remove the following 3 setRect functions and their usages soon
+/*! \internal \obsolete */
 void QTouchEvent::TouchPoint::setRect(const QRectF &rect)
 {
     if (d->ref.load() != 1)
         d = d->detach();
-    d->rect = rect;
+    d->pos = rect.center();
+    d->ellipseDiameters = rect.size();
 }
 
-/*! \internal */
+/*! \internal \obsolete */
 void QTouchEvent::TouchPoint::setSceneRect(const QRectF &sceneRect)
 {
     if (d->ref.load() != 1)
         d = d->detach();
-    d->sceneRect = sceneRect;
+    d->scenePos = sceneRect.center();
+    d->ellipseDiameters = sceneRect.size();
 }
 
-/*! \internal */
+/*! \internal \obsolete */
 void QTouchEvent::TouchPoint::setScreenRect(const QRectF &screenRect)
 {
     if (d->ref.load() != 1)
         d = d->detach();
-    d->screenRect = screenRect;
+    d->screenPos = screenRect.center();
+    d->ellipseDiameters = screenRect.size();
 }
 
 /*! \internal */
@@ -4846,6 +4955,22 @@ void QTouchEvent::TouchPoint::setPressure(qreal pressure)
     if (d->ref.load() != 1)
         d = d->detach();
     d->pressure = pressure;
+}
+
+/*! \internal */
+void QTouchEvent::TouchPoint::setRotation(qreal angle)
+{
+    if (d->ref.load() != 1)
+        d = d->detach();
+    d->rotation = angle;
+}
+
+/*! \internal */
+void QTouchEvent::TouchPoint::setEllipseDiameters(const QSizeF &dia)
+{
+    if (d->ref.load() != 1)
+        d = d->detach();
+    d->ellipseDiameters = dia;
 }
 
 /*! \internal */
@@ -5117,6 +5242,102 @@ QApplicationStateChangeEvent::QApplicationStateChangeEvent(Qt::ApplicationState 
 Qt::ApplicationState QApplicationStateChangeEvent::applicationState() const
 {
     return m_applicationState;
+}
+
+/*!
+    \class QPointingDeviceUniqueId
+    \since 5.8
+    \ingroup events
+    \inmodule QtGui
+
+    \brief QPointingDeviceUniqueId identifies a unique object, such as a tagged token
+    or stylus, which is used with a pointing device.
+
+    QPointingDeviceUniqueIds can be compared for equality, and can be used as keys in a QHash.
+    You get access to the numerical ID via numericId(), if the device supports such IDs.
+    For future extensions, though, you should not use that function, but compare objects
+    of this type using the equality operator.
+
+    This class is a thin wrapper around an integer ID. You pass it into and out of
+    functions by value.
+
+    This type actively prevents you from holding it in a QList, because doing so would
+    be very inefficient. Use a QVector instead, which has the same API as QList, but more
+    efficient storage.
+
+    \sa QTouchEvent::TouchPoint
+*/
+
+/*!
+    \fn QPointingDeviceUniqueId::QPointingDeviceUniqueId()
+    Constructs an invalid unique pointer ID.
+*/
+
+/*!
+    Constructs a unique pointer ID from numeric ID \a id.
+*/
+QPointingDeviceUniqueId QPointingDeviceUniqueId::fromNumericId(qint64 id)
+{
+    QPointingDeviceUniqueId result;
+    result.m_numericId = id;
+    return result;
+}
+
+/*!
+    \fn bool QPointingDeviceUniqueId::isValid() const
+
+    Returns whether this unique pointer ID is valid, that is, it represents an actual
+    pointer.
+*/
+
+/*!
+    \property QPointingDeviceUniqueId::numericId
+    \brief the numeric unique ID of the token represented by a touchpoint
+
+    If the device provides a numeric ID, isValid() returns true, and this
+    property provides the numeric ID;
+    otherwise it is -1.
+
+    You should not use the value of this property in portable code, but
+    instead rely on equality to identify pointers.
+
+    \sa isValid()
+*/
+qint64 QPointingDeviceUniqueId::numericId() const Q_DECL_NOTHROW
+{
+    return m_numericId;
+}
+
+/*!
+    \relates QPointingDeviceUniqueId
+    \since 5.8
+
+    Returns whether the two unique pointer IDs \a lhs and \a rhs identify the same pointer
+    (\c true) or not (\c false).
+*/
+bool operator==(QPointingDeviceUniqueId lhs, QPointingDeviceUniqueId rhs) Q_DECL_NOTHROW
+{
+    return lhs.numericId() == rhs.numericId();
+}
+
+/*!
+    \fn bool operator!=(QPointingDeviceUniqueId lhs, QPointingDeviceUniqueId rhs)
+    \relates QPointingDeviceUniqueId
+    \since 5.8
+
+    Returns whether the two unique pointer IDs \a lhs and \a rhs identify different pointers
+    (\c true) or not (\c false).
+*/
+
+/*!
+    \relates QPointingDeviceUniqueId
+    \since 5.8
+
+    Returns the hash value for \a key, using \a seed to seed the calculation.
+*/
+uint qHash(QPointingDeviceUniqueId key, uint seed) Q_DECL_NOTHROW
+{
+    return qHash(key.numericId(), seed);
 }
 
 QT_END_NAMESPACE

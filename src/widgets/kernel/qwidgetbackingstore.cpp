@@ -112,6 +112,7 @@ void QWidgetBackingStore::qt_flush(QWidget *widget, const QRegion &region, QBack
     if (widget != tlw)
         offset += widget->mapTo(tlw, QPoint());
 
+    QRegion effectiveRegion = region;
 #ifndef QT_NO_OPENGL
     const bool compositionWasActive = widget->d_func()->renderToTextureComposeActive;
     if (!widgetTextures) {
@@ -125,6 +126,11 @@ void QWidgetBackingStore::qt_flush(QWidget *widget, const QRegion &region, QBack
     } else {
         widget->d_func()->renderToTextureComposeActive = true;
     }
+    // When changing the composition status, make sure the dirty region covers
+    // the entire widget.  Just having e.g. the shown/hidden render-to-texture
+    // widget's area marked as dirty is incorrect when changing flush paths.
+    if (compositionWasActive != widget->d_func()->renderToTextureComposeActive)
+        effectiveRegion = widget->rect();
 
     // re-test since we may have been forced to this path via the dummy texture list above
     if (widgetTextures) {
@@ -136,12 +142,12 @@ void QWidgetBackingStore::qt_flush(QWidget *widget, const QRegion &region, QBack
         const bool translucentBackground = widget->testAttribute(Qt::WA_TranslucentBackground);
         // Use the tlw's context, not widget's. The difference is important with native child
         // widgets where tlw != widget.
-        backingStore->handle()->composeAndFlush(widget->windowHandle(), region, offset, widgetTextures,
+        backingStore->handle()->composeAndFlush(widget->windowHandle(), effectiveRegion, offset, widgetTextures,
                                                 tlw->d_func()->shareContext(), translucentBackground);
         widget->window()->d_func()->sendComposeStatus(widget->window(), true);
     } else
 #endif
-        backingStore->flush(region, widget->windowHandle(), offset);
+        backingStore->flush(effectiveRegion, widget->windowHandle(), offset);
 }
 
 #ifndef QT_NO_PAINT_DEBUG
@@ -158,25 +164,13 @@ static void showYellowThing_win(QWidget *widget, const QRegion &region, int msec
         return;
     const HDC hdc = reinterpret_cast<HDC>(hdcV);
 
-    HBRUSH brush;
-    static int i = 0;
-    switch (i) {
-    case 0:
-        brush = CreateSolidBrush(RGB(255, 255, 0));
-        break;
-    case 1:
-        brush = CreateSolidBrush(RGB(255, 200, 55));
-        break;
-    case 2:
-        brush = CreateSolidBrush(RGB(200, 255, 55));
-        break;
-    case 3:
-        brush = CreateSolidBrush(RGB(200, 200, 0));
-        break;
-    }
-    i = (i + 1) & 3;
+    static const COLORREF colors[] = {RGB(255, 255, 0), RGB(255, 200, 55), RGB(200, 255, 55), RGB(200, 200, 0)};
 
-    foreach (const QRect &rect, region.rects()) {
+    static size_t i = 0;
+    const HBRUSH brush = CreateSolidBrush(colors[i]);
+    i = (i + 1) % (sizeof(colors) / sizeof(colors[0]));
+
+    for (const QRect &rect : region) {
         RECT winRect;
         SetRect(&winRect, rect.left(), rect.top(), rect.right(), rect.bottom());
         FillRect(hdc, &winRect, brush);
@@ -303,7 +297,7 @@ bool QWidgetBackingStore::bltRect(const QRect &rect, int dx, int dy, QWidget *wi
 {
     const QPoint pos(tlwOffset + widget->mapTo(tlw, rect.topLeft()));
     const QRect tlwRect(QRect(pos, rect.size()));
-    if (fullUpdatePending || dirty.intersects(tlwRect))
+    if (dirty.intersects(tlwRect))
         return false; // We don't want to scroll junk.
     return store->scroll(tlwRect, dx, dy);
 }
@@ -372,7 +366,7 @@ QRegion QWidgetBackingStore::dirtyRegion(QWidget *widget) const
     const bool widgetDirty = widget && widget != tlw;
     const QRect tlwRect(topLevelRect());
     const QRect surfaceGeometry(tlwRect.topLeft(), store->size());
-    if (fullUpdatePending || (surfaceGeometry != tlwRect && surfaceGeometry.size() != tlwRect.size())) {
+    if (surfaceGeometry != tlwRect && surfaceGeometry.size() != tlwRect.size()) {
         if (widgetDirty) {
             const QRect dirtyTlwRect = QRect(QPoint(), tlwRect.size());
             const QPoint offset(widget->mapTo(tlw, QPoint()));
@@ -550,13 +544,6 @@ void QWidgetBackingStore::markDirty(const QRegion &rgn, QWidget *widget,
         return;
     }
 
-    //### FIXME fullUpdatePending seems to be always false????
-    if (fullUpdatePending) {
-        if (updateTime == UpdateNow)
-            sendUpdateRequest(tlw, updateTime);
-        return;
-    }
-
     const QPoint offset = widget->mapTo(tlw, QPoint());
 
     if (QWidgetPrivate::get(widget)->renderToTexture) {
@@ -649,12 +636,6 @@ void QWidgetBackingStore::markDirty(const QRect &rect, QWidget *widget,
         return;
     }
 
-    if (fullUpdatePending) {
-        if (updateTime == UpdateNow)
-            sendUpdateRequest(tlw, updateTime);
-        return;
-    }
-
     if (QWidgetPrivate::get(widget)->renderToTexture) {
         if (!widget->d_func()->inDirtyList)
             addDirtyRenderToTextureWidget(widget);
@@ -712,7 +693,7 @@ void QWidgetBackingStore::markDirtyOnScreen(const QRegion &region, QWidget *widg
     if (!widget || widget->d_func()->paintOnScreen() || region.isEmpty())
         return;
 
-#if defined(Q_DEAD_CODE_FROM_QT4_MAC)
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     if (!widget->testAttribute(Qt::WA_WState_InPaintEvent))
         dirtyOnScreen += region.translated(topLevelOffset);
     return;
@@ -791,7 +772,6 @@ void QWidgetBackingStore::updateLists(QWidget *cur)
 QWidgetBackingStore::QWidgetBackingStore(QWidget *topLevel)
     : tlw(topLevel),
       dirtyOnScreenWidgets(0),
-      fullUpdatePending(0),
       updateRequestSent(0),
       textureListWatcher(0),
       perfFrames(0)
@@ -1170,7 +1150,6 @@ void QWidgetBackingStore::sync()
             for (int i = 0; i < dirtyWidgets.size(); ++i)
                 resetWidget(dirtyWidgets.at(i));
             dirtyWidgets.clear();
-            fullUpdatePending = false;
         }
         return;
     }
@@ -1187,7 +1166,7 @@ void QWidgetBackingStore::doSync()
     const bool inTopLevelResize = tlw->d_func()->maybeTopData()->inTopLevelResize;
     const QRect tlwRect(topLevelRect());
     const QRect surfaceGeometry(tlwRect.topLeft(), store->size());
-    if ((fullUpdatePending || inTopLevelResize || surfaceGeometry.size() != tlwRect.size()) && !updatesDisabled) {
+    if ((inTopLevelResize || surfaceGeometry.size() != tlwRect.size()) && !updatesDisabled) {
         if (hasStaticContents() && !store->size().isEmpty() ) {
             // Repaint existing dirty area and newly visible area.
             const QRect clipRect(0, 0, surfaceGeometry.width(), surfaceGeometry.height());
@@ -1283,7 +1262,6 @@ void QWidgetBackingStore::doSync()
     tlwExtra->widgetTextures.clear();
     findAllTextureWidgetsRecursively(tlw, tlw);
     qt_window_private(tlw->windowHandle())->compositing = false; // will get updated in qt_flush()
-    fullUpdatePending = false;
 #endif
 
     if (toClean.isEmpty()) {
@@ -1349,9 +1327,8 @@ void QWidgetBackingStore::doSync()
         updateStaticContentsSize();
         dirty = QRegion();
         updateRequestSent = false;
-        const QVector<QRect> rects(toClean.rects());
-        for (int i = 0; i < rects.size(); ++i)
-            tlw->d_func()->extra->proxyWidget->update(rects.at(i));
+        for (const QRect &rect : toClean)
+            tlw->d_func()->extra->proxyWidget->update(rect);
         return;
     }
 #endif
@@ -1641,7 +1618,7 @@ void QWidgetPrivate::repaint_sys(const QRegion &rgn)
                                         && (usesDoubleBufferedGLContext || q->autoFillBackground());
     QRegion toBePainted(noPartialUpdateSupport ? q->rect() : rgn);
 
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     // No difference between update() and repaint() on the Mac.
     update_sys(toBePainted);
     return;

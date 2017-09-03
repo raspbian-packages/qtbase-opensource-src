@@ -49,8 +49,9 @@ private slots:
     void find(); // copied from tst_QMap
     void constFind(); // copied from tst_QMap
     void contains(); // copied from tst_QMap
+    void qhash();
     void take(); // copied from tst_QMap
-    void operator_eq(); // copied from tst_QMap
+    void operator_eq(); // slightly modified from tst_QMap
     void rehash_isnt_quadratic();
     void dont_need_default_constructor();
     void qmultihash_specific();
@@ -695,6 +696,69 @@ void tst_QHash::contains()
     QVERIFY(!map1.contains(43));
 }
 
+namespace {
+class QGlobalQHashSeedResetter
+{
+    int oldSeed;
+public:
+    // not entirely correct (may lost changes made by another thread between the query
+    // of the old and the setting of the new seed), but qSetGlobalQHashSeed doesn't
+    // return the old value, so this is the best we can do:
+    explicit QGlobalQHashSeedResetter(int newSeed)
+        : oldSeed(qGlobalQHashSeed())
+    {
+        qSetGlobalQHashSeed(newSeed);
+    }
+    ~QGlobalQHashSeedResetter()
+    {
+        qSetGlobalQHashSeed(oldSeed);
+    }
+};
+
+template <typename Key, typename T>
+QHash<T, Key> inverted(const QHash<Key, T> &in)
+{
+    QHash<T, Key> result;
+    for (auto it = in.begin(), end = in.end(); it != end; ++it)
+        result[it.value()] = it.key();
+    return result;
+}
+
+template <typename AssociativeContainer>
+void make_test_data(AssociativeContainer &c)
+{
+    c["one"] = "1";
+    c["two"] = "2";
+}
+
+}
+
+void tst_QHash::qhash()
+{
+    const QGlobalQHashSeedResetter seed1(0);
+
+    QHash<QString, QString> hash1;
+    make_test_data(hash1);
+    const QHash<QString, QString> hsah1 = inverted(hash1);
+
+    const QGlobalQHashSeedResetter seed2(1);
+
+    QHash<QString, QString> hash2;
+    make_test_data(hash2);
+    const QHash<QString, QString> hsah2 = inverted(hash2);
+
+    QCOMPARE(hash1, hash2);
+    QCOMPARE(hsah1, hsah2);
+    QCOMPARE(qHash(hash1), qHash(hash2));
+    QCOMPARE(qHash(hsah1), qHash(hsah2));
+
+    // by construction this is almost impossible to cause false collisions:
+    QVERIFY(hash1 != hsah1);
+    QVERIFY(hash2 != hsah2);
+    QVERIFY(qHash(hash1) != qHash(hsah1));
+    QVERIFY(qHash(hash2) != qHash(hsah2));
+}
+
 //copied from tst_QMap
 void tst_QHash::take()
 {
@@ -707,7 +771,7 @@ void tst_QHash::take()
     QVERIFY(!map.contains(3));
 }
 
-//copied from tst_QMap
+// slightly modified from tst_QMap
 void tst_QHash::operator_eq()
 {
     {
@@ -783,6 +847,71 @@ void tst_QHash::operator_eq()
         b.insert("willy", 1);
         QVERIFY(a != b);
         QVERIFY(!(a == b));
+    }
+
+    // unlike multi-maps, multi-hashes should be equal iff their contents are equal,
+    // regardless of insertion or iteration order
+
+    {
+        QHash<int, int> a;
+        QHash<int, int> b;
+
+        a.insertMulti(0, 0);
+        a.insertMulti(0, 1);
+
+        b.insertMulti(0, 1);
+        b.insertMulti(0, 0);
+
+        QVERIFY(a == b);
+        QVERIFY(!(a != b));
+    }
+
+    {
+        QHash<int, int> a;
+        QHash<int, int> b;
+
+        enum { Count = 100 };
+
+        for (int key = 0; key < Count; ++key) {
+            for (int value = 0; value < Count; ++value)
+                a.insertMulti(key, value);
+        }
+
+        for (int key = Count - 1; key >= 0; --key) {
+            for (int value = 0; value < Count; ++value)
+                b.insertMulti(key, value);
+        }
+
+        QVERIFY(a == b);
+        QVERIFY(!(a != b));
+    }
+
+    {
+        QHash<int, int> a;
+        QHash<int, int> b;
+
+        enum {
+            Count = 100,
+            KeyStep = 17,   // coprime with Count
+            ValueStep = 23, // coprime with Count
+        };
+
+        for (int key = 0; key < Count; ++key) {
+            for (int value = 0; value < Count; ++value)
+                a.insertMulti(key, value);
+        }
+
+        // Generates two permutations of [0, Count) for the keys and values,
+        // so that b will be identical to a, just built in a very different order.
+
+        for (int k = 0; k < Count; ++k) {
+           const int key = (k * KeyStep) % Count;
+           for (int v = 0; v < Count; ++v)
+               b.insertMulti(key, (v * ValueStep) % Count);
+        }
+
+        QVERIFY(a == b);
+        QVERIFY(!(a != b));
     }
 }
 
@@ -989,6 +1118,10 @@ void tst_QHash::keyIterator()
     QCOMPARE(*(--key_it), (--it).key());
 
     QCOMPARE(std::count(hash.keyBegin(), hash.keyEnd(), 99), 1);
+
+    // DefaultConstructible test
+    typedef QHash<int, int>::key_iterator keyIterator;
+    Q_STATIC_ASSERT(std::is_default_constructible<keyIterator>::value);
 }
 
 void tst_QHash::rehash_isnt_quadratic()
@@ -996,11 +1129,7 @@ void tst_QHash::rehash_isnt_quadratic()
     // this test should be incredibly slow if rehash() is quadratic
     for (int j = 0; j < 5; ++j) {
         QHash<int, int> testHash;
-#if defined(Q_OS_WINCE) // mobiles do not have infinite mem...
-        for (int i = 0; i < 50000; ++i)
-#else
         for (int i = 0; i < 500000; ++i)
-#endif
             testHash.insertMulti(1, 1);
     }
 }

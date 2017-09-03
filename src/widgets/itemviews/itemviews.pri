@@ -1,5 +1,6 @@
 # Qt gui library, itemviews
 
+qtConfig(itemviews) {
 HEADERS += \
 	itemviews/qabstractitemview.h \
     itemviews/qabstractitemview_p.h \
@@ -27,11 +28,6 @@ HEADERS += \
 	itemviews/qitemeditorfactory_p.h \
 	itemviews/qtreewidgetitemiterator.h \
     itemviews/qdatawidgetmapper.h \
-    itemviews/qfileiconprovider.h \
-    itemviews/qfileiconprovider_p.h \
-    itemviews/qcolumnviewgrip_p.h \
-    itemviews/qcolumnview.h  \
-    itemviews/qcolumnview_p.h \
     itemviews/qstyleditemdelegate.h
 
 SOURCES += \
@@ -50,8 +46,23 @@ SOURCES += \
 	itemviews/qitemeditorfactory.cpp \
 	itemviews/qtreewidgetitemiterator.cpp \
     itemviews/qdatawidgetmapper.cpp \
-    itemviews/qfileiconprovider.cpp \
-    itemviews/qcolumnview.cpp \
-    itemviews/qcolumnviewgrip.cpp \
     itemviews/qstyleditemdelegate.cpp
+}
 
+qtConfig(columnview) {
+    HEADERS += \
+        itemviews/qcolumnviewgrip_p.h \
+        itemviews/qcolumnview.h  \
+        itemviews/qcolumnview_p.h
+
+    SOURCES += \
+        itemviews/qcolumnview.cpp \
+        itemviews/qcolumnviewgrip.cpp
+}
+
+HEADERS += \
+    itemviews/qfileiconprovider.h \
+    itemviews/qfileiconprovider_p.h \
+
+SOURCES +=  \
+        itemviews/qfileiconprovider.cpp

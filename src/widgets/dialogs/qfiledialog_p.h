@@ -51,7 +51,7 @@
 // We mean it.
 //
 
-#include <QtCore/qglobal.h>
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 
 #ifndef QT_NO_FILEDIALOG
 
@@ -177,10 +177,6 @@ public:
 #if defined(Q_OS_WIN)
         QString n(path);
         n.replace(QLatin1Char('\\'), QLatin1Char('/'));
-#if defined(Q_OS_WINCE)
-        if ((n.size() > 1) && (n.startsWith(QLatin1String("//"))))
-            n = n.mid(1);
-#endif
         return n;
 #else // the compile should optimize away this
         return path;
@@ -257,13 +253,15 @@ public:
     bool canBeNativeDialog() const Q_DECL_OVERRIDE;
     inline bool usingWidgets() const;
 
-    void setDirectory_sys(const QUrl &directory);
-    QUrl directory_sys() const;
-    void selectFile_sys(const QUrl &filename);
-    QList<QUrl> selectedFiles_sys() const;
-    void setFilter_sys();
-    void selectNameFilter_sys(const QString &filter);
-    QString selectedNameFilter_sys() const;
+    inline void setDirectory_sys(const QUrl &directory);
+    inline QUrl directory_sys() const;
+    inline void selectFile_sys(const QUrl &filename);
+    inline QList<QUrl> selectedFiles_sys() const;
+    inline void setFilter_sys();
+    inline void selectMimeTypeFilter_sys(const QString &filter);
+    inline QString selectedMimeTypeFilter_sys() const;
+    inline void selectNameFilter_sys(const QString &filter);
+    inline QString selectedNameFilter_sys() const;
     //////////////////////////////////////////////
 
     QScopedPointer<Ui_QFileDialog> qFileDialogUi;
@@ -343,14 +341,14 @@ private:
     QFileDialogPrivate *d_ptr;
 };
 
-inline QModelIndex QFileDialogPrivate::mapToSource(const QModelIndex &index) const {
+QModelIndex QFileDialogPrivate::mapToSource(const QModelIndex &index) const {
 #ifdef QT_NO_PROXYMODEL
     return index;
 #else
     return proxyModel ? proxyModel->mapToSource(index) : index;
 #endif
 }
-inline QModelIndex QFileDialogPrivate::mapFromSource(const QModelIndex &index) const {
+QModelIndex QFileDialogPrivate::mapFromSource(const QModelIndex &index) const {
 #ifdef QT_NO_PROXYMODEL
     return index;
 #else
@@ -358,11 +356,12 @@ inline QModelIndex QFileDialogPrivate::mapFromSource(const QModelIndex &index) c
 #endif
 }
 
-inline QString QFileDialogPrivate::rootPath() const {
+QString QFileDialogPrivate::rootPath() const
+{
     return (model ? model->rootPath() : QStringLiteral("/"));
 }
 
-inline void QFileDialogPrivate::setDirectory_sys(const QUrl &directory)
+void QFileDialogPrivate::setDirectory_sys(const QUrl &directory)
 {
     QPlatformFileDialogHelper *helper = platformFileDialogHelper();
 
@@ -373,14 +372,14 @@ inline void QFileDialogPrivate::setDirectory_sys(const QUrl &directory)
         helper->setDirectory(directory);
 }
 
-inline QUrl QFileDialogPrivate::directory_sys() const
+QUrl QFileDialogPrivate::directory_sys() const
 {
     if (QPlatformFileDialogHelper *helper = platformFileDialogHelper())
         return helper->directory();
     return QUrl();
 }
 
-inline void QFileDialogPrivate::selectFile_sys(const QUrl &filename)
+void QFileDialogPrivate::selectFile_sys(const QUrl &filename)
 {
     QPlatformFileDialogHelper *helper = platformFileDialogHelper();
 
@@ -391,26 +390,40 @@ inline void QFileDialogPrivate::selectFile_sys(const QUrl &filename)
         helper->selectFile(filename);
 }
 
-inline QList<QUrl> QFileDialogPrivate::selectedFiles_sys() const
+QList<QUrl> QFileDialogPrivate::selectedFiles_sys() const
 {
     if (QPlatformFileDialogHelper *helper = platformFileDialogHelper())
         return helper->selectedFiles();
     return QList<QUrl>();
 }
 
-inline void QFileDialogPrivate::setFilter_sys()
+void QFileDialogPrivate::setFilter_sys()
 {
     if (QPlatformFileDialogHelper *helper = platformFileDialogHelper())
         helper->setFilter();
 }
 
-inline void QFileDialogPrivate::selectNameFilter_sys(const QString &filter)
+void QFileDialogPrivate::selectMimeTypeFilter_sys(const QString &filter)
+{
+    if (QPlatformFileDialogHelper *helper = platformFileDialogHelper())
+        helper->selectMimeTypeFilter(filter);
+}
+
+QString QFileDialogPrivate::selectedMimeTypeFilter_sys() const
+{
+    if (QPlatformFileDialogHelper *helper = platformFileDialogHelper())
+        return helper->selectedMimeTypeFilter();
+
+    return QString();
+}
+
+void QFileDialogPrivate::selectNameFilter_sys(const QString &filter)
 {
     if (QPlatformFileDialogHelper *helper = platformFileDialogHelper())
         helper->selectNameFilter(filter);
 }
 
-inline QString QFileDialogPrivate::selectedNameFilter_sys() const
+QString QFileDialogPrivate::selectedNameFilter_sys() const
 {
     if (QPlatformFileDialogHelper *helper = platformFileDialogHelper())
         return helper->selectedNameFilter();

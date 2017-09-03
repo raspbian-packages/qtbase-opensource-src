@@ -5,15 +5,16 @@ PRECOMPILED_HEADER = kernel/qt_widgets_pch.h
 
 KERNEL_P= kernel
 HEADERS += \
-	kernel/qaction.h \
-    kernel/qaction_p.h \
+        kernel/qtwidgetsglobal.h \
+        kernel/qtwidgetsglobal_p.h \
+        kernel/qaction.h \
+        kernel/qaction_p.h \
 	kernel/qactiongroup.h \
 	kernel/qapplication.h \
 	kernel/qapplication_p.h \
         kernel/qwidgetbackingstore_p.h \
 	kernel/qboxlayout.h \
 	kernel/qdesktopwidget.h \
-	kernel/qformlayout.h \
 	kernel/qgridlayout.h \
         kernel/qlayout.h \
 	kernel/qlayout_p.h \
@@ -43,7 +44,6 @@ SOURCES += \
 	kernel/qapplication.cpp \
         kernel/qwidgetbackingstore.cpp \
         kernel/qboxlayout.cpp \
-	kernel/qformlayout.cpp \
 	kernel/qgridlayout.cpp \
         kernel/qlayout.cpp \
 	kernel/qlayoutengine.cpp \
@@ -78,7 +78,12 @@ wince {
                 kernel/qwidgetsfunctions_wince.cpp
 }
 
-contains(QT_CONFIG, opengl) {
+qtConfig(opengl) {
     HEADERS += kernel/qopenglwidget.h
     SOURCES += kernel/qopenglwidget.cpp
+}
+
+qtConfig(formlayout) {
+    HEADERS += kernel/qformlayout.h
+    SOURCES += kernel/qformlayout.cpp
 }

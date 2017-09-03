@@ -71,6 +71,8 @@ QT_BEGIN_NAMESPACE
     \ingroup advanced
     \inmodule QtWidgets
 
+    \image windows-treeview.png
+
     A QTreeView implements a tree representation of items from a
     model. This class is used to provide standard hierarchical lists that
     were previously provided by the \c QListView class, but using the more
@@ -149,15 +151,6 @@ QT_BEGIN_NAMESPACE
     \omit
     Describe the expanding/collapsing concept if not covered elsewhere.
     \endomit
-
-    \table 100%
-    \row \li \inlineimage windowsvista-treeview.png Screenshot of a Windows Vista style tree view
-         \li \inlineimage macintosh-treeview.png Screenshot of a Macintosh style tree view
-         \li \inlineimage fusion-treeview.png Screenshot of a Fusion style tree view
-    \row \li A \l{Windows Vista Style Widget Gallery}{Windows Vista style} tree view.
-         \li A \l{Macintosh Style Widget Gallery}{Macintosh style} tree view.
-         \li A \l{Fusion Style Widget Gallery}{Fusion style} tree view.
-    \endtable
 
     \section1 Improving Performance
 
@@ -1477,13 +1470,12 @@ void QTreeView::drawTree(QPainter *painter, const QRegion &region) const
     QPoint hoverPos = d->viewport->mapFromGlobal(QCursor::pos());
     d->hoverBranch = d->itemDecorationAt(hoverPos);
 
-    QVector<QRect> rects = region.rects();
     QVector<int> drawn;
-    bool multipleRects = (rects.size() > 1);
-    for (int a = 0; a < rects.size(); ++a) {
+    bool multipleRects = (region.rectCount() > 1);
+    for (const QRect &a : region) {
         const QRect area = (multipleRects
-                            ? QRect(0, rects.at(a).y(), viewportWidth, rects.at(a).height())
-                            : rects.at(a));
+                            ? QRect(0, a.y(), viewportWidth, a.height())
+                            : a);
         d->leftAndRight = d->startAndEndColumns(area);
 
         int i = firstVisibleItem; // the first item at the top of the viewport
@@ -1819,7 +1811,7 @@ void QTreeView::drawBranches(QPainter *painter, const QRect &rect,
     QStyle::State extraFlags = QStyle::State_None;
     if (isEnabled())
         extraFlags |= QStyle::State_Enabled;
-    if (window()->isActiveWindow())
+    if (hasFocus())
         extraFlags |= QStyle::State_Active;
     QPoint oldBO = painter->brushOrigin();
     if (verticalScrollMode() == QAbstractItemView::ScrollPerPixel)
@@ -2195,7 +2187,7 @@ QModelIndex QTreeView::moveCursor(CursorAction cursorAction, Qt::KeyboardModifie
         return QModelIndex();
     }
     int vi = -1;
-#if defined(Q_DEAD_CODE_FROM_QT4_MAC) && !defined(QT_NO_STYLE_MAC)
+#if 0 /* Used to be included in Qt4 for Q_WS_MAC */ && QT_CONFIG(style_mac)
     // Selection behavior is slightly different on the Mac.
     if (d->selectionMode == QAbstractItemView::ExtendedSelection
         && d->selectionModel

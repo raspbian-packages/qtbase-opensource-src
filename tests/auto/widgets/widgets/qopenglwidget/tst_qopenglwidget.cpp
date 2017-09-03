@@ -39,12 +39,15 @@
 #include <QtWidgets/QStackedWidget>
 #include <QtTest/QtTest>
 #include <QSignalSpy>
+#include <private/qguiapplication_p.h>
+#include <qpa/qplatformintegration.h>
 
 class tst_QOpenGLWidget : public QObject
 {
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void create();
     void clearAndGrab();
     void clearAndResizeAndGrab();
@@ -59,6 +62,13 @@ private slots:
     void nativeWindow();
     void stackWidgetOpaqueChildIsVisible();
 };
+
+void tst_QOpenGLWidget::initTestCase()
+{
+    // See QOpenGLWidget constructor
+    if (!QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::RasterGLSurface))
+        QSKIP("QOpenGLWidget is not supported on this platform.");
+}
 
 void tst_QOpenGLWidget::create()
 {
@@ -223,6 +233,8 @@ void tst_QOpenGLWidget::painter()
     glw->m_clear = true;
     image = glw->grabFramebuffer();
     QVERIFY(image.pixel(20, 10) == qRgb(0, 255, 0));
+
+    QPixmap pix = glw->grab(); // QTBUG-61036
 }
 
 void tst_QOpenGLWidget::reparentToAlreadyCreated()
@@ -282,6 +294,13 @@ protected:
 void CountingGraphicsView::drawForeground(QPainter *, const QRectF &)
 {
     ++m_count;
+
+    // QTBUG-59318: verify that the context's internal default fbo redirection
+    // is active also when using the QOpenGLWidget as a viewport.
+    GLint currentFbo = -1;
+    QOpenGLContext::currentContext()->functions()->glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFbo);
+    GLuint defFbo = QOpenGLContext::currentContext()->defaultFramebufferObject();
+    QCOMPARE(GLuint(currentFbo), defFbo);
 }
 
 void tst_QOpenGLWidget::asViewport()

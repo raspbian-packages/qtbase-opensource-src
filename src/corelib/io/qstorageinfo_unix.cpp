@@ -120,6 +120,7 @@ public:
     inline QString rootPath() const;
     inline QByteArray fileSystemType() const;
     inline QByteArray device() const;
+    inline QByteArray options() const;
 private:
 #if defined(Q_OS_BSD4)
     QT_STATFSBUF *stat_buf;
@@ -133,6 +134,7 @@ private:
     QByteArray m_rootPath;
     QByteArray m_fileSystemType;
     QByteArray m_device;
+    QByteArray m_options;
 #elif defined(Q_OS_LINUX) || defined(Q_OS_HURD)
     FILE *fp;
     mntent mnt;
@@ -193,8 +195,12 @@ static bool shouldIncludeFs(const QStorageIterator &it)
 
 #if defined(Q_OS_BSD4)
 
+#ifndef MNT_NOWAIT
+#  define MNT_NOWAIT 0
+#endif
+
 inline QStorageIterator::QStorageIterator()
-    : entryCount(::getmntinfo(&stat_buf, 0)),
+    : entryCount(::getmntinfo(&stat_buf, MNT_NOWAIT)),
       currentIndex(-1)
 {
 }
@@ -226,6 +232,11 @@ inline QByteArray QStorageIterator::fileSystemType() const
 inline QByteArray QStorageIterator::device() const
 {
     return QByteArray(stat_buf[currentIndex].f_mntfromname);
+}
+
+inline QByteArray QStorageIterator::options() const
+{
+    return QByteArray();
 }
 
 #elif defined(Q_OS_SOLARIS)
@@ -301,6 +312,7 @@ inline bool QStorageIterator::next()
     m_device = data.at(0);
     m_rootPath = data.at(1);
     m_fileSystemType = data.at(2);
+    m_options = data.at(3);
 
     return true;
 }
@@ -318,6 +330,11 @@ inline QByteArray QStorageIterator::fileSystemType() const
 inline QByteArray QStorageIterator::device() const
 {
     return m_device;
+}
+
+inline QByteArray QStorageIterator::options() const
+{
+    return m_options;
 }
 
 #elif defined(Q_OS_LINUX) || defined(Q_OS_HURD)
@@ -361,6 +378,11 @@ inline QByteArray QStorageIterator::fileSystemType() const
 inline QByteArray QStorageIterator::device() const
 {
     return QByteArray(mnt.mnt_fsname);
+}
+
+inline QByteArray QStorageIterator::options() const
+{
+    return QByteArray(mnt.mnt_opts);
 }
 
 #elif defined(Q_OS_HAIKU)
@@ -420,6 +442,11 @@ inline QByteArray QStorageIterator::device() const
     return m_device;
 }
 
+inline QByteArray QStorageIterator::options() const
+{
+    return QByteArray();
+}
+
 #else
 
 inline QStorageIterator::QStorageIterator()
@@ -455,7 +482,36 @@ inline QByteArray QStorageIterator::device() const
     return QByteArray();
 }
 
+inline QByteArray QStorageIterator::options() const
+{
+    return QByteArray();
+}
+
 #endif
+
+static QByteArray extractSubvolume(const QStorageIterator &it)
+{
+#ifdef Q_OS_LINUX
+    if (it.fileSystemType() == "btrfs") {
+        const QByteArrayList opts = it.options().split(',');
+        QByteArray id;
+        for (const QByteArray &opt : opts) {
+            static const char subvol[] = "subvol=";
+            static const char subvolid[] = "subvolid=";
+            if (opt.startsWith(subvol))
+                return std::move(opt).mid(strlen(subvol));
+            if (opt.startsWith(subvolid))
+                id = std::move(opt).mid(strlen(subvolid));
+        }
+
+        // if we didn't find the subvolume name, return the subvolume ID
+        return id;
+    }
+#else
+    Q_UNUSED(it);
+#endif
+    return QByteArray();
+}
 
 void QStorageInfoPrivate::initRootPath()
 {
@@ -483,6 +539,7 @@ void QStorageInfoPrivate::initRootPath()
             rootPath = mountDir;
             device = it.device();
             fileSystemType = fsName;
+            subvolume = extractSubvolume(it);
         }
     }
 }

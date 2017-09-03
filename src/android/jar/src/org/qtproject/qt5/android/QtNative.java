@@ -52,7 +52,8 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.ClipboardManager;
+import android.content.ClipboardManager;
+import android.content.ClipboardManager.OnPrimaryClipChangedListener;
 import android.os.Build;
 import android.util.Log;
 import android.view.ContextMenu;
@@ -60,6 +61,7 @@ import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.InputDevice;
 
 import java.lang.reflect.Method;
 import java.security.KeyStore;
@@ -243,13 +245,24 @@ public class QtNative
         }
     }
 
-    private static void runPendingCppRunnablesOnUiThread()
+    private static void runPendingCppRunnablesOnAndroidThread()
     {
         synchronized (m_mainActivityMutex) {
-            if (!m_activityPaused && m_activity != null)
-                m_activity.runOnUiThread(runPendingCppRunnablesRunnable);
-            else
-                runAction(runPendingCppRunnablesRunnable);
+            if (m_activity != null) {
+                if (!m_activityPaused)
+                    m_activity.runOnUiThread(runPendingCppRunnablesRunnable);
+                else
+                    runAction(runPendingCppRunnablesRunnable);
+            } else {
+                final Looper mainLooper = Looper.getMainLooper();
+                final Thread looperThread = mainLooper.getThread();
+                if (looperThread.equals(Thread.currentThread())) {
+                    runPendingCppRunnablesRunnable.run();
+                } else {
+                    final Handler handler = new Handler(mainLooper);
+                    handler.post(runPendingCppRunnablesRunnable);
+                }
+            }
         }
     }
 
@@ -337,6 +350,7 @@ public class QtNative
     // application methods
     public static native void startQtApplication(String params, String env);
     public static native boolean startQtAndroidPlugin();
+    public static native void quitQtCoreApplication();
     public static native void quitQtAndroidPlugin();
     public static native void terminateQt();
     // application methods
@@ -411,7 +425,9 @@ public class QtNative
                              i == 0,
                              (int)event.getX(i),
                              (int)event.getY(i),
-                             event.getSize(i),
+                             event.getTouchMajor(i),
+                             event.getTouchMinor(i),
+                             event.getOrientation(i),
                              event.getPressure(i));
             }
 
@@ -455,20 +471,36 @@ public class QtNative
         }
     }
 
-    public static int checkSelfPermission(final String permission)
+    static public void sendGenericMotionEvent(MotionEvent event, int id)
+    {
+        if (event.getActionMasked() != MotionEvent.ACTION_SCROLL
+                || (event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != InputDevice.SOURCE_CLASS_POINTER) {
+            return;
+        }
+
+        mouseWheel(id, (int) event.getX(), (int) event.getY(),
+                       event.getAxisValue(MotionEvent.AXIS_HSCROLL), event.getAxisValue(MotionEvent.AXIS_VSCROLL));
+    }
+
+    public static Context getContext() {
+        if (m_activity != null)
+            return m_activity;
+        return m_service;
+    }
+
+    public static int checkSelfPermission(String permission)
     {
         int perm = PackageManager.PERMISSION_DENIED;
         synchronized (m_mainActivityMutex) {
-            if (m_activity == null)
-                return perm;
+            Context context = getContext();
             try {
                 if (Build.VERSION.SDK_INT >= 23) {
                     if (m_checkSelfPermissionMethod == null)
                         m_checkSelfPermissionMethod = Context.class.getMethod("checkSelfPermission", String.class);
-                    perm = (Integer)m_checkSelfPermissionMethod.invoke(m_activity, permission);
+                    perm = (Integer)m_checkSelfPermissionMethod.invoke(context, permission);
                 } else {
-                    final PackageManager pm = m_activity.getPackageManager();
-                    perm = pm.checkPermission(permission, m_activity.getPackageName());
+                    final PackageManager pm = context.getPackageManager();
+                    perm = pm.checkPermission(permission, context.getApplicationContext().getPackageName());
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -488,6 +520,21 @@ public class QtNative
             public void run() {
                 if (m_activityDelegate != null)
                     m_activityDelegate.updateSelection(selStart, selEnd, candidatesStart, candidatesEnd);
+            }
+        });
+    }
+
+    private static void updateHandles(final int mode,
+                                      final int x1,
+                                      final int y1,
+                                      final int x2,
+                                      final int y2,
+                                      final boolean rtl)
+    {
+        runAction(new Runnable() {
+            @Override
+            public void run() {
+                m_activityDelegate.updateHandles(mode, x1, y1, x2, y2, rtl);
             }
         });
     }
@@ -551,7 +598,14 @@ public class QtNative
                 @Override
                 public void run() {
                     if (m_activity != null)
-                        m_clipboardManager = (android.text.ClipboardManager) m_activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                        m_clipboardManager = (android.content.ClipboardManager) m_activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (m_clipboardManager != null) {
+                        m_clipboardManager.addPrimaryClipChangedListener(new ClipboardManager.OnPrimaryClipChangedListener() {
+                            public void onPrimaryClipChanged() {
+                                onClipboardDataChanged();
+                            }
+                        });
+                    }
                     semaphore.release();
                 }
             });
@@ -569,7 +623,7 @@ public class QtNative
             m_clipboardManager.setText(text);
     }
 
-    private static boolean hasClipboardText()
+    public static boolean hasClipboardText()
     {
         if (m_clipboardManager != null)
             return m_clipboardManager.hasText();
@@ -759,8 +813,9 @@ public class QtNative
     public static native void mouseDown(int winId, int x, int y);
     public static native void mouseUp(int winId, int x, int y);
     public static native void mouseMove(int winId, int x, int y);
+    public static native void mouseWheel(int winId, int x, int y, float hdelta, float vdelta);
     public static native void touchBegin(int winId);
-    public static native void touchAdd(int winId, int pointerId, int action, boolean primary, int x, int y, float size, float pressure);
+    public static native void touchAdd(int winId, int pointerId, int action, boolean primary, int x, int y, float major, float minor, float rotation, float pressure);
     public static native void touchEnd(int winId, int action);
     public static native void longPress(int winId, int x, int y);
     // pointer methods
@@ -776,6 +831,13 @@ public class QtNative
     public static native void keyboardVisibilityChanged(boolean visibility);
     public static native void keyboardGeometryChanged(int x, int y, int width, int height);
     // keyboard methods
+
+    // handle methods
+    public static final int IdCursorHandle = 1;
+    public static final int IdLeftHandle = 2;
+    public static final int IdRightHandle = 3;
+    public static native void handleLocationChanged(int id, int x, int y);
+    // handle methods
 
     // dispatch events methods
     public static native boolean dispatchGenericMotionEvent(MotionEvent ev);
@@ -804,11 +866,17 @@ public class QtNative
     public static native void onContextMenuClosed(Menu menu);
     // menu methods
 
+    // clipboard methods
+    public static native void onClipboardDataChanged();
+    // clipboard methods
+
     // activity methods
     public static native void onActivityResult(int requestCode, int resultCode, Intent data);
     public static native void onNewIntent(Intent data);
 
     public static native void runPendingCppRunnables();
+
+    public static native void sendRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults);
 
     private static native void setNativeActivity(Activity activity);
     private static native void setNativeService(Service service);

@@ -78,7 +78,6 @@
 #include <QtCore/qthread.h>
 #include <QtCore/qurl.h>
 #include <QtCore/qvarlengtharray.h>
-#include <QLibrary> // for loading the security lib for the CA store
 
 #include <string.h>
 
@@ -200,6 +199,15 @@ static unsigned int q_ssl_psk_client_callback(SSL *ssl,
     QSslSocketBackendPrivate *d = reinterpret_cast<QSslSocketBackendPrivate *>(q_SSL_get_ex_data(ssl, QSslSocketBackendPrivate::s_indexForSSLExtraData));
     Q_ASSERT(d);
     return d->tlsPskClientCallback(hint, identity, max_identity_len, psk, max_psk_len);
+}
+
+static unsigned int q_ssl_psk_server_callback(SSL *ssl,
+                                              const char *identity,
+                                              unsigned char *psk, unsigned int max_psk_len)
+{
+    QSslSocketBackendPrivate *d = reinterpret_cast<QSslSocketBackendPrivate *>(q_SSL_get_ex_data(ssl, QSslSocketBackendPrivate::s_indexForSSLExtraData));
+    Q_ASSERT(d);
+    return d->tlsPskServerCallback(identity, psk, max_psk_len);
 }
 #endif
 } // extern "C"
@@ -436,8 +444,12 @@ bool QSslSocketBackendPrivate::initSslContext()
 
 #if OPENSSL_VERSION_NUMBER >= 0x10001000L && !defined(OPENSSL_NO_PSK)
     // Set the client callback for PSK
-    if (q_SSLeay() >= 0x10001000L && mode == QSslSocket::SslClientMode)
-        q_SSL_set_psk_client_callback(ssl, &q_ssl_psk_client_callback);
+    if (q_SSLeay() >= 0x10001000L) {
+        if (mode == QSslSocket::SslClientMode)
+            q_SSL_set_psk_client_callback(ssl, &q_ssl_psk_client_callback);
+        else if (mode == QSslSocket::SslServerMode)
+            q_SSL_set_psk_server_callback(ssl, &q_ssl_psk_server_callback);
+    }
 #endif
 
     return true;
@@ -517,20 +529,14 @@ void QSslSocketPrivate::ensureCiphersAndCertsLoaded()
     resetDefaultCiphers();
     resetDefaultEllipticCurves();
 
-#ifndef QT_NO_LIBRARY
+#if QT_CONFIG(library)
     //load symbols needed to receive certificates from system store
 #if defined(Q_OS_WIN)
     HINSTANCE hLib = LoadLibraryW(L"Crypt32");
     if (hLib) {
-#if defined(Q_OS_WINCE)
-        ptrCertOpenSystemStoreW = (PtrCertOpenSystemStoreW)GetProcAddress(hLib, L"CertOpenStore");
-        ptrCertFindCertificateInStore = (PtrCertFindCertificateInStore)GetProcAddress(hLib, L"CertFindCertificateInStore");
-        ptrCertCloseStore = (PtrCertCloseStore)GetProcAddress(hLib, L"CertCloseStore");
-#else
         ptrCertOpenSystemStoreW = (PtrCertOpenSystemStoreW)GetProcAddress(hLib, "CertOpenSystemStoreW");
         ptrCertFindCertificateInStore = (PtrCertFindCertificateInStore)GetProcAddress(hLib, "CertFindCertificateInStore");
         ptrCertCloseStore = (PtrCertCloseStore)GetProcAddress(hLib, "CertCloseStore");
-#endif
         if (!ptrCertOpenSystemStoreW || !ptrCertFindCertificateInStore || !ptrCertCloseStore)
             qCWarning(lcSsl, "could not resolve symbols in crypt32 library"); // should never happen
     } else {
@@ -551,7 +557,7 @@ void QSslSocketPrivate::ensureCiphersAndCertsLoaded()
         }
     }
 #endif
-#endif //QT_NO_LIBRARY
+#endif // QT_CONFIG(library)
     // if on-demand loading was not enabled, load the certs now
     if (!s_loadRootCertsOnDemand)
         setDefaultCaCertificates(systemCaCertificates());
@@ -691,15 +697,7 @@ QList<QSslCertificate> QSslSocketPrivate::systemCaCertificates()
 #if defined(Q_OS_WIN)
     if (ptrCertOpenSystemStoreW && ptrCertFindCertificateInStore && ptrCertCloseStore) {
         HCERTSTORE hSystemStore;
-#if defined(Q_OS_WINCE)
-        hSystemStore = ptrCertOpenSystemStoreW(CERT_STORE_PROV_SYSTEM_W,
-                                               0,
-                                               0,
-                                               CERT_STORE_NO_CRYPT_RELEASE_FLAG|CERT_SYSTEM_STORE_CURRENT_USER,
-                                               L"ROOT");
-#else
         hSystemStore = ptrCertOpenSystemStoreW(0, L"ROOT");
-#endif
         if(hSystemStore) {
             PCCERT_CONTEXT pc = NULL;
             while(1) {
@@ -1278,6 +1276,31 @@ unsigned int QSslSocketBackendPrivate::tlsPskClientCallback(const char *hint,
     return pskLength;
 }
 
+unsigned int QSslSocketBackendPrivate::tlsPskServerCallback(const char *identity,
+                                                            unsigned char *psk, unsigned int max_psk_len)
+{
+    QSslPreSharedKeyAuthenticator authenticator;
+
+    // Fill in some read-only fields (for the user)
+    authenticator.d->identityHint = configuration.preSharedKeyIdentityHint;
+    authenticator.d->identity = identity;
+    authenticator.d->maximumIdentityLength = 0; // user cannot set an identity
+    authenticator.d->maximumPreSharedKeyLength = int(max_psk_len);
+
+    // Let the client provide the remaining bits...
+    Q_Q(QSslSocket);
+    emit q->preSharedKeyAuthenticationRequired(&authenticator);
+
+    // No PSK set? Return now to make the handshake fail
+    if (authenticator.preSharedKey().isEmpty())
+        return 0;
+
+    // Copy data back into OpenSSL
+    const int pskLength = qMin(authenticator.preSharedKey().length(), authenticator.maximumPreSharedKeyLength());
+    ::memcpy(psk, authenticator.preSharedKey().constData(), pskLength);
+    return pskLength;
+}
+
 #ifdef Q_OS_WIN
 
 void QSslSocketBackendPrivate::fetchCaRootForCert(const QSslCertificate &cert)
@@ -1579,7 +1602,22 @@ void QSslSocketBackendPrivate::continueHandshake()
     } else {
         const unsigned char *proto = 0;
         unsigned int proto_len = 0;
-        q_SSL_get0_next_proto_negotiated(ssl, &proto, &proto_len);
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+        if (q_SSLeay() >= 0x10002000L) {
+            q_SSL_get0_alpn_selected(ssl, &proto, &proto_len);
+            if (proto_len && mode == QSslSocket::SslClientMode) {
+                // Client does not have a callback that sets it ...
+                configuration.nextProtocolNegotiationStatus = QSslConfiguration::NextProtocolNegotiationNegotiated;
+            }
+        }
+
+        if (!proto_len) { // Test if NPN was more lucky ...
+#else
+        {
+#endif
+            q_SSL_get0_next_proto_negotiated(ssl, &proto, &proto_len);
+        }
+
         if (proto_len)
             configuration.nextNegotiatedProtocol = QByteArray(reinterpret_cast<const char *>(proto), proto_len);
         else

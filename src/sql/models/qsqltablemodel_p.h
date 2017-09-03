@@ -51,13 +51,14 @@
 // We mean it.
 //
 
+#include <QtSql/private/qtsqlglobal_p.h>
 #include "private/qsqlquerymodel_p.h"
 #include "QtSql/qsqlindex.h"
 #include "QtCore/qmap.h"
 
 QT_BEGIN_NAMESPACE
 
-class QSqlTableModelPrivate: public QSqlQueryModelPrivate
+class Q_AUTOTEST_EXPORT QSqlTableModelPrivate: public QSqlQueryModelPrivate
 {
     Q_DECLARE_PUBLIC(QSqlTableModel)
 
@@ -68,6 +69,8 @@ public:
           strategy(QSqlTableModel::OnRowChange),
           busyInsertingRows(false)
     {}
+    ~QSqlTableModelPrivate();
+
     void clear();
     virtual void clearCache();
     QSqlRecord record(const QVector<QVariant> &values) const;

@@ -119,6 +119,8 @@ enum {
 
 QT_BEGIN_NAMESPACE
 
+Q_DECLARE_TYPEINFO(xcb_rectangle_t, Q_PRIMITIVE_TYPE);
+
 #undef FocusIn
 
 enum QX11EmbedFocusInDetail {
@@ -152,6 +154,14 @@ const quint32 XEMBED_VERSION = 0;
 QXcbScreen *QXcbWindow::parentScreen()
 {
     return parent() ? static_cast<QXcbWindow*>(parent())->parentScreen() : xcbScreen();
+}
+
+//QPlatformWindow::screenForGeometry version that uses deviceIndependentGeometry
+QXcbScreen *QXcbWindow::initialScreen() const
+{
+    QWindowPrivate *windowPrivate = qt_window_private(window());
+    QScreen *screen = windowPrivate->screenForGeometry(window()->geometry());
+    return static_cast<QXcbScreen*>(screen->handle());
 }
 
 // Returns \c true if we should set WM_TRANSIENT_FOR on \a w
@@ -256,6 +266,7 @@ static inline XTextProperty* qstringToXTP(Display *dpy, const QString& s)
         free_prop = true;
     }
 
+#if QT_CONFIG(textcodec)
     static const QTextCodec* mapper = QTextCodec::codecForLocale();
     int errCode = 0;
     if (mapper) {
@@ -271,6 +282,7 @@ static inline XTextProperty* qstringToXTP(Display *dpy, const QString& s)
         mapper = QTextCodec::codecForName("latin1");
         if (!mapper || !mapper->canEncode(s))
             return Q_NULLPTR;
+#endif
         static QByteArray qcs;
         qcs = s.toLatin1();
         tp.value = (uchar*)qcs.data();
@@ -278,7 +290,11 @@ static inline XTextProperty* qstringToXTP(Display *dpy, const QString& s)
         tp.format = 8;
         tp.nitems = qcs.length();
         free_prop = false;
+#if QT_CONFIG(textcodec)
     }
+#else
+    Q_UNUSED(dpy);
+#endif
     return &tp;
 }
 #endif // XCB_USE_XLIB
@@ -308,21 +324,6 @@ static const char *wm_window_role_property_id = "_q_xcb_wm_window_role";
 
 QXcbWindow::QXcbWindow(QWindow *window)
     : QPlatformWindow(window)
-    , m_window(0)
-    , m_syncCounter(0)
-    , m_gravity(XCB_GRAVITY_STATIC)
-    , m_mapped(false)
-    , m_transparent(false)
-    , m_usingSyncProtocol(false)
-    , m_deferredActivation(false)
-    , m_embedded(false)
-    , m_alertState(false)
-    , m_netWmUserTimeWindow(XCB_NONE)
-    , m_dirtyFrameMargins(false)
-    , m_lastWindowStateEvent(-1)
-    , m_syncState(NoSyncNeeded)
-    , m_pendingSyncRequest(0)
-    , m_currentBitmapCursor(XCB_CURSOR_NONE)
 {
     setConnection(xcbScreen()->connection());
 }
@@ -350,11 +351,6 @@ enum {
 
 void QXcbWindow::create()
 {
-    if (window()->type() == Qt::ForeignWindow) {
-        m_window = window()->winId();
-        return;
-    }
-
     destroy();
 
     m_windowState = Qt::WindowNoState;
@@ -362,8 +358,8 @@ void QXcbWindow::create()
     Qt::WindowType type = window()->type();
 
     QXcbScreen *currentScreen = xcbScreen();
-    QRect rect = windowGeometry();
-    QXcbScreen *platformScreen = parent() ? parentScreen() : static_cast<QXcbScreen*>(screenForGeometry(rect));
+    QXcbScreen *platformScreen = parent() ? parentScreen() : initialScreen();
+    QRect rect = QHighDpi::toNativePixels(window()->geometry(), platformScreen);
 
     if (type == Qt::Desktop) {
         m_window = platformScreen->root();
@@ -406,7 +402,7 @@ void QXcbWindow::create()
     xcb_window_t xcb_parent_id = platformScreen->root();
     if (parent()) {
         xcb_parent_id = static_cast<QXcbWindow *>(parent())->xcb_window();
-        m_embedded = parent()->window()->type() == Qt::ForeignWindow;
+        m_embedded = parent()->isForeignWindow();
 
         QSurfaceFormat parentFormat = parent()->window()->requestedFormat();
         if (window()->surfaceType() != QSurface::OpenGLSurface && parentFormat.hasAlpha()) {
@@ -437,7 +433,6 @@ void QXcbWindow::create()
     m_visualId = visual->visual_id;
     m_depth = platformScreen->depthOfVisual(m_visualId);
     m_imageFormat = imageFormatForVisual(m_depth, visual->red_mask, visual->blue_mask, &m_imageRgbSwap);
-    xcb_colormap_t colormap = 0;
 
     quint32 mask = XCB_CW_BACK_PIXMAP
                  | XCB_CW_BORDER_PIXEL
@@ -449,10 +444,10 @@ void QXcbWindow::create()
     static const bool haveOpenGL = QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::OpenGL);
 
     if ((window()->supportsOpenGL() && haveOpenGL) || m_format.hasAlpha()) {
-        colormap = xcb_generate_id(xcb_connection());
+        m_cmap = xcb_generate_id(xcb_connection());
         Q_XCB_CALL(xcb_create_colormap(xcb_connection(),
                                        XCB_COLORMAP_ALLOC_NONE,
-                                       colormap,
+                                       m_cmap,
                                        xcb_parent_id,
                                        m_visualId));
 
@@ -466,7 +461,7 @@ void QXcbWindow::create()
         type == Qt::Popup || type == Qt::ToolTip || (window()->flags() & Qt::BypassWindowManagerHint),
         type == Qt::Popup || type == Qt::Tool || type == Qt::SplashScreen || type == Qt::ToolTip || type == Qt::Drawer,
         defaultEventMask,
-        colormap
+        m_cmap
     };
 
     m_window = xcb_generate_id(xcb_connection());
@@ -600,14 +595,19 @@ QXcbWindow::~QXcbWindow()
     if (m_currentBitmapCursor != XCB_CURSOR_NONE) {
         xcb_free_cursor(xcb_connection(), m_currentBitmapCursor);
     }
-    if (window()->type() != Qt::ForeignWindow)
-        destroy();
-    else {
-        if (connection()->mouseGrabber() == this)
-            connection()->setMouseGrabber(Q_NULLPTR);
-        if (connection()->mousePressWindow() == this)
-            connection()->setMousePressWindow(Q_NULLPTR);
-    }
+
+    destroy();
+}
+
+QXcbForeignWindow::~QXcbForeignWindow()
+{
+    // Clear window so that destroy() does not affect it
+    m_window = 0;
+
+    if (connection()->mouseGrabber() == this)
+        connection()->setMouseGrabber(nullptr);
+    if (connection()->mousePressWindow() == this)
+        connection()->setMousePressWindow(nullptr);
 }
 
 void QXcbWindow::destroy()
@@ -631,6 +631,9 @@ void QXcbWindow::destroy()
         connection()->removeWindowEventListener(m_window);
         Q_XCB_CALL(xcb_destroy_window(xcb_connection(), m_window));
         m_window = 0;
+    }
+    if (m_cmap) {
+        xcb_free_colormap(xcb_connection(), m_cmap);
     }
     m_mapped = false;
 
@@ -855,7 +858,7 @@ void QXcbWindow::hide()
     Q_XCB_CALL(xcb_unmap_window(xcb_connection(), m_window));
 
     // send synthetic UnmapNotify event according to icccm 4.1.4
-    xcb_unmap_notify_event_t event;
+    Q_DECLARE_XCB_EVENT(event, xcb_unmap_notify_event_t);
     event.response_type = XCB_UNMAP_NOTIFY;
     event.event = xcbScreen()->root();
     event.window = m_window;
@@ -909,19 +912,17 @@ void QXcbWindow::hide()
     }
 }
 
-static QWindow *tlWindow(QWindow *window)
-{
-    if (window && window->parent())
-        return tlWindow(window->parent());
-    return window;
-}
-
 bool QXcbWindow::relayFocusToModalWindow() const
 {
-    QWindow *w = tlWindow(static_cast<QWindowPrivate *>(QObjectPrivate::get(window()))->eventReceiver());
-    QWindow *modal_window = 0;
-    if (QGuiApplicationPrivate::instance()->isWindowBlocked(w,&modal_window) && modal_window != w) {
-        modal_window->requestActivate();
+    QWindow *w = static_cast<QWindowPrivate *>(QObjectPrivate::get(window()))->eventReceiver();
+    // get top-level window
+    while (w && w->parent())
+        w = w->parent();
+
+    QWindow *modalWindow = 0;
+    const bool blocked = QGuiApplicationPrivate::instance()->isWindowBlocked(w, &modalWindow);
+    if (blocked && modalWindow != w) {
+        modalWindow->requestActivate();
         connection()->flush();
         return true;
     }
@@ -934,7 +935,7 @@ void QXcbWindow::doFocusIn()
     if (relayFocusToModalWindow())
         return;
     QWindow *w = static_cast<QWindowPrivate *>(QObjectPrivate::get(window()))->eventReceiver();
-    connection()->setFocusWindow(static_cast<QXcbWindow *>(w->handle()));
+    connection()->setFocusWindow(w);
     QWindowSystemInterface::handleWindowActivated(w, Qt::ActiveWindowFocusReason);
 }
 
@@ -942,7 +943,7 @@ static bool focusInPeeker(QXcbConnection *connection, xcb_generic_event_t *event
 {
     if (!event) {
         // FocusIn event is not in the queue, proceed with FocusOut normally.
-        QWindowSystemInterface::handleWindowActivated(0, Qt::ActiveWindowFocusReason);
+        QWindowSystemInterface::handleWindowActivated(nullptr, Qt::ActiveWindowFocusReason);
         return true;
     }
     uint response_type = event->response_type & ~0x80;
@@ -967,12 +968,10 @@ static bool focusInPeeker(QXcbConnection *connection, xcb_generic_event_t *event
 
 void QXcbWindow::doFocusOut()
 {
-    if (relayFocusToModalWindow())
-        return;
-    connection()->setFocusWindow(0);
-    // Do not set the active window to 0 if there is a FocusIn coming.
-    // There is however no equivalent for XPutBackEvent so register a
-    // callback for QXcbConnection instead.
+    connection()->setFocusWindow(nullptr);
+    relayFocusToModalWindow();
+    // Do not set the active window to nullptr if there is a FocusIn coming.
+    // The FocusIn handler will update QXcbConnection::setFocusWindow() accordingly.
     connection()->addPeekFunc(focusInPeeker);
 }
 
@@ -1515,7 +1514,7 @@ void QXcbWindow::setParent(const QPlatformWindow *parent)
     if (parent) {
         const QXcbWindow *qXcbParent = static_cast<const QXcbWindow *>(parent);
         xcb_parent_id = qXcbParent->xcb_window();
-        m_embedded = qXcbParent->window()->type() == Qt::ForeignWindow;
+        m_embedded = qXcbParent->isForeignWindow();
     } else {
         xcb_parent_id = xcbScreen()->root();
         m_embedded = false;
@@ -1525,8 +1524,8 @@ void QXcbWindow::setParent(const QPlatformWindow *parent)
 
 void QXcbWindow::setWindowTitle(const QString &title)
 {
-    const QString fullTitle = formatWindowTitle(title, QString::fromUtf8(" \xe2\x80\x94 ")); // unicode character U+2014, EM DASH
-    const QByteArray ba = fullTitle.toUtf8();
+    QString fullTitle = formatWindowTitle(title, QString::fromUtf8(" \xe2\x80\x94 ")); // unicode character U+2014, EM DASH
+    const QByteArray ba = std::move(fullTitle).toUtf8();
     Q_XCB_CALL(xcb_change_property(xcb_connection(),
                                    XCB_PROP_MODE_REPLACE,
                                    m_window,
@@ -1685,9 +1684,11 @@ void QXcbWindow::requestActivateWindow()
     m_deferredActivation = false;
 
     updateNetWmUserTime(connection()->time());
+    QWindow *focusWindow = QGuiApplication::focusWindow();
 
     if (window()->isTopLevel()
         && !(window()->flags() & Qt::X11BypassWindowManagerHint)
+        && (!focusWindow || !window()->isAncestorOf(focusWindow))
         && connection()->wmSupport()->isSupportedByWM(atom(QXcbAtom::_NET_ACTIVE_WINDOW))) {
         xcb_client_message_event_t event;
 
@@ -1698,7 +1699,6 @@ void QXcbWindow::requestActivateWindow()
         event.type = atom(QXcbAtom::_NET_ACTIVE_WINDOW);
         event.data.data32[0] = 1;
         event.data.data32[1] = connection()->time();
-        QWindow *focusWindow = QGuiApplication::focusWindow();
         event.data.data32[2] = focusWindow ? focusWindow->winId() : XCB_NONE;
         event.data.data32[3] = 0;
         event.data.data32[4] = 0;
@@ -2147,12 +2147,9 @@ bool QXcbWindow::isExposed() const
     return m_mapped;
 }
 
-bool QXcbWindow::isEmbedded(const QPlatformWindow *parentWindow) const
+bool QXcbWindow::isEmbedded() const
 {
-    if (!m_embedded)
-        return false;
-
-    return parentWindow ? (parentWindow == parent()) : true;
+    return m_embedded;
 }
 
 QPoint QXcbWindow::mapToGlobal(const QPoint &pos) const
@@ -2421,6 +2418,22 @@ void QXcbWindow::handleXIMouseEvent(xcb_ge_event_t *event, Qt::MouseEventSource 
 {
     QXcbConnection *conn = connection();
     xXIDeviceEvent *ev = reinterpret_cast<xXIDeviceEvent *>(event);
+
+    if (ev->buttons_len > 0) {
+        unsigned char *buttonMask = (unsigned char *) &ev[1];
+        // There is a bug in the evdev driver which leads to receiving mouse events without
+        // XIPointerEmulated being set: https://bugs.freedesktop.org/show_bug.cgi?id=98188
+        // Filter them out by other attributes: when their source device is a touch screen
+        // and the LMB is pressed.
+        if (XIMaskIsSet(buttonMask, 1) && conn->isTouchScreen(ev->sourceid)) {
+            if (Q_UNLIKELY(lcQpaXInputEvents().isDebugEnabled()))
+                qCDebug(lcQpaXInput, "XI2 mouse event from touch device %d was ignored", ev->sourceid);
+            return;
+        }
+        for (int i = 1; i <= 15; ++i)
+            conn->setButton(conn->translateMouseButton(i), XIMaskIsSet(buttonMask, i));
+    }
+
     const Qt::KeyboardModifiers modifiers = conn->keyboard()->translateModifiers(ev->mods.effective_mods);
     const int event_x = fixed1616ToInt(ev->event_x);
     const int event_y = fixed1616ToInt(ev->event_y);
@@ -2430,12 +2443,6 @@ void QXcbWindow::handleXIMouseEvent(xcb_ge_event_t *event, Qt::MouseEventSource 
     conn->keyboard()->updateXKBStateFromXI(&ev->mods, &ev->group);
 
     const Qt::MouseButton button = conn->xiToQtMouseButton(ev->detail);
-
-    if (ev->buttons_len > 0) {
-        unsigned char *buttonMask = (unsigned char *) &ev[1];
-        for (int i = 1; i <= 15; ++i)
-            conn->setButton(conn->translateMouseButton(i), XIMaskIsSet(buttonMask, i));
-    }
 
     const char *sourceName = 0;
     if (Q_UNLIKELY(lcQpaXInputEvents().isDebugEnabled())) {
@@ -2721,13 +2728,23 @@ bool QXcbWindow::startSystemResize(const QPoint &pos, Qt::Corner corner)
     const xcb_atom_t moveResize = connection()->atom(QXcbAtom::_NET_WM_MOVERESIZE);
     if (!connection()->wmSupport()->isSupportedByWM(moveResize))
         return false;
+    const QPoint globalPos = QHighDpi::toNativePixels(window()->mapToGlobal(pos), window()->screen());
+#ifdef XCB_USE_XINPUT22
+    if (connection()->startSystemResizeForTouchBegin(m_window, globalPos, corner))
+        return true;
+#endif
+    return doStartSystemResize(globalPos, corner);
+}
+
+bool QXcbWindow::doStartSystemResize(const QPoint &globalPos, Qt::Corner corner)
+{
+    const xcb_atom_t moveResize = connection()->atom(QXcbAtom::_NET_WM_MOVERESIZE);
     xcb_client_message_event_t xev;
     xev.response_type = XCB_CLIENT_MESSAGE;
     xev.type = moveResize;
     xev.sequence = 0;
     xev.window = xcb_window();
     xev.format = 32;
-    const QPoint globalPos = window()->mapToGlobal(pos);
     xev.data.data32[0] = globalPos.x();
     xev.data.data32[1] = globalPos.y();
     const bool bottom = corner == Qt::BottomRightCorner || corner == Qt::BottomLeftCorner;
@@ -2806,14 +2823,14 @@ void QXcbWindow::handleXEmbedMessage(const xcb_client_message_event_t *event)
             reason = Qt::OtherFocusReason;
             break;
         }
-        connection()->setFocusWindow(static_cast<QXcbWindow*>(window()->handle()));
+        connection()->setFocusWindow(window());
         QWindowSystemInterface::handleWindowActivated(window(), reason);
         break;
     case XEMBED_FOCUS_OUT:
         if (window() == QGuiApplication::focusWindow()
             && !activeWindowChangeQueued(window())) {
-            connection()->setFocusWindow(0);
-            QWindowSystemInterface::handleWindowActivated(0);
+            connection()->setFocusWindow(nullptr);
+            QWindowSystemInterface::handleWindowActivated(nullptr);
         }
         break;
     }
@@ -2855,9 +2872,8 @@ void QXcbWindow::setMask(const QRegion &region)
                        XCB_SHAPE_SK_BOUNDING, xcb_window(), 0, 0, XCB_NONE);
     } else {
         QVector<xcb_rectangle_t> rects;
-        const QVector<QRect> regionRects = region.rects();
-        rects.reserve(regionRects.count());
-        foreach (const QRect &r, regionRects)
+        rects.reserve(region.rectCount());
+        for (const QRect &r : region)
             rects.push_back(qRectToXCBRectangle(r));
         xcb_shape_rectangles(connection()->xcb_connection(), XCB_SHAPE_SO_SET,
                              XCB_SHAPE_SK_BOUNDING, XCB_CLIP_ORDERING_UNSORTED,

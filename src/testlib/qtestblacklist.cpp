@@ -82,7 +82,9 @@ QT_BEGIN_NAMESPACE
         msvc-2010
 
   Keys are lower-case.  Distribution name and version are supported if
-  QSysInfo's productType() and productVersion() return them.
+  QSysInfo's productType() and productVersion() return them. Keys can be
+  added via the space-separated QTEST_ENVIRONMENT environment variable.
+
   The other known keys are listed below:
 */
 
@@ -97,11 +99,17 @@ static QSet<QByteArray> keywords()
 #ifdef Q_OS_OSX
             << "osx"
 #endif
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) && !defined(Q_OS_WINRT)
             << "windows"
 #endif
 #ifdef Q_OS_IOS
             << "ios"
+#endif
+#ifdef Q_OS_TVOS
+            << "tvos"
+#endif
+#ifdef Q_OS_WATCHOS
+            << "watchos"
 #endif
 #ifdef Q_OS_ANDROID
             << "android"
@@ -111,9 +119,6 @@ static QSet<QByteArray> keywords()
 #endif
 #ifdef Q_OS_WINRT
             << "winrt"
-#endif
-#ifdef Q_OS_WINCE
-            << "wince"
 #endif
 
 #if QT_POINTER_SIZE == 8
@@ -179,6 +184,11 @@ static QSet<QByteArray> activeConditions()
             if (result.find(versioned) == result.end())
                 result.insert(versioned);
         }
+    }
+
+    if (qEnvironmentVariableIsSet("QTEST_ENVIRONMENT")) {
+        for (const QByteArray &k : qgetenv("QTEST_ENVIRONMENT").split(' '))
+            result.insert(k);
     }
 
     return result;

@@ -68,10 +68,11 @@ static inline qreal initialGlobalScaleFactor()
         }
     } else {
         if (qEnvironmentVariableIsSet(legacyDevicePixelEnvVar)) {
-            qWarning() << "Warning:" << legacyDevicePixelEnvVar << "is deprecated. Instead use:" << endl
-                       << "   " << autoScreenEnvVar << "to enable platform plugin controlled per-screen factors." << endl
-                       << "   " << screenFactorsEnvVar << "to set per-screen factors." << endl
-                       << "   " << scaleFactorEnvVar << "to set the application global scale factor.";
+            qWarning("Warning: %s is deprecated. Instead use:\n"
+                     "   %s to enable platform plugin controlled per-screen factors.\n"
+                     "   %s to set per-screen factors.\n"
+                     "   %s to set the application global scale factor.",
+                     legacyDevicePixelEnvVar, autoScreenEnvVar, screenFactorsEnvVar, scaleFactorEnvVar);
 
             int dpr = qEnvironmentVariableIntValue(legacyDevicePixelEnvVar);
             if (dpr > 0)
@@ -342,8 +343,10 @@ static const char scaleFactorProperty[] = "_q_scaleFactor";
 */
 void QHighDpiScaling::setScreenFactor(QScreen *screen, qreal factor)
 {
-    m_screenFactorSet = true;
-    m_active = true;
+    if (!qFuzzyCompare(factor, qreal(1))) {
+        m_screenFactorSet = true;
+        m_active = true;
+    }
     screen->setProperty(scaleFactorProperty, QVariant(factor));
 
     // hack to force re-evaluation of screen geometry

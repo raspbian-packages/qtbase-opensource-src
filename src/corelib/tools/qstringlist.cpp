@@ -143,8 +143,8 @@ QT_BEGIN_NAMESPACE
 
     \snippet qstringlist/main.cpp 6
 
-    The argument to split can be a single character, a string, or a
-    QRegExp.
+    The argument to split can be a single character, a string, a
+    QRegularExpression or a (deprecated) QRegExp.
 
     In addition, the \l {QStringList::operator+()}{operator+()}
     function allows you to concatenate two string lists into one. To
@@ -447,6 +447,17 @@ void QtPrivate::QStringList_replaceInStrings(QStringList *that, const QRegularEx
 #endif // QT_NO_REGULAREXPRESSION
 #endif // QT_BOOTSTRAPPED
 
+static int accumulatedSize(const QStringList &list, int seplen)
+{
+    int result = 0;
+    if (!list.isEmpty()) {
+        for (const auto &e : list)
+            result += e.size() + seplen;
+        result -= seplen;
+    }
+    return result;
+}
+
 /*!
     \fn QString QStringList::join(const QString &separator) const
 
@@ -464,14 +475,8 @@ void QtPrivate::QStringList_replaceInStrings(QStringList *that, const QRegularEx
 */
 QString QtPrivate::QStringList_join(const QStringList *that, const QChar *sep, int seplen)
 {
-    int totalLength = 0;
+    const int totalLength = accumulatedSize(*that, seplen);
     const int size = that->size();
-
-    for (int i = 0; i < size; ++i)
-        totalLength += that->at(i).size();
-
-    if(size > 0)
-        totalLength += seplen * (size - 1);
 
     QString res;
     if (totalLength == 0)
@@ -483,6 +488,27 @@ QString QtPrivate::QStringList_join(const QStringList *that, const QChar *sep, i
         res += that->at(i);
     }
     return res;
+}
+
+/*!
+    \fn QString QStringList::join(QLatin1String separator) const
+    \since 5.8
+    \overload join()
+*/
+QString QtPrivate::QStringList_join(const QStringList &list, QLatin1String sep)
+{
+    QString result;
+    if (!list.isEmpty()) {
+        result.reserve(accumulatedSize(list, sep.size()));
+        const auto end = list.end();
+        auto it = list.begin();
+        result += *it;
+        while (++it != end) {
+            result += sep;
+            result += *it;
+        }
+    }
+    return result;
 }
 
 /*!
@@ -690,7 +716,7 @@ int QtPrivate::QStringList_lastIndexOf(const QStringList *that, const QRegularEx
 /*!
     \fn int QStringList::removeDuplicates()
 
-    \since  4.5
+    \since 4.5
 
     This function removes duplicate entries from a list.
     The entries do not have to be sorted. They will retain their

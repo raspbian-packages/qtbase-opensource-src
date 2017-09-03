@@ -60,15 +60,7 @@
 #include <qmimedatabase.h>
 #include <qapplication.h>
 #include <qstylepainter.h>
-#if !defined(Q_OS_WINCE)
 #include "ui_qfiledialog.h"
-#else
-#define Q_EMBEDDED_SMALLSCREEN
-#include "ui_qfiledialog_embedded.h"
-#if defined(Q_OS_WINCE)
-extern bool qt_priv_ptr_valid;
-#endif
-#endif
 #if defined(Q_OS_UNIX)
 #include <pwd.h>
 #include <unistd.h> // for pathconf() on OS X
@@ -533,7 +525,7 @@ QFileDialogPrivate::QFileDialogPrivate()
         showHiddenAction(0),
         useDefaultCaption(true),
         qFileDialogUi(0),
-        options(new QFileDialogOptions)
+        options(QFileDialogOptions::create())
 {
 }
 
@@ -664,7 +656,7 @@ void QFileDialogPrivate::retranslateStrings()
     /* WIDGETS */
     if (options->useDefaultNameFilters())
         q->setNameFilter(QFileDialogOptions::defaultNameFilterString());
-    if (nativeDialogInUse)
+    if (!usingWidgets())
         return;
 
     QList<QAction*> actions = qFileDialogUi->treeView->header()->actions();
@@ -868,7 +860,7 @@ void QFileDialog::setVisible(bool visible)
         }
     }
 
-    if (d->usingWidgets())
+    if (visible && d->usingWidgets())
         d->qFileDialogUi->fileNameEdit->setFocus();
 
     QDialog::setVisible(visible);
@@ -900,6 +892,9 @@ void QFileDialogPrivate::_q_goToUrl(const QUrl &url)
         {QStandardPaths::standardLocations(QStandardPaths::PicturesLocation).last()},
         a native image picker dialog will be used for accessing the user's photo album.
         The filename returned can be loaded using QFile and related APIs.
+        For this to be enabled, the Info.plist assigned to QMAKE_INFO_PLIST in the
+        project file must contain the key \c NSPhotoLibraryUsageDescription. See
+        Info.plist documentation from Apple for more information regarding this key.
         This feature was added in Qt 5.5.
 */
 void QFileDialog::setDirectory(const QString &directory)
@@ -1466,6 +1461,19 @@ void QFileDialog::selectNameFilter(const QString &filter)
 }
 
 /*!
+ * \since 5.9
+ * \return The mimetype of the file that the user selected in the file dialog.
+ */
+QString QFileDialog::selectedMimeTypeFilter() const
+{
+    Q_D(const QFileDialog);
+    if (!d->usingWidgets())
+        return d->selectedMimeTypeFilter_sys();
+
+    return d->options->initiallySelectedMimeTypeFilter();
+}
+
+/*!
     \since 4.4
 
     Returns the filter that the user selected in the file dialog.
@@ -1584,9 +1592,19 @@ QStringList QFileDialog::mimeTypeFilters() const
 */
 void QFileDialog::selectMimeTypeFilter(const QString &filter)
 {
-    const QString text = nameFilterForMime(filter);
-    if (!text.isEmpty())
-        selectNameFilter(text);
+    Q_D(QFileDialog);
+    d->options->setInitiallySelectedMimeTypeFilter(filter);
+
+    const QString filterForMime = nameFilterForMime(filter);
+
+    if (!d->usingWidgets()) {
+        d->selectMimeTypeFilter_sys(filter);
+        if (d->selectedMimeTypeFilter_sys().isEmpty() && !filterForMime.isEmpty()) {
+            selectNameFilter(filterForMime);
+        }
+    } else if (!filterForMime.isEmpty()) {
+        selectNameFilter(filterForMime);
+    }
 }
 
 #endif // QT_NO_MIMETYPE
@@ -1752,7 +1770,7 @@ int QFileDialogPrivate::maxNameLength(const QString &path)
 {
 #if defined(Q_OS_UNIX)
     return ::pathconf(QFile::encodeName(path).data(), _PC_NAME_MAX);
-#elif defined(Q_OS_WINCE) || defined(Q_OS_WINRT)
+#elif defined(Q_OS_WINRT)
     Q_UNUSED(path);
     return MAX_PATH;
 #elif defined(Q_OS_WIN)
@@ -2042,10 +2060,12 @@ QString QFileDialog::labelText(DialogLabel label) const
             button = d->qFileDialogUi->buttonBox->button(QDialogButtonBox::Save);
         if (button)
             return button->text();
+        break;
     case Reject:
         button = d->qFileDialogUi->buttonBox->button(QDialogButtonBox::Cancel);
         if (button)
             return button->text();
+        break;
     }
     return QString();
 }
@@ -2226,7 +2246,7 @@ QStringList QFileDialog::getOpenFileNames(QWidget *parent,
 }
 
 /*!
-    This is a convenience static function that will return or or more existing
+    This is a convenience static function that will return one or more existing
     files selected by the user. If the user presses Cancel, it returns an
     empty list.
 
@@ -3792,13 +3812,13 @@ void QFileDialogPrivate::_q_nativeEnterDirectory(const QUrl &directory)
 */
 bool QFileDialogPrivate::itemViewKeyboardEvent(QKeyEvent *event) {
 
+#if QT_CONFIG(shortcut)
     Q_Q(QFileDialog);
-
     if (event->matches(QKeySequence::Cancel)) {
         q->reject();
         return true;
     }
-
+#endif
     switch (event->key()) {
     case Qt::Key_Backspace:
         _q_navigateToParent();
@@ -3998,9 +4018,13 @@ void QFileDialogLineEdit::keyPressEvent(QKeyEvent *e)
     }
 #endif // QT_KEYPAD_NAVIGATION
 
+#if QT_CONFIG(shortcut)
     int key = e->key();
+#endif
     QLineEdit::keyPressEvent(e);
+#if QT_CONFIG(shortcut)
     if (!e->matches(QKeySequence::Cancel) && key != Qt::Key_Back)
+#endif
         e->accept();
 }
 
@@ -4016,7 +4040,7 @@ QString QFSCompleter::pathFromIndex(const QModelIndex &index) const
     QString currentLocation = dirModel->rootPath();
     QString path = index.data(QFileSystemModel::FilePathRole).toString();
     if (!currentLocation.isEmpty() && path.startsWith(currentLocation)) {
-#if defined(Q_OS_UNIX) || defined(Q_OS_WINCE)
+#if defined(Q_OS_UNIX)
         if (currentLocation == QDir::separator())
             return path.mid(currentLocation.length());
 #endif

@@ -48,8 +48,14 @@
 #include <qcache.h>
 #include <qdockwidget.h>
 #include <qdrawutil.h>
+#if QT_CONFIG(dialogbuttonbox)
 #include <qdialogbuttonbox.h>
+#endif
+#if QT_CONFIG(formlayout)
 #include <qformlayout.h>
+#else
+#include <qlayout.h>
+#endif
 #include <qgroupbox.h>
 #include <qmath.h>
 #include <qmenu.h>
@@ -410,6 +416,8 @@ void QCommonStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, Q
         proxy()->drawItemPixmap(p, opt->rect, Qt::AlignCenter, pixmap);
         break;
     }
+#else
+    Q_UNUSED(d);
 #endif // QT_NO_TABBAR
     case PE_FrameTabWidget:
     case PE_FrameWindow:
@@ -600,7 +608,7 @@ void QCommonStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, Q
         }
         break;
 #endif // QT_NO_LINEEDIT
-#ifndef QT_NO_COLUMNVIEW
+#if QT_CONFIG(columnview)
     case PE_IndicatorColumnViewArrow: {
     if (const QStyleOptionViewItem *viewOpt = qstyleoption_cast<const QStyleOptionViewItem *>(opt)) {
         bool reverse = (viewOpt->direction == Qt::RightToLeft);
@@ -652,7 +660,7 @@ void QCommonStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, Q
         p->restore();
     }
     break; }
-#endif //QT_NO_COLUMNVIEW
+#endif //QT_CONFIG(columnview)
     case PE_IndicatorItemViewItemDrop: {
         QRect rect = opt->rect;
         if (opt->rect.height() == 0)
@@ -1099,7 +1107,7 @@ void QCommonStylePrivate::tabLayout(const QStyleOptionTab *opt, const QWidget *w
                         || opt->shape == QTabBar::TriangularEast
                         || opt->shape == QTabBar::TriangularWest;
     if (verticalTabs)
-        tr.setRect(0, 0, tr.height(), tr.width()); //0, 0 as we will have a translate transform
+        tr.setRect(0, 0, tr.height(), tr.width()); // 0, 0 as we will have a translate transform
 
     int verticalShift = proxyStyle->pixelMetric(QStyle::PM_TabBarTabShiftVertical, opt, widget);
     int horizontalShift = proxyStyle->pixelMetric(QStyle::PM_TabBarTabShiftHorizontal, opt, widget);
@@ -1122,7 +1130,7 @@ void QCommonStylePrivate::tabLayout(const QStyleOptionTab *opt, const QWidget *w
     // right widget
     if (!opt->rightButtonSize.isEmpty()) {
         tr.setRight(tr.right() - 4 -
-        (verticalTabs ? opt->rightButtonSize.height() : opt->rightButtonSize.width()));
+            (verticalTabs ? opt->rightButtonSize.height() : opt->rightButtonSize.width()));
     }
 
     // icon
@@ -1134,12 +1142,12 @@ void QCommonStylePrivate::tabLayout(const QStyleOptionTab *opt, const QWidget *w
         }
         QSize tabIconSize = opt->icon.actualSize(iconSize,
                         (opt->state & QStyle::State_Enabled) ? QIcon::Normal : QIcon::Disabled,
-                        (opt->state & QStyle::State_Selected) ? QIcon::On : QIcon::Off  );
-        // High-dpi icons do not need adjustmet; make sure tabIconSize is not larger than iconSize
+                        (opt->state & QStyle::State_Selected) ? QIcon::On : QIcon::Off);
+        // High-dpi icons do not need adjustment; make sure tabIconSize is not larger than iconSize
         tabIconSize = QSize(qMin(tabIconSize.width(), iconSize.width()), qMin(tabIconSize.height(), iconSize.height()));
 
         *iconRect = QRect(tr.left(), tr.center().y() - tabIconSize.height() / 2,
-                    tabIconSize.width(), tabIconSize .height());
+                    tabIconSize.width(), tabIconSize.height());
         if (!verticalTabs)
             *iconRect = proxyStyle->visualRect(opt->direction, opt->rect, *iconRect);
         tr.setLeft(tr.left() + tabIconSize.width() + 4);
@@ -2309,6 +2317,9 @@ void QCommonStyle::drawControl(ControlElement element, const QStyleOption *opt,
     default:
         break;
     }
+#if !QT_CONFIG(tabbar) && !QT_CONFIG(itemviews)
+    Q_UNUSED(d);
+#endif
 }
 
 /*!
@@ -3008,6 +3019,7 @@ QRect QCommonStyle::subElementRect(SubElement sr, const QStyleOption *opt,
             r = subElementRect(SE_CheckBoxIndicator, opt, widget);
             break;
         }
+        Q_FALLTHROUGH();
     case SE_ItemViewItemDecoration:
     case SE_ItemViewItemText:
     case SE_ItemViewItemFocusRect:
@@ -3052,6 +3064,9 @@ QRect QCommonStyle::subElementRect(SubElement sr, const QStyleOption *opt,
         break;
     }
     return r;
+#if !QT_CONFIG(tabwidget) && !QT_CONFIG(itemviews)
+    Q_UNUSED(d);
+#endif
 }
 
 #ifndef QT_NO_DIAL
@@ -3724,6 +3739,8 @@ void QCommonStyle::drawComplexControl(ComplexControl cc, const QStyleOptionCompl
             btnOpt.state &= ~State_MouseOver;
             int bsx = 0;
             int bsy = 0;
+            const int buttonIconMetric = proxy()->pixelMetric(PM_TitleBarButtonIconSize, &btnOpt, widget);
+            const QSize buttonIconSize(buttonIconMetric, buttonIconMetric);
             if (opt->subControls & QStyle::SC_MdiCloseButton) {
                 if (opt->activeSubControls & QStyle::SC_MdiCloseButton && (opt->state & State_Sunken)) {
                     btnOpt.state |= State_Sunken;
@@ -3738,7 +3755,7 @@ void QCommonStyle::drawComplexControl(ComplexControl cc, const QStyleOptionCompl
                 }
                 btnOpt.rect = proxy()->subControlRect(CC_MdiControls, opt, SC_MdiCloseButton, widget);
                 proxy()->drawPrimitive(PE_PanelButtonCommand, &btnOpt, p, widget);
-                QPixmap pm = proxy()->standardIcon(SP_TitleBarCloseButton).pixmap(qt_getWindow(widget), QSize(16, 16));
+                QPixmap pm = proxy()->standardIcon(SP_TitleBarCloseButton).pixmap(qt_getWindow(widget), buttonIconSize);
                 proxy()->drawItemPixmap(p, btnOpt.rect.translated(bsx, bsy), Qt::AlignCenter, pm);
             }
             if (opt->subControls & QStyle::SC_MdiNormalButton) {
@@ -3755,7 +3772,7 @@ void QCommonStyle::drawComplexControl(ComplexControl cc, const QStyleOptionCompl
                 }
                 btnOpt.rect = proxy()->subControlRect(CC_MdiControls, opt, SC_MdiNormalButton, widget);
                 proxy()->drawPrimitive(PE_PanelButtonCommand, &btnOpt, p, widget);
-                QPixmap pm = proxy()->standardIcon(SP_TitleBarNormalButton).pixmap(qt_getWindow(widget), QSize(16, 16));
+                QPixmap pm = proxy()->standardIcon(SP_TitleBarNormalButton).pixmap(qt_getWindow(widget), buttonIconSize);
                 proxy()->drawItemPixmap(p, btnOpt.rect.translated(bsx, bsy), Qt::AlignCenter, pm);
             }
             if (opt->subControls & QStyle::SC_MdiMinButton) {
@@ -3772,7 +3789,7 @@ void QCommonStyle::drawComplexControl(ComplexControl cc, const QStyleOptionCompl
                 }
                 btnOpt.rect = proxy()->subControlRect(CC_MdiControls, opt, SC_MdiMinButton, widget);
                 proxy()->drawPrimitive(PE_PanelButtonCommand, &btnOpt, p, widget);
-                QPixmap pm = proxy()->standardIcon(SP_TitleBarMinButton).pixmap(qt_getWindow(widget), QSize(16, 16));
+                QPixmap pm = proxy()->standardIcon(SP_TitleBarMinButton).pixmap(qt_getWindow(widget), buttonIconSize);
                 proxy()->drawItemPixmap(p, btnOpt.rect.translated(bsx, bsy), Qt::AlignCenter, pm);
             }
         }
@@ -4178,11 +4195,13 @@ QRect QCommonStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex 
             case SC_TitleBarContextHelpButton:
                 if (tb->titleBarFlags & Qt::WindowContextHelpButtonHint)
                     offset += delta;
+                Q_FALLTHROUGH();
             case SC_TitleBarMinButton:
                 if (!isMinimized && (tb->titleBarFlags & Qt::WindowMinimizeButtonHint))
                     offset += delta;
                 else if (sc == SC_TitleBarMinButton)
                     break;
+                Q_FALLTHROUGH();
             case SC_TitleBarNormalButton:
                 if (isMinimized && (tb->titleBarFlags & Qt::WindowMinimizeButtonHint))
                     offset += delta;
@@ -4190,21 +4209,25 @@ QRect QCommonStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex 
                     offset += delta;
                 else if (sc == SC_TitleBarNormalButton)
                     break;
+                Q_FALLTHROUGH();
             case SC_TitleBarMaxButton:
                 if (!isMaximized && (tb->titleBarFlags & Qt::WindowMaximizeButtonHint))
                     offset += delta;
                 else if (sc == SC_TitleBarMaxButton)
                     break;
+                Q_FALLTHROUGH();
             case SC_TitleBarShadeButton:
                 if (!isMinimized && (tb->titleBarFlags & Qt::WindowShadeButtonHint))
                     offset += delta;
                 else if (sc == SC_TitleBarShadeButton)
                     break;
+                Q_FALLTHROUGH();
             case SC_TitleBarUnshadeButton:
                 if (isMinimized && (tb->titleBarFlags & Qt::WindowShadeButtonHint))
                     offset += delta;
                 else if (sc == SC_TitleBarUnshadeButton)
                     break;
+                Q_FALLTHROUGH();
             case SC_TitleBarCloseButton:
                 if (tb->titleBarFlags & Qt::WindowSystemMenuHint)
                     offset += delta;
@@ -4230,7 +4253,6 @@ QRect QCommonStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex 
         if (const QStyleOptionGroupBox *groupBox = qstyleoption_cast<const QStyleOptionGroupBox *>(opt)) {
             switch (sc) {
             case SC_GroupBoxFrame:
-                // FALL THROUGH
             case SC_GroupBoxContents: {
                 int topMargin = 0;
                 int topHeight = 0;
@@ -4259,7 +4281,6 @@ QRect QCommonStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex 
                 break;
             }
             case SC_GroupBoxCheckBox:
-                // FALL THROUGH
             case SC_GroupBoxLabel: {
                 QFontMetrics fontMetrics = groupBox->fontMetrics;
                 int h = fontMetrics.height();
@@ -4325,7 +4346,7 @@ QRect QCommonStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex 
             if (numSubControls == 1)
                 break;
             offset += buttonWidth + 2;
-            //FALL THROUGH
+            Q_FALLTHROUGH();
         case SC_MdiNormalButton:
             // No offset needed if
             // 1) There's only one sub control
@@ -4351,6 +4372,9 @@ QRect QCommonStyle::subControlRect(ComplexControl cc, const QStyleOptionComplex 
      default:
         qWarning("QCommonStyle::subControlRect: Case %d not handled", cc);
     }
+#if !QT_CONFIG(slider) && !QT_CONFIG(spinbox) && !QT_CONFIG(toolbutton) && !QT_CONFIG(groupbox)
+    Q_UNUSED(widget);
+#endif
     return ret;
 }
 
@@ -4393,6 +4417,13 @@ int QCommonStyle::pixelMetric(PixelMetric m, const QStyleOption *opt, const QWid
         }
 
         break; }
+    case PM_TitleBarButtonSize:
+        ret = int(QStyleHelper::dpiScaled(16.));
+        break;
+    case PM_TitleBarButtonIconSize:
+        ret = int(QStyleHelper::dpiScaled(16.));
+        break;
+
     case PM_ScrollBarSliderMin:
         ret = int(QStyleHelper::dpiScaled(9.));
         break;
@@ -4845,16 +4876,18 @@ QSize QCommonStyle::sizeFromContents(ContentsType ct, const QStyleOption *opt,
 #endif // QT_NO_GROUPBOX
     case CT_MdiControls:
         if (const QStyleOptionComplex *styleOpt = qstyleoption_cast<const QStyleOptionComplex *>(opt)) {
+            const int buttonSize = proxy()->pixelMetric(PM_TitleBarButtonSize, styleOpt, widget);
             int width = 1;
             if (styleOpt->subControls & SC_MdiMinButton)
-                width += 16 + 1;
+                width += buttonSize + 1;
             if (styleOpt->subControls & SC_MdiNormalButton)
-                width += 16 + 1;
+                width += buttonSize + 1;
             if (styleOpt->subControls & SC_MdiCloseButton)
-                width += 16 + 1;
-            sz = QSize(width, 16);
+                width += buttonSize + 1;
+            sz = QSize(width, buttonSize);
         } else {
-            sz = QSize(52, 16);
+            const int buttonSize = proxy()->pixelMetric(PM_TitleBarButtonSize, opt, widget);
+            sz = QSize(1 + 3 * (buttonSize + 1), buttonSize);
         }
         break;
 #ifndef QT_NO_ITEMVIEWS
@@ -4863,8 +4896,12 @@ QSize QCommonStyle::sizeFromContents(ContentsType ct, const QStyleOption *opt,
             QRect decorationRect, displayRect, checkRect;
             d->viewItemLayout(vopt, &checkRect, &decorationRect, &displayRect, true);
             sz = (decorationRect|displayRect|checkRect).size();
+            if (decorationRect.isValid() && sz.height() == decorationRect.height())
+                sz.rheight() += 2; // Prevent icons from overlapping.
                       }
         break;
+#else
+        Q_UNUSED(d);
 #endif // QT_NO_ITEMVIEWS
 #ifndef QT_NO_SPINBOX
     case CT_SpinBox:
@@ -4884,7 +4921,7 @@ QSize QCommonStyle::sizeFromContents(ContentsType ct, const QStyleOption *opt,
     case CT_ProgressBar:
     case CT_TabBarTab:
         // just return the contentsSize for now
-        // fall through intended
+        Q_FALLTHROUGH();
     default:
         break;
     }
@@ -4911,9 +4948,11 @@ int QCommonStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget
     case SH_ScrollBar_ContextMenu:
         ret = true;
         break;
+#if QT_CONFIG(dialogbuttonbox)
     case SH_DialogButtons_DefaultButton:  // This value not used anywhere.
         ret = QDialogButtonBox::AcceptRole;
         break;
+#endif
 #ifndef QT_NO_GROUPBOX
     case SH_GroupBox_TextLabelVerticalAlignment:
         ret = Qt::AlignVCenter;
@@ -5101,11 +5140,13 @@ int QCommonStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget
     case SH_TabBar_ElideMode:
         ret = Qt::ElideNone;
         break;
+#if QT_CONFIG(dialogbuttonbox)
     case SH_DialogButtonLayout:
         ret = QDialogButtonBox::WinLayout;
         if (const QPlatformTheme *theme = QGuiApplicationPrivate::platformTheme())
             ret = theme->themeHint(QPlatformTheme::DialogButtonBoxLayout).toInt();
         break;
+#endif
     case SH_ComboBox_PopupFrameStyle:
         ret = QFrame::StyledPanel | QFrame::Plain;
         break;
@@ -5151,12 +5192,14 @@ int QCommonStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget
         ret = QWizard::ClassicStyle;
         break;
 #endif
+#if QT_CONFIG(formlayout)
     case SH_FormLayoutWrapPolicy:
         ret = QFormLayout::DontWrapRows;
         break;
     case SH_FormLayoutFieldGrowthPolicy:
         ret = QFormLayout::AllNonFixedFieldsGrow;
         break;
+#endif
     case SH_FormLayoutFormAlignment:
         ret = Qt::AlignLeft | Qt::AlignTop;
         break;
@@ -5215,9 +5258,11 @@ int QCommonStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget
     case SH_Splitter_OpaqueResize:
         ret = true;
         break;
+#if QT_CONFIG(itemviews)
     case SH_ItemView_ScrollMode:
         ret = QAbstractItemView::ScrollPerItem;
         break;
+#endif
     default:
         ret = 0;
         break;
@@ -5226,6 +5271,7 @@ int QCommonStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget
     return ret;
 }
 
+#if QT_CONFIG(imageformat_xpm)
 static QPixmap cachedPixmapFromXPM(const char * const *xpm)
 {
     QPixmap result;
@@ -5237,6 +5283,9 @@ static QPixmap cachedPixmapFromXPM(const char * const *xpm)
     return result;
 }
 
+static inline QPixmap titleBarMenuCachedPixmapFromXPM() { return cachedPixmapFromXPM(qt_menu_xpm); }
+#endif // QT_CONFIG(imageformat_xpm)
+
 #ifndef QT_NO_IMAGEFORMAT_PNG
 static inline QString clearText16IconPath()
 {
@@ -5244,6 +5293,7 @@ static inline QString clearText16IconPath()
 }
 #endif // !QT_NO_IMAGEFORMAT_PNG
 
+#if defined(Q_OS_WIN) || QT_CONFIG(imageformat_png)
 static QIcon clearTextIcon(bool rtl)
 {
     const QString directionalThemeName = rtl
@@ -5267,6 +5317,7 @@ static QIcon clearTextIcon(bool rtl)
 #endif // !QT_NO_IMAGEFORMAT_PNG
     return icon;
 }
+#endif
 
 /*! \reimp */
 QPixmap QCommonStyle::standardPixmap(StandardPixmap sp, const QStyleOption *option,
@@ -5581,7 +5632,7 @@ QPixmap QCommonStyle::standardPixmap(StandardPixmap sp, const QStyleOption *opti
 #ifndef QT_NO_IMAGEFORMAT_XPM
     switch (sp) {
     case SP_TitleBarMenuButton:
-        return cachedPixmapFromXPM(qt_menu_xpm);
+        return titleBarMenuCachedPixmapFromXPM();
     case SP_TitleBarShadeButton:
         return cachedPixmapFromXPM(qt_shade_xpm);
     case SP_TitleBarUnshadeButton:
@@ -5611,6 +5662,9 @@ QPixmap QCommonStyle::standardPixmap(StandardPixmap sp, const QStyleOption *opti
     }
 #endif //QT_NO_IMAGEFORMAT_XPM
 
+#if !QT_CONFIG(imageformat_png) && !QT_CONFIG(imageformat_xpm) && !QT_CONFIG(imageformat_png)
+    Q_UNUSED(rtl);
+#endif
 
     return QPixmap();
 }
@@ -5902,14 +5956,14 @@ QIcon QCommonStyle::standardIcon(StandardPixmap standardIcon, const QStyleOption
             if (const QPlatformTheme *theme = QGuiApplicationPrivate::platformTheme()) {
                 QPlatformTheme::StandardPixmap sp = static_cast<QPlatformTheme::StandardPixmap>(standardIcon);
                 QIcon retIcon;
-                QList<int> sizes = theme->themeHint(QPlatformTheme::IconPixmapSizes).value<QList<int> >();
-                Q_FOREACH (int size, sizes) {
+                const QList<QSize> sizes = theme->themeHint(QPlatformTheme::IconPixmapSizes).value<QList<QSize> >();
+                for (const QSize &size : sizes) {
                     QPixmap mainIcon;
-                    const QString cacheKey = QLatin1String("qt_mac_constructQIconFromIconRef") + QString::number(standardIcon) + QString::number(size);
+                    const QString cacheKey = QLatin1String("qt_mac_constructQIconFromIconRef") + QString::number(standardIcon) + QString::number(size.width());
                     if (standardIcon >= QStyle::SP_CustomBase) {
-                        mainIcon = theme->standardPixmap(sp, QSizeF(size, size));
+                        mainIcon = theme->standardPixmap(sp, QSizeF(size));
                     } else if (QPixmapCache::find(cacheKey, mainIcon) == false) {
-                        mainIcon = theme->standardPixmap(sp, QSizeF(size, size));
+                        mainIcon = theme->standardPixmap(sp, QSizeF(size));
                         QPixmapCache::insert(cacheKey, mainIcon);
                     }
 
@@ -6120,6 +6174,12 @@ QIcon QCommonStyle::standardIcon(StandardPixmap standardIcon, const QStyleOption
         break;
     case SP_MediaVolumeMuted:
         icon.addFile(QLatin1String(":/qt-project.org/styles/commonstyle/images/media-volume-muted-16.png"), QSize(16, 16));
+        break;
+    case SP_TitleBarMenuButton:
+#  ifndef QT_NO_IMAGEFORMAT_XPM
+        icon.addPixmap(titleBarMenuCachedPixmapFromXPM());
+#  endif
+        icon.addFile(QLatin1String(":/qt-project.org/qmessagebox/images/qtlogo-64.png"));
         break;
 #endif // QT_NO_IMAGEFORMAT_PNG
     default:

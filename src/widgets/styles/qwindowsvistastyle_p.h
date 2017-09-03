@@ -51,12 +51,13 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <private/qwindowsxpstyle_p.h>
 
 QT_BEGIN_NAMESPACE
 
 
-#if !defined(QT_NO_STYLE_WINDOWSVISTA)
+#if QT_CONFIG(style_windowsvista)
 
 class QWindowsVistaStylePrivate;
 class QWindowsVistaStyle : public QWindowsXPStyle
@@ -102,7 +103,7 @@ private:
     Q_DECLARE_PRIVATE(QWindowsVistaStyle)
     friend class QStyleFactory;
 };
-#endif //QT_NO_STYLE_WINDOWSVISTA
+#endif // style_windowsvista
 
 QT_END_NAMESPACE
 

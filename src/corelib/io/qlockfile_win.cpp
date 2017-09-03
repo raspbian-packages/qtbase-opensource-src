@@ -100,7 +100,7 @@ QLockFile::LockError QLockFilePrivate::tryLock_sys()
                 ? QLockFile::LockFailedError
                 : QLockFile::PermissionError;
         default:
-            qWarning() << "Got unexpected locking error" << lastError;
+            qWarning("Got unexpected locking error %llu", quint64(lastError));
             return QLockFile::UnknownError;
         }
     }
@@ -160,12 +160,12 @@ bool QLockFilePrivate::isApparentlyStale() const
     Q_UNUSED(appname);
 #endif // Q_OS_WINRT
     const qint64 age = QFileInfo(fileName).lastModified().msecsTo(QDateTime::currentDateTime());
-    return staleLockTime > 0 && age > staleLockTime;
+    return staleLockTime > 0 && qAbs(age) > staleLockTime;
 }
 
 QString QLockFilePrivate::processNameByPid(qint64 pid)
 {
-#if !defined(Q_OS_WINRT) && !defined(Q_OS_WINCE)
+#if !defined(Q_OS_WINRT)
     typedef DWORD (WINAPI *GetModuleFileNameExFunc)(HANDLE, HMODULE, LPTSTR, DWORD);
 
     HMODULE hPsapi = LoadLibraryA("psapi");

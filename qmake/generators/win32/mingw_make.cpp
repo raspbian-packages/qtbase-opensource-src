@@ -36,6 +36,12 @@
 #include <stdlib.h>
 #include <time.h>
 
+#ifdef Q_OS_WIN
+#define NULL_DEVICE "NUL"
+#else
+#define NULL_DEVICE "/dev/null"
+#endif
+
 QT_BEGIN_NAMESPACE
 
 MingwMakefileGenerator::MingwMakefileGenerator() : Win32MakefileGenerator()
@@ -310,15 +316,21 @@ void MingwMakefileGenerator::writeBuildRulesPart(QTextStream &t)
     t << "all: " << escapeDependencyPath(fileFixify(Option::output.fileName()))
       << ' ' << depVar("ALL_DEPS") << " $(DESTDIR_TARGET)\n\n";
     t << "$(DESTDIR_TARGET): " << depVar("PRE_TARGETDEPS") << " $(OBJECTS) " << depVar("POST_TARGETDEPS");
+    if (project->first("TEMPLATE") == "aux") {
+        t << "\n\n";
+        return;
+    }
+
     if(!project->isEmpty("QMAKE_PRE_LINK"))
         t << "\n\t" <<var("QMAKE_PRE_LINK");
     if(project->isActiveConfig("staticlib") && project->first("TEMPLATE") == "lib") {
+        t << "\n\t-$(DEL_FILE) $(DESTDIR_TARGET) 2>" NULL_DEVICE;
         if (project->values("OBJECTS").count() < var("QMAKE_LINK_OBJECT_MAX").toInt()) {
             t << "\n\t$(LIB) $(DESTDIR_TARGET) " << objectsLinkLine << " " ;
         } else {
             t << "\n\t" << objectsLinkLine << " " ;
         }
-    } else if (project->first("TEMPLATE") != "aux") {
+    } else {
         t << "\n\t$(LINKER) $(LFLAGS) " << var("QMAKE_LINK_O_FLAG") << "$(DESTDIR_TARGET) " << objectsLinkLine << "  $(LIBS)";
     }
     if(!project->isEmpty("QMAKE_POST_LINK"))

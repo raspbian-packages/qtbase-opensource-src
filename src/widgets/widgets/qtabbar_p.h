@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qtabbar.h"
 #include "private/qwidget_p.h"
 
@@ -86,11 +87,11 @@ class QTabBarPrivate  : public QWidgetPrivate
 public:
     QTabBarPrivate()
         :currentIndex(-1), pressedIndex(-1), shape(QTabBar::RoundedNorth), layoutDirty(false),
-        drawBase(true), scrollOffset(0), elideModeSetByUser(false), useScrollButtonsSetByUser(false), expanding(true), closeButtonOnTabs(false),
+        drawBase(true), scrollOffset(0), hoverIndex(-1), elideModeSetByUser(false), useScrollButtonsSetByUser(false), expanding(true), closeButtonOnTabs(false),
         selectionBehaviorOnRemove(QTabBar::SelectRightTab), paintWithOffsets(true), movable(false),
         dragInProgress(false), documentMode(false), autoHide(false), changeCurrentOnDrag(false),
         switchTabCurrentIndex(-1), switchTabTimerId(0), movingTab(0)
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
         , previousPressedIndex(-1)
 #endif
         {}
@@ -131,6 +132,9 @@ public:
         QWidget *rightWidget;
         int lastTab;
         int dragOffset;
+#ifndef QT_NO_ACCESSIBILITY
+        QString accessibleName;
+#endif
 
 #ifndef QT_NO_ANIMATION
         ~Tab() { delete animation; }
@@ -188,6 +192,7 @@ public:
     void moveTab(int index, int offset);
     void moveTabFinished(int index);
     QRect hoverRect;
+    int hoverIndex;
 
     void refresh();
     void layoutTabs();
@@ -198,6 +203,7 @@ public:
     void setupMovableTab();
     void autoHideTabs();
     QRect normalizedScrollRect(int index = -1);
+    int hoveredTabIndex() const;
 
     void initBasicStyleOption(QStyleOptionTab *option, int tabIndex) const;
 
@@ -224,7 +230,7 @@ public:
     int switchTabTimerId;
 
     QMovableTabWidget *movingTab;
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     int previousPressedIndex;
 #endif
     // shared by tabwidget and qtabbar

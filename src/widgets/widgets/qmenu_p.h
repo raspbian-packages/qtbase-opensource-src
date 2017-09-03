@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "QtWidgets/qmenubar.h"
 #include "QtWidgets/qstyleoption.h"
 #include "QtCore/qdatetime.h"
@@ -67,15 +68,6 @@ QT_BEGIN_NAMESPACE
 
 class QTornOffMenu;
 class QEventLoop;
-
-#ifdef Q_OS_WINCE
-struct QWceMenuAction {
-    uint command;
-    QPointer<QAction> action;
-    HMENU menuHandle;
-    QWceMenuAction() : menuHandle(0), command(0) {}
-};
-#endif
 
 template <typename T>
 class QSetValueOnDestroy
@@ -103,6 +95,7 @@ public:
         , m_select_other_actions(false)
         , m_first_mouse(true)
         , m_init_guard(false)
+        , m_use_reset_action(true)
         , m_uni_dir_discarded_count(0)
         , m_uni_dir_fail_at_count(0)
         , m_timeout(0)
@@ -190,9 +183,17 @@ public:
         QSetValueOnDestroy<bool> setFirstMouse(m_first_mouse, false);
         QSetValueOnDestroy<QPointF> setPreviousPoint(m_previous_point, mousePos);
 
-        if (resetAction && resetAction->isSeparator())
+        if (resetAction && resetAction->isSeparator()) {
             m_reset_action = Q_NULLPTR;
-        else {
+            m_use_reset_action = true;
+        } else if (m_reset_action != resetAction) {
+            if (m_use_reset_action && resetAction) {
+                const QList<QAction *> actions = m_menu->actions();
+                const int resetIdx  = actions.indexOf(resetAction);
+                const int originIdx = actions.indexOf(m_origin_action);
+                if (resetIdx > -1 && originIdx > -1 && qAbs(resetIdx - originIdx) > 1)
+                    m_use_reset_action = false;
+            }
             m_reset_action = resetAction;
         }
 
@@ -257,6 +258,7 @@ private:
     bool m_init_guard;
     bool m_discard_state_when_entering_parent;
     bool m_dont_start_time_on_leave;
+    bool m_use_reset_action;
     short m_uni_dir_discarded_count;
     short m_uni_dir_fail_at_count;
     short m_timeout;
@@ -284,22 +286,18 @@ public:
                       cancelAction(0),
 #endif
                       scroll(0), eventLoop(0), tearoff(0), tornoff(0), tearoffHighlighted(0),
-                      hasCheckableItems(0), doChildEffects(false), platformMenu(0)
-
-#if defined(Q_OS_WINCE) && !defined(QT_NO_MENUBAR)
-                      ,wce_menu(0)
-#endif
+                      hasCheckableItems(0), doChildEffects(false), platformMenu(0),
+                      scrollUpTearOffItem(nullptr), scrollDownItem(nullptr)
     { }
+
     ~QMenuPrivate()
     {
         delete scroll;
         if (!platformMenu.isNull() && !platformMenu->parent())
             delete platformMenu.data();
-#if defined(Q_OS_WINCE) && !defined(QT_NO_MENUBAR)
-        delete wce_menu;
-#endif
     }
     void init();
+    QPlatformMenu *createPlatformMenu();
     void setPlatformMenu(QPlatformMenu *menu);
     void syncPlatformMenu();
 #ifdef Q_OS_OSX
@@ -323,7 +321,6 @@ public:
     mutable uint ncols : 4; //4 bits is probably plenty
     uint collapsibleSeparators : 1;
     uint toolTipsVisible : 1;
-    QSize adjustMenuSizeForScreen(const QRect & screen);
     int getLastVisibleAction() const;
 
     bool activationRecursionGuard;
@@ -457,32 +454,26 @@ public:
 
     QPointer<QAction> actionAboutToTrigger;
 
-#if defined(Q_OS_WINCE) && !defined(QT_NO_MENUBAR)
-    struct QWceMenuPrivate {
-        QList<QWceMenuAction*> actionItems;
-        HMENU menuHandle;
-        QWceMenuPrivate();
-        ~QWceMenuPrivate();
-        void addAction(QAction *, QWceMenuAction* =0);
-        void addAction(QWceMenuAction *, QWceMenuAction* =0);
-        void syncAction(QWceMenuAction *);
-        inline void syncAction(QAction *a) { syncAction(findAction(a)); }
-        void removeAction(QWceMenuAction *);
-        void rebuild();
-        inline void removeAction(QAction *a) { removeAction(findAction(a)); }
-        inline QWceMenuAction *findAction(QAction *a) {
-            for(int i = 0; i < actionItems.size(); i++) {
-                QWceMenuAction *act = actionItems[i];
-                if(a == act->action)
-                    return act;
-            }
-            return 0;
-        }
-    } *wce_menu;
-    HMENU wceMenu();
-    QAction* wceCommands(uint command);
-#endif
     QPointer<QWidget> noReplayFor;
+
+    class ScrollerTearOffItem : public QWidget {
+    public:
+        enum Type { ScrollUp, ScrollDown };
+        ScrollerTearOffItem(Type type, QMenuPrivate *mPrivate,
+                            QWidget *parent = Q_NULLPTR, Qt::WindowFlags f = Qt::WindowFlags());
+        void paintEvent(QPaintEvent *e) Q_DECL_OVERRIDE;
+        void updateScrollerRects(const QRect &rect);
+
+    private:
+        QMenuPrivate *menuPrivate;
+        Type scrollType;
+    };
+    ScrollerTearOffItem *scrollUpTearOffItem;
+    ScrollerTearOffItem *scrollDownItem;
+
+    void drawScroller(QPainter *painter, ScrollerTearOffItem::Type type, const QRect &rect);
+    void drawTearOff(QPainter *painter, const QRect &rect);
+    QRect rect() const;
 };
 
 #endif // QT_NO_MENU

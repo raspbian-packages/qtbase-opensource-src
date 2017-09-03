@@ -156,23 +156,33 @@ public:
     QString windowTitle;
 };
 
-QFontDialogOptions::QFontDialogOptions() : d(new QFontDialogOptionsPrivate)
+QFontDialogOptions::QFontDialogOptions(QFontDialogOptionsPrivate *dd)
+    : d(dd)
 {
-}
-
-QFontDialogOptions::QFontDialogOptions(const QFontDialogOptions &rhs) : d(rhs.d)
-{
-}
-
-QFontDialogOptions &QFontDialogOptions::operator=(const QFontDialogOptions &rhs)
-{
-    if (this != &rhs)
-        d = rhs.d;
-    return *this;
 }
 
 QFontDialogOptions::~QFontDialogOptions()
 {
+}
+
+namespace {
+    struct FontDialogCombined : QFontDialogOptionsPrivate, QFontDialogOptions
+    {
+        FontDialogCombined() : QFontDialogOptionsPrivate(), QFontDialogOptions(this) {}
+        FontDialogCombined(const FontDialogCombined &other)
+            : QFontDialogOptionsPrivate(other), QFontDialogOptions(this) {}
+    };
+}
+
+// static
+QSharedPointer<QFontDialogOptions> QFontDialogOptions::create()
+{
+    return QSharedPointer<FontDialogCombined>::create();
+}
+
+QSharedPointer<QFontDialogOptions> QFontDialogOptions::clone() const
+{
+    return QSharedPointer<FontDialogCombined>::create(*static_cast<const FontDialogCombined*>(this));
 }
 
 QString QFontDialogOptions::windowTitle() const
@@ -268,7 +278,7 @@ void QColorDialogStaticData::readSettings()
 void QColorDialogStaticData::writeSettings() const
 {
 #ifndef QT_NO_SETTINGS
-    if (!customSet) {
+    if (customSet) {
         QSettings settings(QSettings::UserScope, QStringLiteral("QtProject"));
         for (int i = 0; i < int(CustomColorCount); ++i)
             settings.setValue(QLatin1String("Qt/customColors/") + QString::number(i), customRgb[i]);
@@ -289,23 +299,33 @@ public:
     QString windowTitle;
 };
 
-QColorDialogOptions::QColorDialogOptions() : d(new QColorDialogOptionsPrivate)
+QColorDialogOptions::QColorDialogOptions(QColorDialogOptionsPrivate *dd)
+    : d(dd)
 {
-}
-
-QColorDialogOptions::QColorDialogOptions(const QColorDialogOptions &rhs) : d(rhs.d)
-{
-}
-
-QColorDialogOptions &QColorDialogOptions::operator=(const QColorDialogOptions &rhs)
-{
-    if (this != &rhs)
-        d = rhs.d;
-    return *this;
 }
 
 QColorDialogOptions::~QColorDialogOptions()
 {
+}
+
+namespace {
+    struct ColorDialogCombined : QColorDialogOptionsPrivate, QColorDialogOptions
+    {
+        ColorDialogCombined() : QColorDialogOptionsPrivate(), QColorDialogOptions(this) {}
+        ColorDialogCombined(const ColorDialogCombined &other)
+            : QColorDialogOptionsPrivate(other), QColorDialogOptions(this) {}
+    };
+}
+
+// static
+QSharedPointer<QColorDialogOptions> QColorDialogOptions::create()
+{
+    return QSharedPointer<ColorDialogCombined>::create();
+}
+
+QSharedPointer<QColorDialogOptions> QColorDialogOptions::clone() const
+{
+    return QSharedPointer<ColorDialogCombined>::create(*static_cast<const ColorDialogCombined*>(this));
 }
 
 QString QColorDialogOptions::windowTitle() const
@@ -431,28 +451,38 @@ public:
     QString defaultSuffix;
     QStringList history;
     QUrl initialDirectory;
+    QString initiallySelectedMimeTypeFilter;
     QString initiallySelectedNameFilter;
     QList<QUrl> initiallySelectedFiles;
     QStringList supportedSchemes;
 };
 
-QFileDialogOptions::QFileDialogOptions() : d(new QFileDialogOptionsPrivate)
+QFileDialogOptions::QFileDialogOptions(QFileDialogOptionsPrivate *dd)
+    : d(dd)
 {
-}
-
-QFileDialogOptions::QFileDialogOptions(const QFileDialogOptions &rhs) : d(rhs.d)
-{
-}
-
-QFileDialogOptions &QFileDialogOptions::operator=(const QFileDialogOptions &rhs)
-{
-    if (this != &rhs)
-        d = rhs.d;
-    return *this;
 }
 
 QFileDialogOptions::~QFileDialogOptions()
 {
+}
+
+namespace {
+    struct FileDialogCombined : QFileDialogOptionsPrivate, QFileDialogOptions
+    {
+        FileDialogCombined() : QFileDialogOptionsPrivate(), QFileDialogOptions(this) {}
+        FileDialogCombined(const FileDialogCombined &other) : QFileDialogOptionsPrivate(other), QFileDialogOptions(this) {}
+    };
+}
+
+// static
+QSharedPointer<QFileDialogOptions> QFileDialogOptions::create()
+{
+    return QSharedPointer<FileDialogCombined>::create();
+}
+
+QSharedPointer<QFileDialogOptions> QFileDialogOptions::clone() const
+{
+    return QSharedPointer<FileDialogCombined>::create(*static_cast<const FileDialogCombined*>(this));
 }
 
 QString QFileDialogOptions::windowTitle() const
@@ -639,6 +669,16 @@ void QFileDialogOptions::setInitialDirectory(const QUrl &directory)
     d->initialDirectory = directory;
 }
 
+QString QFileDialogOptions::initiallySelectedMimeTypeFilter() const
+{
+    return d->initiallySelectedMimeTypeFilter;
+}
+
+void QFileDialogOptions::setInitiallySelectedMimeTypeFilter(const QString &filter)
+{
+    d->initiallySelectedMimeTypeFilter = filter;
+}
+
 QString QFileDialogOptions::initiallySelectedNameFilter() const
 {
     return d->initiallySelectedNameFilter;
@@ -668,6 +708,16 @@ void QFileDialogOptions::setSupportedSchemes(const QStringList &schemes)
 QStringList QFileDialogOptions::supportedSchemes() const
 {
     return d->supportedSchemes;
+}
+
+void QPlatformFileDialogHelper::selectMimeTypeFilter(const QString &filter)
+{
+    Q_UNUSED(filter)
+}
+
+QString QPlatformFileDialogHelper::selectedMimeTypeFilter() const
+{
+    return QString();
 }
 
 // Return true if the URL is supported by the filedialog implementation *and* by the application.
@@ -728,23 +778,33 @@ public:
     QPlatformDialogHelper::StandardButtons buttons;
 };
 
-QMessageDialogOptions::QMessageDialogOptions() : d(new QMessageDialogOptionsPrivate)
+QMessageDialogOptions::QMessageDialogOptions(QMessageDialogOptionsPrivate *dd)
+    : d(dd)
 {
-}
-
-QMessageDialogOptions::QMessageDialogOptions(const QMessageDialogOptions &rhs) : d(rhs.d)
-{
-}
-
-QMessageDialogOptions &QMessageDialogOptions::operator=(const QMessageDialogOptions &rhs)
-{
-    if (this != &rhs)
-        d = rhs.d;
-    return *this;
 }
 
 QMessageDialogOptions::~QMessageDialogOptions()
 {
+}
+
+namespace {
+    struct MessageDialogCombined : QMessageDialogOptionsPrivate, QMessageDialogOptions
+    {
+        MessageDialogCombined() : QMessageDialogOptionsPrivate(), QMessageDialogOptions(this) {}
+        MessageDialogCombined(const MessageDialogCombined &other)
+            : QMessageDialogOptionsPrivate(other), QMessageDialogOptions(this) {}
+    };
+}
+
+// static
+QSharedPointer<QMessageDialogOptions> QMessageDialogOptions::create()
+{
+    return QSharedPointer<MessageDialogCombined>::create();
+}
+
+QSharedPointer<QMessageDialogOptions> QMessageDialogOptions::clone() const
+{
+    return QSharedPointer<MessageDialogCombined>::create(*static_cast<const MessageDialogCombined*>(this));
 }
 
 QString QMessageDialogOptions::windowTitle() const

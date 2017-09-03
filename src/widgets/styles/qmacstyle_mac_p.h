@@ -51,12 +51,13 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <QtWidgets/qcommonstyle.h>
 
 QT_BEGIN_NAMESPACE
 
 
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
 
 class QPalette;
 
@@ -99,10 +100,6 @@ public:
     virtual int styleHint(StyleHint sh, const QStyleOption *opt = 0, const QWidget *w = 0,
                           QStyleHintReturn *shret = 0) const;
 
-    enum FocusRectPolicy { FocusEnabled, FocusDisabled, FocusDefault };
-    static void setFocusRectPolicy(QWidget *w, FocusRectPolicy policy);
-    static FocusRectPolicy focusRectPolicy(const QWidget *w);
-
     enum WidgetSizePolicy { SizeSmall, SizeLarge, SizeMini, SizeDefault
     };
 
@@ -130,10 +127,12 @@ private:
     Q_DISABLE_COPY(QMacStyle)
     Q_DECLARE_PRIVATE(QMacStyle)
 
+#if QT_CONFIG(pushbutton)
     friend bool qt_mac_buttonIsRenderedFlat(const QPushButton *pushButton, const QStyleOptionButton *option);
+#endif
 };
 
-#endif // Q_DEAD_CODE_FROM_QT4_MAC
+#endif
 
 QT_END_NAMESPACE
 

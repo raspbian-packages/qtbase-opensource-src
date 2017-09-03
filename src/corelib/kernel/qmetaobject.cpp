@@ -2241,12 +2241,10 @@ bool QMetaMethod::invoke(QObject *object,
 
         for (int i = 1; i < paramCount; ++i) {
             types[i] = QMetaType::type(typeNames[i]);
-            if (types[i] != QMetaType::UnknownType) {
-                args[i] = QMetaType::create(types[i], param[i]);
-                ++nargs;
-            } else if (param[i]) {
+            if (types[i] == QMetaType::UnknownType && param[i]) {
                 // Try to register the type and try again before reporting an error.
-                void *argv[] = { &types[i], &i };
+                int index = nargs - 1;
+                void *argv[] = { &types[i], &index };
                 QMetaObject::metacall(object, QMetaObject::RegisterMethodArgumentMetaType,
                                       idx_relative + idx_offset, argv);
                 if (types[i] == -1) {
@@ -2260,6 +2258,10 @@ bool QMetaMethod::invoke(QObject *object,
                     free(args);
                     return false;
                 }
+            }
+            if (types[i] != QMetaType::UnknownType) {
+                args[i] = QMetaType::create(types[i], param[i]);
+                ++nargs;
             }
         }
 
@@ -2557,9 +2559,19 @@ int QMetaEnum::value(int index) const
 */
 bool QMetaEnum::isFlag() const
 {
-    return mobj && mobj->d.data[handle + 1];
+    return mobj && mobj->d.data[handle + 1] & EnumIsFlag;
 }
 
+/*!
+    \since 5.8
+
+    Returns \c true if this enumerator is declared as a C++11 enum class;
+    otherwise returns false.
+*/
+bool QMetaEnum::isScoped() const
+{
+    return mobj && mobj->d.data[handle + 1] & EnumIsScoped;
+}
 
 /*!
     Returns the scope this enumerator was declared in.
@@ -2652,15 +2664,16 @@ int QMetaEnum::keysToValue(const char *keys, bool *ok) const
         return -1;
     if (ok != 0)
         *ok = true;
-    QStringList l = QString::fromLatin1(keys).split(QLatin1Char('|'));
-    if (l.isEmpty())
+    const QString keysString = QString::fromLatin1(keys);
+    const QVector<QStringRef> splitKeys = keysString.splitRef(QLatin1Char('|'));
+    if (splitKeys.isEmpty())
         return 0;
-    //#### TODO write proper code, do not use QStringList
+    // ### TODO write proper code: do not allocate memory, so we can go nothrow
     int value = 0;
     int count = mobj->d.data[handle + 2];
     int data = mobj->d.data[handle + 3];
-    for (int li = 0; li < l.size(); ++li) {
-        QString trimmed = l.at(li).trimmed();
+    for (const QStringRef &untrimmed : splitKeys) {
+        const QStringRef trimmed = untrimmed.trimmed();
         QByteArray qualified_key = trimmed.toLatin1();
         const char *key = qualified_key.constData();
         uint scope = 0;

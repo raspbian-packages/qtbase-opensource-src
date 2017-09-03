@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <QtGui/qtextdocument.h>
 #include <QtGui/qtextoption.h>
 #include <QtGui/qtextcursor.h>
@@ -62,6 +63,9 @@
 #include <QtGui/qtextdocumentfragment.h>
 #include <QtGui/qclipboard.h>
 #include <QtCore/qmimedata.h>
+#include <QtGui/private/qinputcontrol_p.h>
+
+QT_REQUIRE_CONFIG(widgettextcontrol);
 
 QT_BEGIN_NAMESPACE
 
@@ -74,7 +78,7 @@ class QAbstractScrollArea;
 class QEvent;
 class QTimerEvent;
 
-class Q_WIDGETS_EXPORT QWidgetTextControl : public QObject
+class Q_WIDGETS_EXPORT QWidgetTextControl : public QInputControl
 {
     Q_OBJECT
     Q_DECLARE_PRIVATE(QWidgetTextControl)
@@ -171,6 +175,8 @@ public:
 
     bool isWordSelectionEnabled() const;
     void setWordSelectionEnabled(bool enabled);
+
+    bool isPreediting();
 
     void print(QPagedPaintDevice *printer) const;
 

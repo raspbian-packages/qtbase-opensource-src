@@ -181,13 +181,7 @@ long QSslSocketPrivate::sslLibraryVersionNumber()
 
 QString QSslSocketPrivate::sslLibraryVersionString()
 {
-    switch (QSysInfo::windowsVersion()) {
-    case QSysInfo::WV_WINDOWS8_1:
-        return QStringLiteral("Windows Runtime 8.1 SSL library");
-    default:
-        break;
-    }
-    return QStringLiteral("Windows Runtime SSL library");
+    return QStringLiteral("Windows Runtime, ") + QSysInfo::prettyProductName();
 }
 
 long QSslSocketPrivate::sslLibraryBuildVersionNumber()
@@ -215,7 +209,9 @@ QList<QSslCipher> QSslSocketBackendPrivate::defaultCiphers()
     const QString protocolStrings[] = { QStringLiteral("SSLv3"), QStringLiteral("TLSv1"),
                                         QStringLiteral("TLSv1.1"), QStringLiteral("TLSv1.2") };
     const QSsl::SslProtocol protocols[] = { QSsl::SslV3, QSsl::TlsV1_0, QSsl::TlsV1_1, QSsl::TlsV1_2 };
-    for (int i = 0; i < ARRAYSIZE(protocols); ++i) {
+    const int size = static_cast<int>(ARRAYSIZE(protocols));
+    ciphers.reserve(size);
+    for (int i = 0; i < size; ++i) {
         QSslCipher cipher;
         cipher.d->isNull = false;
         cipher.d->name = QStringLiteral("WINRT");

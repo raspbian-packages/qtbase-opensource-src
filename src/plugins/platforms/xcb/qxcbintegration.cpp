@@ -55,18 +55,13 @@
 
 #include <xcb/xcb.h>
 
-#include <QtPlatformSupport/private/qgenericunixeventdispatcher_p.h>
-#include <QtPlatformSupport/private/qgenericunixfontdatabase_p.h>
-#include <QtPlatformSupport/private/qgenericunixservices_p.h>
+#include <QtEventDispatcherSupport/private/qgenericunixeventdispatcher_p.h>
+#include <QtFontDatabaseSupport/private/qgenericunixfontdatabase_p.h>
+#include <QtServiceSupport/private/qgenericunixservices_p.h>
 
 #include <stdio.h>
 
-//this has to be included before egl, since egl pulls in X headers
 #include <QtGui/private/qguiapplication_p.h>
-
-#ifdef XCB_USE_EGL
-# include <QtPlatformSupport/private/qt_egl_p.h>
-#endif
 
 #ifdef XCB_USE_XLIB
 #include <X11/Xlib.h>
@@ -82,7 +77,7 @@
 #ifndef QT_NO_ACCESSIBILITY
 #include <qpa/qplatformaccessibility.h>
 #ifndef QT_NO_ACCESSIBILITY_ATSPI_BRIDGE
-#include "../../../platformsupport/linuxaccessibility/bridge_p.h"
+#include <QtLinuxAccessibilitySupport/private/bridge_p.h>
 #endif
 #endif
 
@@ -217,6 +212,11 @@ QPlatformWindow *QXcbIntegration::createPlatformWindow(QWindow *window) const
     QXcbWindow *xcbWindow = new QXcbWindow(window);
     xcbWindow->create();
     return xcbWindow;
+}
+
+QPlatformWindow *QXcbIntegration::createForeignWindow(QWindow *window, WId nativeHandle) const
+{
+    return new QXcbForeignWindow(window, nativeHandle);
 }
 
 #ifndef QT_NO_OPENGL
@@ -389,9 +389,6 @@ QVariant QXcbIntegration::styleHint(QPlatformIntegration::StyleHint hint) const
     case QPlatformIntegration::PasswordMaskCharacter:
         // TODO using various xcb, gnome or KDE settings
         break; // Not implemented, use defaults
-    case QPlatformIntegration::FontSmoothingGamma:
-        // Match Qt 4.8 text rendering, and rendering of other X11 toolkits.
-        return qreal(1.0);
     case QPlatformIntegration::StartDragDistance: {
         // The default (in QPlatformTheme::defaultThemeHint) is 10 pixels, but
         // on a high-resolution screen it makes sense to increase it.
@@ -452,12 +449,8 @@ QByteArray QXcbIntegration::wmClass() const
                 className[0] = className.at(0).toUpper();
         }
 
-        if (!name.isEmpty() && !className.isEmpty()) {
-            m_wmClass = name.toLocal8Bit();
-            m_wmClass.append('\0');
-            m_wmClass.append(className.toLocal8Bit());
-            m_wmClass.append('\0');
-        }
+        if (!name.isEmpty() && !className.isEmpty())
+            m_wmClass = std::move(name).toLocal8Bit() + '\0' + std::move(className).toLocal8Bit() + '\0';
     }
     return m_wmClass;
 }

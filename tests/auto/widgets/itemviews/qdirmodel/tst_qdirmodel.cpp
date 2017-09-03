@@ -32,6 +32,7 @@
 #include <qtreeview.h>
 #include <qdir.h>
 #include <qdebug.h>
+#include "emulationdetector.h"
 
 class tst_QDirModel : public QObject
 {
@@ -575,7 +576,7 @@ void tst_QDirModel::filePath()
     model.setResolveSymlinks(false);
     QModelIndex index = model.index(SRCDIR "test.lnk");
     QVERIFY(index.isValid());
-#if !defined(Q_OS_WINCE) && !defined(Q_OS_ANDROID)
+#if !defined(Q_OS_ANDROID)
     QString path = SRCDIR;
 #else
     QString path = QFileInfo(SRCDIR).absoluteFilePath();
@@ -615,6 +616,9 @@ void tst_QDirModel::task196768_sorting()
 
 #if defined(Q_OS_ANDROID)
     QEXPECT_FAIL("", "QTBUG-43818", Continue);
+#else
+    if (EmulationDetector::isRunningArmOnX86())
+        QEXPECT_FAIL("", "QTBUG-43818", Continue);
 #endif
 
     QCOMPARE(index.data(), index2.data());

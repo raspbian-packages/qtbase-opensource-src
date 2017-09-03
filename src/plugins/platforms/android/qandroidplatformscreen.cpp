@@ -311,10 +311,13 @@ void QAndroidPlatformScreen::doRedraw()
         }
     }
     if (!hasVisibleRasterWindows) {
+        lockSurface();
         if (m_id != -1) {
             QtAndroid::destroySurface(m_id);
+            releaseSurface();
             m_id = -1;
         }
+        unlockSurface();
         return;
     }
     QMutexLocker lock(&m_surfaceMutex);
@@ -379,9 +382,8 @@ void QAndroidPlatformScreen::doRedraw()
         }
     }
 
-    foreach (const QRect &rect, visibleRegion.rects()) {
+    for (const QRect &rect : visibleRegion)
         compositePainter.fillRect(rect, QColor(Qt::transparent));
-    }
 
     ret = ANativeWindow_unlockAndPost(m_nativeSurface);
     if (ret >= 0)

@@ -1029,9 +1029,7 @@ bool QGraphicsViewPrivate::updateRegion(const QRectF &rect, const QTransform &xf
     if (!intersectsViewport(viewRect, viewport->width(), viewport->height()))
         return false; // Update region for sure outside viewport.
 
-    const QVector<QRect> &rects = region.rects();
-    for (int i = 0; i < rects.size(); ++i) {
-        viewRect = rects.at(i);
+    for (QRect viewRect : region) {
         if (dontAdjustForAntialiasing)
             viewRect.adjust(-1, -1, 1, 1);
         else
@@ -1146,8 +1144,7 @@ QList<QGraphicsItem *> QGraphicsViewPrivate::findItems(const QRegion &exposedReg
     // the expose region, convert it to a path, and then search for items
     // using QGraphicsScene::items(QPainterPath);
     QRegion adjustedRegion;
-    const auto rects = exposedRegion.rects();
-    for (const QRect &r : rects)
+    for (const QRect &r : exposedRegion)
         adjustedRegion += r.adjusted(-1, -1, 1, 1);
 
     const QPainterPath exposedScenePath(q->mapToScene(qt_regionToPath(adjustedRegion)));
@@ -2676,11 +2673,9 @@ void QGraphicsView::updateScene(const QList<QRectF> &rects)
 
     // Extract and reset dirty scene rect info.
     QVector<QRect> dirtyViewportRects;
-    const QVector<QRect> &dirtyRects = d->dirtyRegion.rects();
-    const int dirtyRectsCount = dirtyRects.size();
-    dirtyViewportRects.reserve(dirtyRectsCount + rects.count());
-    for (int i = 0; i < dirtyRectsCount; ++i)
-        dirtyViewportRects += dirtyRects.at(i);
+    dirtyViewportRects.reserve(d->dirtyRegion.rectCount() + rects.count());
+    for (const QRect &dirtyRect : d->dirtyRegion)
+        dirtyViewportRects += dirtyRect;
     d->dirtyRegion = QRegion();
     d->dirtyBoundingRect = QRect();
 
@@ -3001,12 +2996,12 @@ void QGraphicsView::contextMenuEvent(QContextMenuEvent *event)
 }
 #endif // QT_NO_CONTEXTMENU
 
+#if QT_CONFIG(draganddrop)
 /*!
     \reimp
 */
 void QGraphicsView::dropEvent(QDropEvent *event)
 {
-#ifndef QT_NO_DRAGANDDROP
     Q_D(QGraphicsView);
     if (!d->scene || !d->sceneInteractionAllowed)
         return;
@@ -3025,10 +3020,6 @@ void QGraphicsView::dropEvent(QDropEvent *event)
 
     delete d->lastDragDropEvent;
     d->lastDragDropEvent = 0;
-
-#else
-    Q_UNUSED(event)
-#endif
 }
 
 /*!
@@ -3036,7 +3027,6 @@ void QGraphicsView::dropEvent(QDropEvent *event)
 */
 void QGraphicsView::dragEnterEvent(QDragEnterEvent *event)
 {
-#ifndef QT_NO_DRAGANDDROP
     Q_D(QGraphicsView);
     if (!d->scene || !d->sceneInteractionAllowed)
         return;
@@ -3059,9 +3049,6 @@ void QGraphicsView::dragEnterEvent(QDragEnterEvent *event)
         event->setAccepted(true);
         event->setDropAction(sceneEvent.dropAction());
     }
-#else
-    Q_UNUSED(event)
-#endif
 }
 
 /*!
@@ -3069,7 +3056,6 @@ void QGraphicsView::dragEnterEvent(QDragEnterEvent *event)
 */
 void QGraphicsView::dragLeaveEvent(QDragLeaveEvent *event)
 {
-#ifndef QT_NO_DRAGANDDROP
     Q_D(QGraphicsView);
     if (!d->scene || !d->sceneInteractionAllowed)
         return;
@@ -3099,9 +3085,6 @@ void QGraphicsView::dragLeaveEvent(QDragLeaveEvent *event)
     // Accept the originating event if the scene accepted the scene event.
     if (sceneEvent.isAccepted())
         event->setAccepted(true);
-#else
-    Q_UNUSED(event)
-#endif
 }
 
 /*!
@@ -3109,7 +3092,6 @@ void QGraphicsView::dragLeaveEvent(QDragLeaveEvent *event)
 */
 void QGraphicsView::dragMoveEvent(QDragMoveEvent *event)
 {
-#ifndef QT_NO_DRAGANDDROP
     Q_D(QGraphicsView);
     if (!d->scene || !d->sceneInteractionAllowed)
         return;
@@ -3128,10 +3110,8 @@ void QGraphicsView::dragMoveEvent(QDragMoveEvent *event)
     event->setAccepted(sceneEvent.isAccepted());
     if (sceneEvent.isAccepted())
         event->setDropAction(sceneEvent.dropAction());
-#else
-    Q_UNUSED(event)
-#endif
 }
+#endif // QT_CONFIG(draganddrop)
 
 /*!
     \reimp
@@ -3495,7 +3475,7 @@ void QGraphicsView::paintEvent(QPaintEvent *event)
 
     // Draw background
     if ((d->cacheMode & CacheBackground)
-#ifdef Q_DEAD_CODE_FROM_QT4_X11
+#if 0 // Used to be included in Qt4 for Q_WS_X11
         && X11->use_xrender
 #endif
         ) {
@@ -3694,7 +3674,7 @@ void QGraphicsView::scrollContentsBy(int dx, int dy)
     d->updateLastCenterPoint();
 
     if ((d->cacheMode & CacheBackground)
-#ifdef Q_DEAD_CODE_FROM_QT4_X11
+#if 0 // Used to be included in Qt4 for Q_WS_X11
         && X11->use_xrender
 #endif
         ) {

@@ -64,10 +64,6 @@
 #include "qmenubar_p.h"
 #include "qdebug.h"
 
-#ifdef Q_OS_WINCE
-extern bool qt_wince_is_mobile(); //defined in qguifunctions_wce.cpp
-#endif
-
 QT_BEGIN_NAMESPACE
 
 class QMenuBarExtension : public QToolButton
@@ -695,16 +691,6 @@ void QMenuBarPrivate::init()
 
     if (platformMenuBar)
         q->hide();
-#ifdef Q_OS_WINCE
-    if (qt_wince_is_mobile()) {
-        wceCreateMenuBar(q->parentWidget());
-        if(wce_menubar)
-            q->hide();
-    }
-    else {
-        QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar, true);
-    }
-#endif
     q->setBackgroundRole(QPalette::Button);
     handleReparent();
     q->setMouseTracking(q->style()->styleHint(QStyle::SH_MenuBar_MouseTracking, 0, q));
@@ -754,11 +740,6 @@ QMenuBar::~QMenuBar()
     Q_D(QMenuBar);
     delete d->platformMenuBar;
     d->platformMenuBar = 0;
-
-#ifdef Q_OS_WINCE
-    if (qt_wince_is_mobile())
-        d->wceDestroyMenuBar();
-#endif
 }
 
 /*!
@@ -1124,11 +1105,13 @@ void QMenuBar::keyPressEvent(QKeyEvent *e)
         key_consumed = false;
     }
 
+#ifndef QT_NO_SHORTCUT
     if (!key_consumed && e->matches(QKeySequence::Cancel)) {
         d->setCurrentAction(0);
         d->setKeyboardMode(false);
         key_consumed = true;
     }
+#endif
 
     if(!key_consumed &&
        (!e->modifiers() ||
@@ -1136,7 +1119,7 @@ void QMenuBar::keyPressEvent(QKeyEvent *e)
         int clashCount = 0;
         QAction *first = 0, *currentSelected = 0, *firstAfterCurrent = 0;
         {
-            QChar c = e->text()[0].toUpper();
+            const QChar c = e->text().at(0).toUpper();
             for(int i = 0; i < d->actions.size(); ++i) {
                 if (d->actionRects.at(i).isNull())
                     continue;
@@ -1225,11 +1208,7 @@ void QMenuBar::actionEvent(QActionEvent *e)
     d->itemsDirty = true;
 
     if (d->platformMenuBar) {
-#if !defined(Q_OS_WINCE)
         QPlatformMenuBar *nativeMenuBar = d->platformMenuBar;
-#else
-        QMenuBarPrivate::QWceMenuBarPrivate *nativeMenuBar = d->wce_menubar;
-#endif
         if (!nativeMenuBar)
             return;
 
@@ -1288,10 +1267,12 @@ void QMenuBar::actionEvent(QActionEvent *e)
     } else if(e->type() == QEvent::ActionRemoved) {
         e->action()->disconnect(this);
     }
-    if (isVisible()) {
+    // updateGeometries() is also needed for native menu bars because
+    // it updates shortcutIndexMap
+    if (isVisible() || isNativeMenuBar())
         d->updateGeometries();
+    if (isVisible())
         update();
-    }
 }
 
 /*!
@@ -1381,11 +1362,6 @@ void QMenuBarPrivate::handleReparent()
             platformMenuBar->handleReparent(0);
         }
     }
-
-#ifdef Q_OS_WINCE
-    if (qt_wince_is_mobile() && wce_menubar)
-        wce_menubar->rebuild();
-#endif
 }
 
 /*!
@@ -1445,6 +1421,7 @@ bool QMenuBar::event(QEvent *e)
     case QEvent::Show:
         d->_q_updateLayout();
     break;
+#ifndef QT_NO_SHORTCUT
     case QEvent::ShortcutOverride: {
         QKeyEvent *kev = static_cast<QKeyEvent*>(e);
         //we only filter out escape if there is a current action
@@ -1454,8 +1431,7 @@ bool QMenuBar::event(QEvent *e)
         }
     }
     break;
-
-
+#endif
 #ifndef QT_NO_WHATSTHIS
     case QEvent::QueryWhatsThis:
         e->setAccepted(d->whatsThis.size());
@@ -1494,6 +1470,17 @@ bool QMenuBar::eventFilter(QObject *object, QEvent *event)
         }
     }
 
+    if (isNativeMenuBar() && event->type() == QEvent::ShowToParent) {
+        // On some desktops like Unity, the D-Bus menu bar is unregistered
+        // when the window is hidden. So when the window is shown, we need
+        // to forcefully re-register it. The only way to force re-registering
+        // with D-Bus menu is the handleReparent method.
+        QWidget *widget = qobject_cast<QWidget *>(object);
+        QWindow *handle = widget ? widget->windowHandle() : nullptr;
+        if (handle != nullptr)
+            d->platformMenuBar->handleReparent(handle);
+    }
+
     if (style()->styleHint(QStyle::SH_MenuBar_AltKeyNavigation, 0, this)) {
         if (d->altPressed) {
             switch (event->type()) {
@@ -1514,6 +1501,7 @@ bool QMenuBar::eventFilter(QObject *object, QEvent *event)
             case QEvent::FocusIn:
             case QEvent::FocusOut:
             case QEvent::ActivationChange:
+            case QEvent::Shortcut:
                 d->altPressed = false;
                 qApp->removeEventFilter(this);
                 break;
@@ -1708,6 +1696,13 @@ void QMenuBarPrivate::_q_internalShortcutActivated(int id)
 {
     Q_Q(QMenuBar);
     QAction *act = actions.at(id);
+    if (act && act->menu()) {
+        if (QPlatformMenu *platformMenu = act->menu()->platformMenu()) {
+            platformMenu->showPopup(q->windowHandle(), actionRects.at(id), Q_NULLPTR);
+            return;
+        }
+    }
+
     setCurrentAction(act, true, true);
     if (act && !act->menu()) {
         activateAction(act, QAction::Trigger);
@@ -1844,55 +1839,6 @@ QPlatformMenuBar *QMenuBar::platformMenuBar()
     Q_D(const QMenuBar);
     return d->platformMenuBar;
 }
-
-/*!
-  \since 4.4
-
-  Sets the default action to \a act.
-
-  The default action is assigned to the left soft key. The menu is assigned
-  to the right soft key.
-
-  Currently there is only support for the default action on Windows
-  Mobile. On all other platforms this method is not available.
-
-  \sa defaultAction()
-*/
-
-#ifdef Q_OS_WINCE
-void QMenuBar::setDefaultAction(QAction *act)
-{
-    Q_D(QMenuBar);
-    if (d->defaultAction == act)
-        return;
-    if (qt_wince_is_mobile())
-        if (d->defaultAction) {
-            disconnect(d->defaultAction, SIGNAL(changed()), this, SLOT(_q_updateDefaultAction()));
-            disconnect(d->defaultAction, SIGNAL(destroyed()), this, SLOT(_q_updateDefaultAction()));
-        }
-    d->defaultAction = act;
-    if (qt_wince_is_mobile())
-        if (d->defaultAction) {
-            connect(d->defaultAction, SIGNAL(changed()), this, SLOT(_q_updateDefaultAction()));
-            connect(d->defaultAction, SIGNAL(destroyed()), this, SLOT(_q_updateDefaultAction()));
-        }
-    if (d->wce_menubar) {
-        d->wce_menubar->rebuild();
-    }
-}
-
-/*!
-  \since 4.4
-
-  Returns the current default action.
-
-  \sa setDefaultAction()
-*/
-QAction *QMenuBar::defaultAction() const
-{
-    return d_func()->defaultAction;
-}
-#endif
 
 /*!
     \fn void QMenuBar::triggered(QAction *action)

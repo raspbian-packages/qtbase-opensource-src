@@ -349,6 +349,12 @@ QJsonValue &QJsonValue::operator =(const QJsonValue &other)
     \row
         \li
             \list
+                \li QMetaType::Nullptr
+            \endlist
+        \li QJsonValue::Null
+    \row
+        \li
+            \list
                 \li QMetaType::Bool
             \endlist
         \li QJsonValue::Bool
@@ -393,6 +399,8 @@ QJsonValue &QJsonValue::operator =(const QJsonValue &other)
 QJsonValue QJsonValue::fromVariant(const QVariant &variant)
 {
     switch (variant.userType()) {
+    case QMetaType::Nullptr:
+        return QJsonValue(Null);
     case QVariant::Bool:
         return QJsonValue(variant.toBool());
     case QVariant::Int:
@@ -438,7 +446,7 @@ QJsonValue QJsonValue::fromVariant(const QVariant &variant)
 
     The QJsonValue types will be converted as follows:
 
-    \value Null     \l {QVariant::}{QVariant()}
+    \value Null     QMetaType::Nullptr
     \value Bool     QMetaType::Bool
     \value Double   QMetaType::Double
     \value String   QString
@@ -466,6 +474,7 @@ QVariant QJsonValue::toVariant() const
                QJsonObject(d, static_cast<QJsonPrivate::Object *>(base)).toVariantMap() :
                QVariantMap();
     case Null:
+        return QVariant::fromValue(nullptr);
     case Undefined:
         break;
     }

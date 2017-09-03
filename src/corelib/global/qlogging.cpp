@@ -39,6 +39,7 @@
 **
 ****************************************************************************/
 
+#include "qglobal_p.h"
 #include "qlogging.h"
 #include "qlist.h"
 #include "qbytearray.h"
@@ -59,7 +60,7 @@
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
 #endif
-#ifdef QT_USE_SLOG2
+#if QT_CONFIG(slog2)
 #include <slog2.h>
 #endif
 
@@ -67,12 +68,12 @@
 #include <android/log.h>
 #endif
 
-#if defined(QT_USE_JOURNALD) && !defined(QT_BOOTSTRAPPED)
+#if QT_CONFIG(journald)
 # define SD_JOURNAL_SUPPRESS_LOCATION
 # include <systemd/sd-journal.h>
 # include <syslog.h>
 #endif
-#if defined(QT_USE_SYSLOG) && !defined(QT_BOOTSTRAPPED)
+#if QT_CONFIG(syslog)
 # include <syslog.h>
 #endif
 #ifdef Q_OS_UNIX
@@ -93,7 +94,7 @@
 #  endif
 #endif
 
-#if defined(QT_USE_SLOG2)
+#if QT_CONFIG(slog2)
 extern char *__progname;
 #endif
 
@@ -140,6 +141,8 @@ static QT_PREPEND_NAMESPACE(qint64) qt_gettid()
 #endif
 #endif // !QT_BOOTSTRAPPED
 
+#include <cstdlib>
+
 #include <stdio.h>
 
 QT_BEGIN_NAMESPACE
@@ -170,7 +173,7 @@ static bool isFatal(QtMsgType msgType)
 
 static bool willLogToConsole()
 {
-#if defined(Q_OS_WINCE) || defined(Q_OS_WINRT)
+#if defined(Q_OS_WINRT)
     // these systems have no stderr, so always log to the system log
     return false;
 #elif defined(QT_BOOTSTRAPPED)
@@ -194,7 +197,7 @@ static bool willLogToConsole()
 #  elif defined(Q_OS_UNIX)
     // if /dev/tty exists, we can only open it if we have a controlling TTY
     int devtty = qt_safe_open("/dev/tty", O_RDONLY);
-    if (devtty == -1 && (errno == ENOENT || errno == EPERM)) {
+    if (devtty == -1 && (errno == ENOENT || errno == EPERM || errno == ENXIO)) {
         // no /dev/tty, fall back to isatty on stderr
         return isatty(STDERR_FILENO);
     } else if (devtty != -1) {
@@ -251,7 +254,7 @@ Q_CORE_EXPORT bool qt_logging_to_console()
     \sa QMessageLogContext, qDebug(), qInfo(), qWarning(), qCritical(), qFatal()
 */
 
-#ifdef Q_OS_WIN
+#if defined(Q_CC_MSVC) && defined(QT_DEBUG) && defined(_DEBUG) && defined(_CRT_ERROR)
 static inline void convert_to_wchar_t_elided(wchar_t *d, size_t space, const char *s) Q_DECL_NOEXCEPT
 {
     size_t len = qstrlen(s);
@@ -1039,6 +1042,10 @@ void QMessagePattern::setPattern(const QString &pattern)
         delete [] literals;
     }
     delete [] tokens;
+    timeArgs.clear();
+#ifdef QLOGGING_HAVE_BACKTRACE
+    backtraceArgs.clear();
+#endif
 
     // scanner
     QList<QString> lexemes;
@@ -1177,7 +1184,7 @@ void QMessagePattern::setPattern(const QString &pattern)
     else if (inIf)
         error += QLatin1String("QT_MESSAGE_PATTERN: missing %{endif}\n");
     if (!error.isEmpty()) {
-#if defined(Q_OS_WINCE) || defined(Q_OS_WINRT)
+#if defined(Q_OS_WINRT)
         OutputDebugString(reinterpret_cast<const wchar_t*>(error.utf16()));
         if (0)
 #elif defined(Q_OS_WIN) && defined(QT_BUILD_CORE_LIB)
@@ -1199,7 +1206,7 @@ void QMessagePattern::setPattern(const QString &pattern)
 // make sure the function has "Message" in the name so the function is removed
 
 #if ((defined(Q_CC_GNU) && defined(QT_COMPILER_SUPPORTS_SIMD_ALWAYS)) || QT_HAS_ATTRIBUTE(optimize)) \
-    && !defined(Q_CC_INTEL)
+    && !defined(Q_CC_INTEL) && !defined(Q_CC_CLANG)
 // force skipping the frame pointer, to save the backtrace() function some work
 __attribute__((optimize("omit-frame-pointer")))
 #endif
@@ -1279,7 +1286,7 @@ static QString formatBacktraceForLogMessage(const QMessagePattern::BacktracePara
 }
 #endif // QLOGGING_HAVE_BACKTRACE && !QT_BOOTSTRAPPED
 
-#if defined(QT_USE_SLOG2)
+#if QT_CONFIG(slog2)
 #ifndef QT_LOG_CODE
 #define QT_LOG_CODE 9000
 #endif
@@ -1328,7 +1335,7 @@ static void slog2_default_handler(QtMsgType msgType, const char *message)
     //writes to the slog2 buffer
     slog2c(NULL, QT_LOG_CODE, severity, message);
 }
-#endif // QT_USE_SLOG2
+#endif // slog2
 
 Q_GLOBAL_STATIC(QMessagePattern, qMessagePattern)
 
@@ -1438,12 +1445,14 @@ QString qFormatLogMessage(QtMsgType type, const QMessageLogContext &context, con
                 now.start();
                 uint ms = now.msecsSinceReference();
                 message.append(QString::asprintf("%6d.%03d", uint(ms / 1000), uint(ms % 1000)));
+#if QT_CONFIG(datestring)
             } else if (timeFormat.isEmpty()) {
                     message.append(QDateTime::currentDateTime().toString(Qt::ISODate));
             } else {
                 message.append(QDateTime::currentDateTime().toString(timeFormat));
+#endif // QT_CONFIG(datestring)
             }
-#endif
+#endif // !QT_BOOTSTRAPPED
         } else if (token == ifCategoryTokenC) {
             if (!context.category || (strcmp(context.category, "default") == 0))
                 skip = true;
@@ -1477,7 +1486,7 @@ static QBasicAtomicPointer<void (QtMsgType, const char*)> msgHandler = Q_BASIC_A
 // pointer to QtMessageHandler debug handler (with context)
 static QBasicAtomicPointer<void (QtMsgType, const QMessageLogContext &, const QString &)> messageHandler = Q_BASIC_ATOMIC_INITIALIZER(qDefaultMessageHandler);
 
-#if defined(QT_USE_JOURNALD) && !defined(QT_BOOTSTRAPPED)
+#if QT_CONFIG(journald)
 static void systemd_default_message_handler(QtMsgType type,
                                             const QMessageLogContext &context,
                                             const QString &message)
@@ -1511,7 +1520,7 @@ static void systemd_default_message_handler(QtMsgType type,
 }
 #endif
 
-#ifdef QT_USE_SYSLOG
+#if QT_CONFIG(syslog)
 static void syslog_default_message_handler(QtMsgType type, const char *message)
 {
     int priority = LOG_INFO; // Informational
@@ -1575,14 +1584,14 @@ static void qDefaultMessageHandler(QtMsgType type, const QMessageLogContext &con
         logMessage.append(QLatin1Char('\n'));
         OutputDebugString(reinterpret_cast<const wchar_t *>(logMessage.utf16()));
         return;
-#elif defined(QT_USE_SLOG2)
+#elif QT_CONFIG(slog2)
         logMessage.append(QLatin1Char('\n'));
         slog2_default_handler(type, logMessage.toLocal8Bit().constData());
         return;
-#elif defined(QT_USE_JOURNALD) && !defined(QT_BOOTSTRAPPED)
+#elif QT_CONFIG(journald)
         systemd_default_message_handler(type, context, logMessage);
         return;
-#elif defined(QT_USE_SYSLOG) && !defined(QT_BOOTSTRAPPED)
+#elif QT_CONFIG(syslog)
         syslog_default_message_handler(type, logMessage.toUtf8().constData());
         return;
 #elif defined(Q_OS_ANDROID)
@@ -1678,11 +1687,7 @@ static void qt_message_fatal(QtMsgType, const QMessageLogContext &context, const
     Q_UNUSED(message);
 #endif
 
-#if (defined(Q_OS_UNIX) || defined(Q_CC_MINGW))
-    abort(); // trap; generates core dump
-#else
-    exit(1); // goodbye cruel world
-#endif
+    std::abort();
 }
 
 
@@ -1781,7 +1786,7 @@ void qErrnoWarning(int code, const char *msg, ...)
 
     \snippet code/src_corelib_global_qglobal.cpp 23
 
-    \sa QtMessageHandler, QtMsgType, qDebug(), qWarning(), qCritical(), qFatal(),
+    \sa QtMessageHandler, QtMsgType, qDebug(), qInfo(), qWarning(), qCritical(), qFatal(),
     {Debugging Techniques}
 */
 

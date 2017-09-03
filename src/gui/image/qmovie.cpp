@@ -170,11 +170,9 @@
     \sa QMovie::stop()
 */
 
-#include "qglobal.h"
-
-#ifndef QT_NO_MOVIE
-
 #include "qmovie.h"
+
+#include "qglobal.h"
 #include "qimage.h"
 #include "qimagereader.h"
 #include "qpixmap.h"
@@ -1020,5 +1018,3 @@ void QMovie::setCacheMode(CacheMode cacheMode)
 QT_END_NAMESPACE
 
 #include "moc_qmovie.cpp"
-
-#endif // QT_NO_MOVIE

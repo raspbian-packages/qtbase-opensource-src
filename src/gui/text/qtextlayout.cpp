@@ -630,6 +630,9 @@ Qt::CursorMoveStyle QTextLayout::cursorMoveStyle() const
 /*!
     Begins the layout process.
 
+    \warning This will invalidate the layout, so all existing QTextLine objects
+    that refer to the previous contents should now be discarded.
+
     \sa endLayout()
 */
 void QTextLayout::beginLayout()
@@ -673,6 +676,9 @@ void QTextLayout::endLayout()
 
     Clears the line information in the layout. After having called
     this function, lineCount() returns 0.
+
+    \warning This will invalidate the layout, so all existing QTextLine objects
+    that refer to the previous contents should now be discarded.
 */
 void QTextLayout::clearLayout()
 {
@@ -975,7 +981,7 @@ void QTextLayout::setFlags(int flags)
 }
 
 static void addSelectedRegionsToPath(QTextEngine *eng, int lineNumber, const QPointF &pos, QTextLayout::FormatRange *selection,
-                                     QPainterPath *region, QRectF boundingRect)
+                                     QPainterPath *region, const QRectF &boundingRect)
 {
     const QScriptLine &line = eng->lines[lineNumber];
 
@@ -1059,9 +1065,10 @@ QList<QGlyphRun> QTextLayout::glyphRuns(int from, int length) const
                 QGlyphRun::GlyphRunFlags flags = glyphRun.flags();
                 QPair<QFontEngine *, int> key(fontEngine, int(flags));
                 // merge the glyph runs using the same font
-                if (glyphRunHash.contains(key)) {
-                    QGlyphRun &oldGlyphRun = glyphRunHash[key];
-
+                QGlyphRun &oldGlyphRun = glyphRunHash[key];
+                if (oldGlyphRun.isEmpty()) {
+                    oldGlyphRun = glyphRun;
+                } else {
                     QVector<quint32> indexes = oldGlyphRun.glyphIndexes();
                     QVector<QPointF> positions = oldGlyphRun.positions();
                     QRectF boundingRect = oldGlyphRun.boundingRect();
@@ -1073,8 +1080,6 @@ QList<QGlyphRun> QTextLayout::glyphRuns(int from, int length) const
                     oldGlyphRun.setGlyphIndexes(indexes);
                     oldGlyphRun.setPositions(positions);
                     oldGlyphRun.setBoundingRect(boundingRect);
-                } else {
-                    glyphRunHash[key] = glyphRun;
                 }
             }
         }
@@ -1326,7 +1331,11 @@ void QTextLayout::drawCursor(QPainter *p, const QPointF &pos, int cursorPosition
                               && (p->transform().type() > QTransform::TxTranslate);
     if (toggleAntialiasing)
         p->setRenderHint(QPainter::Antialiasing);
+    QPainter::CompositionMode origCompositionMode = p->compositionMode();
+    if (p->paintEngine()->hasFeature(QPaintEngine::RasterOpModes))
+        p->setCompositionMode(QPainter::RasterOp_NotDestination);
     p->fillRect(QRectF(x, y, qreal(width), (base + descent).toReal()), p->pen().brush());
+    p->setCompositionMode(origCompositionMode);
     if (toggleAntialiasing)
         p->setRenderHint(QPainter::Antialiasing, false);
     if (d->layoutData->hasBidi) {
@@ -1650,6 +1659,7 @@ namespace {
         int maxGlyphs;
         int currentPosition;
         glyph_t previousGlyph;
+        QFontEngine *previousGlyphFontEngine;
 
         QFixed minw;
         QFixed softHyphenWidth;
@@ -1683,13 +1693,14 @@ namespace {
             if (currentPosition > 0 &&
                 logClusters[currentPosition - 1] < glyphs.numGlyphs) {
                 previousGlyph = currentGlyph(); // needed to calculate right bearing later
+                previousGlyphFontEngine = fontEngine;
             }
         }
 
-        inline void calculateRightBearing(glyph_t glyph)
+        inline void calculateRightBearing(QFontEngine *engine, glyph_t glyph)
         {
             qreal rb;
-            fontEngine->getGlyphBearings(glyph, 0, &rb);
+            engine->getGlyphBearings(glyph, 0, &rb);
 
             // We only care about negative right bearings, so we limit the range
             // of the bearing here so that we can assume it's negative in the rest
@@ -1702,13 +1713,13 @@ namespace {
         {
             if (currentPosition <= 0)
                 return;
-            calculateRightBearing(currentGlyph());
+            calculateRightBearing(fontEngine, currentGlyph());
         }
 
         inline void calculateRightBearingForPreviousGlyph()
         {
             if (previousGlyph > 0)
-                calculateRightBearing(previousGlyph);
+                calculateRightBearing(previousGlyphFontEngine, previousGlyph);
         }
 
         static const QFixed RightBearingNotCalculated;
@@ -1902,11 +1913,15 @@ void QTextLine::layout_helper(int maxGlyphs)
             ++lbh.glyphCount;
             if (lbh.checkFullOtherwiseExtend(line))
                 goto found;
-        } else if (attributes[lbh.currentPosition].whiteSpace) {
+        } else if (attributes[lbh.currentPosition].whiteSpace
+                   && eng->layoutData->string.at(lbh.currentPosition).decompositionTag() != QChar::NoBreak) {
             lbh.whiteSpaceOrObject = true;
-            while (lbh.currentPosition < end && attributes[lbh.currentPosition].whiteSpace)
+            while (lbh.currentPosition < end
+                   && attributes[lbh.currentPosition].whiteSpace
+                   && eng->layoutData->string.at(lbh.currentPosition).decompositionTag() != QChar::NoBreak) {
                 addNextCluster(lbh.currentPosition, end, lbh.spaceData, lbh.glyphCount,
                                current, lbh.logClusters, lbh.glyphs);
+            }
 
             if (!lbh.manualWrap && lbh.spaceData.textWidth > line.width) {
                 lbh.spaceData.textWidth = line.width; // ignore spaces that fall out of the line.

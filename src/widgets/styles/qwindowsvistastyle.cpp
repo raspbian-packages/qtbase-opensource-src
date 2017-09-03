@@ -39,15 +39,15 @@
 
 #include "qwindowsvistastyle_p.h"
 #include "qwindowsvistastyle_p_p.h"
+#include <qoperatingsystemversion.h>
 #include <qscreen.h>
 #include <qwindow.h>
 #include <private/qstyleanimation_p.h>
 #include <private/qstylehelper_p.h>
-#include <private/qsystemlibrary_p.h>
 #include <private/qapplication_p.h>
 #include <qpa/qplatformnativeinterface.h>
 
-#if !defined(QT_NO_STYLE_WINDOWSVISTA) || defined(QT_PLUGIN)
+#if QT_CONFIG(style_windowsvista) || defined(QT_PLUGIN)
 
 QT_BEGIN_NAMESPACE
 
@@ -88,8 +88,7 @@ bool QWindowsVistaStylePrivate::useVista()
 {
     return (QSysInfo::WindowsVersion >= QSysInfo::WV_VISTA
             && (QSysInfo::WindowsVersion & QSysInfo::WV_NT_based))
-           && QWindowsVistaStylePrivate::useXP()
-           && QWindowsVistaStylePrivate::pGetThemeTransitionDuration != Q_NULLPTR;
+           && QWindowsVistaStylePrivate::useXP();
 }
 
 /* \internal
@@ -356,13 +355,13 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
 
                     HTHEME theme;
                     int partId;
-                    int duration;
+                    DWORD duration;
                     int fromState = 0;
                     int toState = 0;
 
                     //translate state flags to UXTHEME states :
                     if (element == PE_FrameLineEdit) {
-                        theme = QWindowsXPStylePrivate::pOpenThemeData(0, L"Edit");
+                        theme = OpenThemeData(0, L"Edit");
                         partId = EP_EDITBORDER_NOSCROLL;
 
                         if (oldState & State_MouseOver)
@@ -380,7 +379,7 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
                             toState = ETS_NORMAL;
 
                     } else {
-                        theme = QWindowsXPStylePrivate::pOpenThemeData(0, L"Button");
+                        theme = OpenThemeData(0, L"Button");
                         if (element == PE_IndicatorRadioButton)
                             partId = BP_RADIOBUTTON;
                         else if (element == PE_IndicatorCheckBox)
@@ -393,9 +392,9 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
                     }
 
                     // Retrieve the transition time between the states from the system.
-                    if (theme && QWindowsXPStylePrivate::pGetThemeTransitionDuration(theme, partId, fromState, toState,
-                                                             TMT_TRANSITIONDURATIONS, &duration) == S_OK)
-                    {
+                    if (theme
+                        && SUCCEEDED(GetThemeTransitionDuration(theme, partId, fromState, toState,
+                                                                TMT_TRANSITIONDURATIONS, &duration))) {
                         t->setDuration(duration);
                     }
                     t->setStartTime(QTime::currentTime());
@@ -513,7 +512,7 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
                               EP_EDITBORDER_HVSCROLL, stateId, option->rect);
             // Since EP_EDITBORDER_HVSCROLL does not us borderfill, theme.noContent cannot be used for clipping
             int borderSize = 1;
-            QWindowsXPStylePrivate::pGetThemeInt(theme.handle(), theme.partId, theme.stateId, TMT_BORDERSIZE, &borderSize);
+            GetThemeInt(theme.handle(), theme.partId, theme.stateId, TMT_BORDERSIZE, &borderSize);
             QRegion clipRegion = option->rect;
             QRegion content = option->rect.adjusted(borderSize, borderSize, -borderSize, -borderSize);
             clipRegion ^= content;
@@ -548,22 +547,18 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
                     return;
                 }
                 int bgType;
-                QWindowsXPStylePrivate::pGetThemeEnumValue( theme.handle(),
-                                    partId,
-                                    stateId,
-                                    TMT_BGTYPE,
-                                    &bgType);
+                GetThemeEnumValue(theme.handle(), partId, stateId, TMT_BGTYPE, &bgType);
                 if( bgType == BT_IMAGEFILE ) {
                     d->drawBackground(theme);
                 } else {
                     QBrush fillColor = option->palette.brush(QPalette::Base);
                     if (!isEnabled) {
                         PROPERTYORIGIN origin = PO_NOTFOUND;
-                        QWindowsXPStylePrivate::pGetThemePropertyOrigin(theme.handle(), theme.partId, theme.stateId, TMT_FILLCOLOR, &origin);
+                        GetThemePropertyOrigin(theme.handle(), theme.partId, theme.stateId, TMT_FILLCOLOR, &origin);
                         // Use only if the fill property comes from our part
                         if ((origin == PO_PART || origin == PO_STATE)) {
                             COLORREF bgRef;
-                            QWindowsXPStylePrivate::pGetThemeColor(theme.handle(), partId, stateId, TMT_FILLCOLOR, &bgRef);
+                            GetThemeColor(theme.handle(), partId, stateId, TMT_FILLCOLOR, &bgRef);
                             fillColor = QBrush(qRgb(GetRValue(bgRef), GetGValue(bgRef), GetBValue(bgRef)));
                         }
                     }
@@ -605,6 +600,7 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
                 XPThemeData theme(widget, painter,
                                   QWindowsXPStylePrivate::EditTheme,
                                   EP_EDITBORDER_NOSCROLL, stateId, option->rect);
+                theme.noContent = true;
                 painter->save();
                 QRegion clipRegion = option->rect;
                 clipRegion -= option->rect.adjusted(2, 2, -2, -2);
@@ -779,6 +775,7 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
         }
     case PE_Widget:
         {
+#if QT_CONFIG(dialogbuttonbox)
             const QDialogButtonBox *buttonBox = 0;
 
             if (qobject_cast<const QMessageBox *> (widget))
@@ -805,6 +802,7 @@ void QWindowsVistaStyle::drawPrimitive(PrimitiveElement element, const QStyleOpt
                 theme.partId = TDLG_SECONDARYPANEL;
                 d->drawBackground(theme);
             }
+#endif
         }
         break;
     default:
@@ -899,12 +897,12 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
                 t->setEndImage(endImage);
 
 
-                int duration = 0;
-                HTHEME theme = QWindowsXPStylePrivate::pOpenThemeData(0, L"Button");
+                DWORD duration = 0;
+                const HTHEME theme = OpenThemeData(0, L"Button");
 
                 int fromState = buttonStateId(oldState, BP_PUSHBUTTON);
                 int toState = buttonStateId(option->state, BP_PUSHBUTTON);
-                if (QWindowsXPStylePrivate::pGetThemeTransitionDuration(theme, BP_PUSHBUTTON, fromState, toState, TMT_TRANSITIONDURATIONS, &duration) == S_OK)
+                if (GetThemeTransitionDuration(theme, BP_PUSHBUTTON, fromState, toState, TMT_TRANSITIONDURATIONS, &duration) == S_OK)
                     t->setDuration(duration);
                 else
                     t->setDuration(0);
@@ -1456,7 +1454,7 @@ void QWindowsVistaStyle::drawControl(ControlElement element, const QStyleOption 
                 // We cannot currently get the correct selection color for "explorer style" views
                 COLORREF cref = 0;
                 XPThemeData theme(d->treeViewHelper(), 0, QLatin1String("LISTVIEW"), 0, 0);
-                unsigned int res = pGetThemeColor(theme.handle(), LVP_LISTITEM, LISS_SELECTED, TMT_TEXTCOLOR, &cref);
+                unsigned int res = GetThemeColor(theme.handle(), LVP_LISTITEM, LISS_SELECTED, TMT_TEXTCOLOR, &cref);
                 QColor textColor(GetRValue(cref), GetGValue(cref), GetBValue(cref));
                 */
                 QPalette palette = vopt->palette;
@@ -1758,7 +1756,7 @@ void QWindowsVistaStyle::drawComplexControl(ComplexControl control, const QStyle
                     theme.stateId = stateId;
                     d->drawBackground(theme);
 
-                    if (QSysInfo::WindowsVersion < QSysInfo::WV_WINDOWS8) {
+                    if (QOperatingSystemVersion::current() < QOperatingSystemVersion::Windows8) {
                         const QRect gripperBounds = QWindowsXPStylePrivate::scrollBarGripperBounds(flags, widget, &theme);
                         // Draw gripper if there is enough space
                         if (!gripperBounds.isEmpty() && flags & State_Enabled) {
@@ -1877,8 +1875,7 @@ QSize QWindowsVistaStyle::sizeFromContents(ContentsType type, const QStyleOption
     case CT_MenuBarItem:
         if (!sz.isEmpty())
             sz += QSize(windowsItemHMargin * 5 + 1, 5);
-            return sz;
-        break;
+        return sz;
 #endif
     case CT_ItemViewItem:
         sz = QWindowsXPStyle::sizeFromContents(type, option, size, widget);
@@ -1925,7 +1922,7 @@ QRect QWindowsVistaStyle::subElementRect(SubElement element, const QStyleOption 
     case SE_PushButtonContents:
         if (const QStyleOptionButton *btn = qstyleoption_cast<const QStyleOptionButton *>(option)) {
             MARGINS borderSize;
-            HTHEME theme = QWindowsXPStylePrivate::pOpenThemeData(widget ? QWindowsVistaStylePrivate::winId(widget) : 0, L"Button");
+            const HTHEME theme = OpenThemeData(widget ? QWindowsVistaStylePrivate::winId(widget) : 0, L"Button");
             if (theme) {
                 int stateId = PBS_NORMAL;
                 if (!(option->state & State_Enabled))
@@ -1940,15 +1937,7 @@ QRect QWindowsVistaStyle::subElementRect(SubElement element, const QStyleOption 
                 int border = proxy()->pixelMetric(PM_DefaultFrameWidth, btn, widget);
                 rect = option->rect.adjusted(border, border, -border, -border);
 
-                int result = QWindowsXPStylePrivate::pGetThemeMargins(theme,
-                                              NULL,
-                                              BP_PUSHBUTTON,
-                                              stateId,
-                                              TMT_CONTENTMARGINS,
-                                              NULL,
-                                              &borderSize);
-
-                if (result == S_OK) {
+                if (SUCCEEDED(GetThemeMargins(theme, NULL, BP_PUSHBUTTON, stateId, TMT_CONTENTMARGINS, NULL, &borderSize))) {
                     rect.adjust(borderSize.cxLeftWidth, borderSize.cyTopHeight,
                                 -borderSize.cxRightWidth, -borderSize.cyBottomHeight);
                     rect = visualRect(option->direction, option->rect, rect);
@@ -2319,27 +2308,29 @@ void QWindowsVistaStyle::polish(QWidget *widget)
         //we do not have to care about unpolishing
         widget->setContentsMargins(3, 0, 4, 0);
         COLORREF bgRef;
-        HTHEME theme = QWindowsXPStylePrivate::pOpenThemeData(widget ? QWindowsVistaStylePrivate::winId(widget) : 0, L"TOOLTIP");
-        if (theme) {
-            if (QWindowsXPStylePrivate::pGetThemeColor(theme, TTP_STANDARD, TTSS_NORMAL, TMT_TEXTCOLOR, &bgRef) == S_OK) {
-                QColor textColor = QColor::fromRgb(bgRef);
-                QPalette pal;
-                pal.setColor(QPalette::All, QPalette::ToolTipText, textColor);
-                widget->setPalette(pal);
-            }
+        HTHEME theme = OpenThemeData(widget ? QWindowsVistaStylePrivate::winId(widget) : 0, L"TOOLTIP");
+        if (theme && SUCCEEDED(GetThemeColor(theme, TTP_STANDARD, TTSS_NORMAL, TMT_TEXTCOLOR, &bgRef))) {
+            QColor textColor = QColor::fromRgb(bgRef);
+            QPalette pal;
+            pal.setColor(QPalette::All, QPalette::ToolTipText, textColor);
+            widget->setPalette(pal);
         }
     } else if (qobject_cast<QMessageBox *> (widget)) {
         widget->setAttribute(Qt::WA_StyledBackground);
+#if QT_CONFIG(dialogbuttonbox)
         QDialogButtonBox *buttonBox = widget->findChild<QDialogButtonBox *>(QLatin1String("qt_msgbox_buttonbox"));
         if (buttonBox)
             buttonBox->setContentsMargins(0, 9, 0, 0);
+#endif
     }
 #ifndef QT_NO_INPUTDIALOG
     else if (qobject_cast<QInputDialog *> (widget)) {
         widget->setAttribute(Qt::WA_StyledBackground);
+#if QT_CONFIG(dialogbuttonbox)
         QDialogButtonBox *buttonBox = widget->findChild<QDialogButtonBox *>(QLatin1String("qt_inputdlg_buttonbox"));
         if (buttonBox)
             buttonBox->setContentsMargins(0, 9, 0, 0);
+#endif
     }
 #endif // QT_NO_INPUTDIALOG
     else if (QTreeView *tree = qobject_cast<QTreeView *> (widget)) {
@@ -2370,16 +2361,20 @@ void QWindowsVistaStyle::unpolish(QWidget *widget)
         widget->setAttribute(Qt::WA_Hover, false);
     else if (qobject_cast<QMessageBox *> (widget)) {
         widget->setAttribute(Qt::WA_StyledBackground, false);
+#if QT_CONFIG(dialogbuttonbox)
         QDialogButtonBox *buttonBox = widget->findChild<QDialogButtonBox *>(QLatin1String("qt_msgbox_buttonbox"));
         if (buttonBox)
             buttonBox->setContentsMargins(0, 0, 0, 0);
+#endif
     }
 #ifndef QT_NO_INPUTDIALOG
     else if (qobject_cast<QInputDialog *> (widget)) {
         widget->setAttribute(Qt::WA_StyledBackground, false);
+#if QT_CONFIG(dialogbuttonbox)
         QDialogButtonBox *buttonBox = widget->findChild<QDialogButtonBox *>(QLatin1String("qt_inputdlg_buttonbox"));
         if (buttonBox)
             buttonBox->setContentsMargins(0, 0, 0, 0);
+#endif
     }
 #endif // QT_NO_INPUTDIALOG
     else if (QTreeView *tree = qobject_cast<QTreeView *> (widget)) {

@@ -28,10 +28,26 @@
 
 #include <QtTest/QtTest>
 #include "qdatetime.h"
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+#  include <locale.h>
+#endif
 
 class tst_QTime : public QObject
 {
     Q_OBJECT
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+public:
+    tst_QTime()
+    {
+        // Some tests depend on C locale - BF&I it with belt *and* braces:
+        qputenv("LC_ALL", "C");
+        setlocale(LC_ALL, "C");
+        // Need to instantiate as early as possible, before anything accesses
+        // the QSystemLocale singleton; once it exists, there's no changing it.
+    }
+#endif // remove for ### Qt 6
+
 private slots:
     void msecsTo_data();
     void msecsTo();
@@ -675,6 +691,9 @@ void tst_QTime::toStringDateFormat_data()
     QTest::newRow("Text 10:12:34.999") << QTime(10, 12, 34, 999) << Qt::TextDate << QString("10:12:34");
     QTest::newRow("ISO 10:12:34.999") << QTime(10, 12, 34, 999) << Qt::ISODate << QString("10:12:34");
     QTest::newRow("RFC2822Date") << QTime(10, 12, 34, 999) << Qt::RFC2822Date << QString("10:12:34");
+    QTest::newRow("ISOWithMs 10:12:34.000") << QTime(10, 12, 34, 0) << Qt::ISODateWithMs << QString("10:12:34.000");
+    QTest::newRow("ISOWithMs 10:12:34.020") << QTime(10, 12, 34, 20) << Qt::ISODateWithMs << QString("10:12:34.020");
+    QTest::newRow("ISOWithMs 10:12:34.999") << QTime(10, 12, 34, 999) << Qt::ISODateWithMs << QString("10:12:34.999");
 }
 
 void tst_QTime::toStringDateFormat()

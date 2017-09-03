@@ -47,7 +47,7 @@
 /*
    The operating system, must be one of: (Q_OS_x)
 
-     DARWIN   - Any Darwin system (OS X, iOS, watchOS, tvOS)
+     DARWIN   - Any Darwin system (macOS, iOS, watchOS, tvOS)
      MACOS    - macOS
      IOS      - iOS
      WATCHOS  - watchOS
@@ -56,7 +56,6 @@
      OS2      - OS/2
      OS2EMX   - XFree86 on OS/2 (not PM)
      WIN32    - Win32 (Windows 2000/XP/Vista/7 and Windows Server 2003/2008)
-     WINCE    - WinCE (Windows CE 5.0)
      WINRT    - WinRT (Windows 8 Runtime)
      CYGWIN   - Cygwin
      SOLARIS  - Sun Solaris
@@ -103,18 +102,19 @@
 #      define Q_OS_DARWIN32
 #    endif
 #    if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
-#      if defined(TARGET_OS_TV) && TARGET_OS_TV
-#        define Q_OS_TVOS
-#      elif defined(TARGET_OS_WATCH) && TARGET_OS_WATCH
+#      define QT_PLATFORM_UIKIT
+#      if defined(TARGET_OS_WATCH) && TARGET_OS_WATCH
 #        define Q_OS_WATCHOS
+#      elif defined(TARGET_OS_TV) && TARGET_OS_TV
+#        define Q_OS_TVOS
 #      else
 #        // TARGET_OS_IOS is only available in newer SDKs,
 #        // so assume any other iOS-based platform is iOS for now
 #        define Q_OS_IOS
 #      endif
 #    else
-#      // there is no "real" OS X define (rdar://22640089),
-#      // assume any non iOS-based platform is OS X for now
+#      // TARGET_OS_OSX is only available in newer SDKs,
+#      // so assume any non iOS-based platform is macOS for now
 #      define Q_OS_MACOS
 #    endif
 #  else
@@ -129,14 +129,11 @@
 #  define Q_OS_WIN32
 #  define Q_OS_WIN64
 #elif !defined(SAG_COM) && (defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__))
-#  if defined(WINCE) || defined(_WIN32_WCE)
-#    define Q_OS_WINCE
-#  elif defined(WINAPI_FAMILY)
+#  if defined(WINAPI_FAMILY)
 #    ifndef WINAPI_FAMILY_PC_APP
 #      define WINAPI_FAMILY_PC_APP WINAPI_FAMILY_APP
 #    endif
 #    if defined(WINAPI_FAMILY_PHONE_APP) && WINAPI_FAMILY==WINAPI_FAMILY_PHONE_APP
-#      define Q_OS_WINPHONE
 #      define Q_OS_WINRT
 #    elif WINAPI_FAMILY==WINAPI_FAMILY_PC_APP
 #      define Q_OS_WINRT
@@ -209,7 +206,7 @@
 #  error "Qt has not been ported to this OS - see http://www.qt-project.org/"
 #endif
 
-#if defined(Q_OS_WIN32) || defined(Q_OS_WIN64) || defined(Q_OS_WINCE) || defined(Q_OS_WINRT)
+#if defined(Q_OS_WIN32) || defined(Q_OS_WIN64) || defined(Q_OS_WINRT)
 #  define Q_OS_WIN
 #endif
 

@@ -40,6 +40,7 @@
 #ifndef QUNDOSTACK_P_H
 #define QUNDOSTACK_P_H
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <private/qobject_p.h>
 #include <QtCore/qlist.h>
 #include <QtCore/qstring.h>
@@ -65,11 +66,12 @@ class QUndoGroup;
 class QUndoCommandPrivate
 {
 public:
-    QUndoCommandPrivate() : id(-1) {}
+    QUndoCommandPrivate() : id(-1), obsolete(false) {}
     QList<QUndoCommand*> child_list;
     QString text;
     QString actionText;
     int id;
+    bool obsolete;
 };
 
 #ifndef QT_NO_UNDOSTACK

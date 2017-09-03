@@ -158,7 +158,7 @@
 #include <QMainWindow>
 #include <QScrollBar>
 #include <QDebug>
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
 #include <private/qmacstyle_mac_p.h>
 #endif
 #include <QMdiArea>
@@ -280,7 +280,7 @@ static inline bool isHoverControl(QStyle::SubControl control)
     return control != QStyle::SC_None && control != QStyle::SC_TitleBarLabel;
 }
 
-#if defined(Q_DEAD_CODE_FROM_QT4_WIN)
+#if 0 // Used to be included in Qt4 for Q_WS_WIN
 static inline QRgb colorref2qrgb(COLORREF col)
 {
     return qRgb(GetRValue(col),GetGValue(col),GetBValue(col));
@@ -295,7 +295,7 @@ static void showToolTip(QHelpEvent *helpEvent, QWidget *widget, const QStyleOpti
     Q_ASSERT(helpEvent->type() == QEvent::ToolTip);
     Q_ASSERT(widget);
 
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
     // Native Mac windows don't show tool tip.
     if (qobject_cast<QMacStyle *>(widget->style()))
         return;
@@ -412,6 +412,10 @@ bool ControlLabel::event(QEvent *event)
 {
     if (event->type() == QEvent::WindowIconChange)
         updateWindowIcon();
+    else if (event->type() == QEvent::StyleChange) {
+        updateWindowIcon();
+        setFixedSize(label.size());
+    }
 #ifndef QT_NO_TOOLTIP
     else if (event->type() == QEvent::ToolTip) {
         QStyleOptionTitleBar options;
@@ -480,7 +484,8 @@ void ControlLabel::updateWindowIcon()
     QIcon menuIcon = windowIcon();
     if (menuIcon.isNull())
         menuIcon = style()->standardIcon(QStyle::SP_TitleBarMenuButton, 0, parentWidget());
-    label = menuIcon.pixmap(16, 16);
+    const int iconSize = style()->pixelMetric(QStyle::PM_TitleBarButtonIconSize, 0, parentWidget());
+    label = menuIcon.pixmap(iconSize);
     update();
 }
 
@@ -556,7 +561,8 @@ QSize ControllerWidget::sizeHint() const
     ensurePolished();
     QStyleOptionComplex opt;
     initStyleOption(&opt);
-    QSize size(48, 16);
+    const int buttonSize = style()->pixelMetric(QStyle::PM_TitleBarButtonSize, &opt, mdiArea);
+    QSize size(3 * buttonSize, buttonSize);
     return style()->sizeFromContents(QStyle::CT_MdiControls, &opt, size, mdiArea);
 }
 
@@ -1070,7 +1076,7 @@ void QMdiSubWindowPrivate::updateCursor()
 {
 #ifndef QT_NO_CURSOR
     Q_Q(QMdiSubWindow);
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
     if (qobject_cast<QMacStyle *>(q->style()))
         return;
 #endif
@@ -1498,7 +1504,7 @@ void QMdiSubWindowPrivate::processClickedSubControl()
         q->showNormal();
         break;
     case QStyle::SC_TitleBarMinButton:
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
         if (qobject_cast<QMacStyle *>(q->style())) {
             if (q->isMinimized())
                 q->showNormal();
@@ -1515,7 +1521,7 @@ void QMdiSubWindowPrivate::processClickedSubControl()
         q->showNormal();
         break;
     case QStyle::SC_TitleBarMaxButton:
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
         if (qobject_cast<QMacStyle *>(q->style())) {
             if (q->isMaximized())
                 q->showNormal();
@@ -1562,7 +1568,7 @@ QRegion QMdiSubWindowPrivate::getRegion(Operation operation) const
     }
 
     QRegion region;
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
     if (qobject_cast<QMacStyle *>(q->style()))
         return region;
 #endif
@@ -1769,7 +1775,7 @@ bool QMdiSubWindowPrivate::drawTitleBarWhenMaximized() const
     if (isChildOfTabbedQMdiArea(q))
         return false;
 
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC) || defined(Q_OS_WINCE_WM)
+#if QT_CONFIG(style_mac)
     Q_UNUSED(isChildOfQMdiSubWindow);
     return true;
 #else
@@ -1857,7 +1863,7 @@ void QMdiSubWindowPrivate::removeButtonsFromMenuBar()
     topLevelWindow->removeEventFilter(q);
     if (baseWidget && !drawTitleBarWhenMaximized())
         topLevelWindow->setWindowModified(false);
-    originalTitle = QString::null;
+    originalTitle.clear();
 }
 
 #endif // QT_NO_MENUBAR
@@ -1926,7 +1932,7 @@ QPalette QMdiSubWindowPrivate::desktopPalette() const
     QPalette newPalette = q->palette();
 
     bool colorsInitialized = false;
-#ifdef Q_DEAD_CODE_FROM_QT4_WIN // ask system properties on windows
+#if 0 // Used to be included in Qt4 for Q_WS_WIN // ask system properties on windows
 #ifndef SPI_GETGRADIENTCAPTIONS
 #define SPI_GETGRADIENTCAPTIONS 0x1008
 #endif
@@ -1962,7 +1968,7 @@ QPalette QMdiSubWindowPrivate::desktopPalette() const
                                 newPalette.color(QPalette::Inactive, QPalette::Highlight));
         }
     }
-#endif // Q_DEAD_CODE_FROM_QT4_WIN
+#endif
     if (!colorsInitialized) {
         newPalette.setColor(QPalette::Active, QPalette::Highlight,
                             newPalette.color(QPalette::Active, QPalette::Highlight));
@@ -2185,7 +2191,7 @@ void QMdiSubWindowPrivate::setSizeGrip(QSizeGrip *newSizeGrip)
         return;
     newSizeGrip->setFixedSize(newSizeGrip->sizeHint());
     bool putSizeGripInLayout = layout ? true : false;
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
     if (qobject_cast<QMacStyle *>(q->style()))
         putSizeGripInLayout = false;
 #endif
@@ -2763,7 +2769,7 @@ bool QMdiSubWindow::eventFilter(QObject *object, QEvent *event)
 #ifndef QT_NO_MENUBAR
         } else if (maximizedButtonsWidget() && d->controlContainer->menuBar() && d->controlContainer->menuBar()
                    ->cornerWidget(Qt::TopRightCorner) == maximizedButtonsWidget()) {
-            d->originalTitle = QString::null;
+            d->originalTitle.clear();
             if (d->baseWidget && d->baseWidget->windowTitle() == windowTitle())
                 d->updateWindowTitle(true);
             else
@@ -2837,7 +2843,7 @@ bool QMdiSubWindow::event(QEvent *event)
         d->isMaximizeMode = false;
         d->isWidgetHiddenByUs = false;
         if (!parent()) {
-#if !defined(QT_NO_SIZEGRIP) && defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if !defined(QT_NO_SIZEGRIP) && QT_CONFIG(style_mac)
             if (qobject_cast<QMacStyle *>(style()))
                 delete d->sizeGrip;
 #endif
@@ -2932,7 +2938,7 @@ void QMdiSubWindow::showEvent(QShowEvent *showEvent)
         return;
     }
 
-#if !defined(QT_NO_SIZEGRIP) && defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if !defined(QT_NO_SIZEGRIP) && QT_CONFIG(style_mac)
     if (qobject_cast<QMacStyle *>(style()) && !d->sizeGrip
             && !(windowFlags() & Qt::FramelessWindowHint)) {
         d->setSizeGrip(new QSizeGrip(this));
@@ -3327,7 +3333,7 @@ void QMdiSubWindow::mouseMoveEvent(QMouseEvent *mouseEvent)
             hoverRegion += style()->subControlRect(QStyle::CC_TitleBar, &options,
                     d->hoveredSubControl, this);
         }
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
         if (qobject_cast<QMacStyle *>(style()) && !hoverRegion.isEmpty())
             hoverRegion += QRegion(0, 0, width(), d->titleBarHeight(options));
 #endif
@@ -3537,7 +3543,7 @@ QSize QMdiSubWindow::minimumSizeHint() const
     int sizeGripHeight = 0;
     if (d->sizeGrip && d->sizeGrip->isVisibleTo(const_cast<QMdiSubWindow *>(this)))
         sizeGripHeight = d->sizeGrip->height();
-#if defined(Q_OS_MAC) && !defined(QT_NO_STYLE_MAC)
+#if QT_CONFIG(style_mac)
     else if (parent() && qobject_cast<QMacStyle *>(style()) && !d->sizeGrip)
         sizeGripHeight = style()->pixelMetric(QStyle::PM_SizeGripSize, 0, this);
 #endif

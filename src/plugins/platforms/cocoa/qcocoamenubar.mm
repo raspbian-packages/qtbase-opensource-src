@@ -52,13 +52,7 @@ QT_BEGIN_NAMESPACE
 
 static QList<QCocoaMenuBar*> static_menubars;
 
-static inline QCocoaMenuLoader *getMenuLoader()
-{
-    return [NSApp QT_MANGLE_NAMESPACE(qt_qcocoamenuLoader)];
-}
-
-QCocoaMenuBar::QCocoaMenuBar() :
-    m_window(0)
+QCocoaMenuBar::QCocoaMenuBar()
 {
     static_menubars.append(this);
 
@@ -84,7 +78,7 @@ QCocoaMenuBar::~QCocoaMenuBar()
     [m_nativeMenu release];
     static_menubars.removeOne(this);
 
-    if (m_window && m_window->menubar() == this) {
+    if (!m_window.isNull() && m_window->menubar() == this) {
         m_window->setMenubar(0);
 
         // Delete the children first so they do not cause
@@ -93,6 +87,33 @@ QCocoaMenuBar::~QCocoaMenuBar()
         qDeleteAll(children());
         updateMenuBarImmediately();
     }
+}
+
+bool QCocoaMenuBar::needsImmediateUpdate()
+{
+    if (!m_window.isNull()) {
+        if (m_window->window()->isActive())
+            return true;
+    } else {
+        // Only update if the focus/active window has no
+        // menubar, which means it'll be using this menubar.
+        // This is to avoid a modification in a parentless
+        // menubar to affect a window-assigned menubar.
+        QWindow *fw = QGuiApplication::focusWindow();
+        if (!fw) {
+            // Same if there's no focus window, BTW.
+            return true;
+        } else {
+            QCocoaWindow *cw = static_cast<QCocoaWindow *>(fw->handle());
+            if (cw && !cw->menubar())
+                return true;
+        }
+    }
+
+    // Either the menubar is attached to a non-active window,
+    // or the application's focus window has its own menubar
+    // (which is different from this one)
+    return false;
 }
 
 void QCocoaMenuBar::insertMenu(QPlatformMenu *platformMenu, QPlatformMenu *before)
@@ -135,7 +156,7 @@ void QCocoaMenuBar::insertMenu(QPlatformMenu *platformMenu, QPlatformMenu *befor
 
     syncMenu(menu);
 
-    if (m_window && m_window->window()->isActive())
+    if (needsImmediateUpdate())
         updateMenuBarImmediately();
 }
 
@@ -200,11 +221,11 @@ void QCocoaMenuBar::handleReparent(QWindow *newParentWindow)
     qDebug() << "QCocoaMenuBar" << this << "handleReparent" << newParentWindow;
 #endif
 
-    if (m_window)
-        m_window->setMenubar(NULL);
+    if (!m_window.isNull())
+        m_window->setMenubar(nullptr);
 
-    if (newParentWindow == NULL) {
-        m_window = NULL;
+    if (newParentWindow == nullptr) {
+        m_window.clear();
     } else {
         newParentWindow->create();
         m_window = static_cast<QCocoaWindow*>(newParentWindow->handle());
@@ -225,7 +246,7 @@ QCocoaWindow *QCocoaMenuBar::findWindowForMenubar()
 QCocoaMenuBar *QCocoaMenuBar::findGlobalMenubar()
 {
     foreach (QCocoaMenuBar *mb, static_menubars) {
-        if (mb->m_window == NULL)
+        if (mb->m_window.isNull())
             return mb;
     }
 
@@ -330,7 +351,7 @@ void QCocoaMenuBar::updateMenuBarImmediately()
         menu->propagateEnabledState(!disableForModal);
     }
 
-    QCocoaMenuLoader *loader = getMenuLoader();
+    QCocoaMenuLoader *loader = [QCocoaMenuLoader sharedMenuLoader];
     [loader ensureAppMenuInMenu:mb->nsMenu()];
 
     NSMutableSet *mergedItems = [[NSMutableSet setWithCapacity:0] retain];

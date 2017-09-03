@@ -43,9 +43,9 @@
 #include "qeglfskmsgbmdevice.h"
 #include "qeglfskmsgbmscreen.h"
 #include "qeglfskmsgbmcursor.h"
-#include "qeglfscursor.h"
+#include "private/qeglfscursor_p.h"
 
-#include <QtPlatformSupport/private/qdevicediscovery_p.h>
+#include <QtDeviceDiscoverySupport/private/qdevicediscovery_p.h>
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
@@ -63,8 +63,9 @@ QT_BEGIN_NAMESPACE
 QMutex QEglFSKmsGbmScreen::m_waitForFlipMutex;
 
 QEglFSKmsGbmIntegration::QEglFSKmsGbmIntegration()
-    : QEglFSKmsIntegration()
-{}
+{
+    qCDebug(qLcEglfsKmsDebug, "New DRM/KMS via GBM integration created");
+}
 
 EGLNativeWindowType QEglFSKmsGbmIntegration::createNativeWindow(QPlatformWindow *platformWindow,
                                                      const QSize &size,
@@ -104,10 +105,13 @@ void QEglFSKmsGbmIntegration::destroyNativeWindow(EGLNativeWindowType window)
 
 QPlatformCursor *QEglFSKmsGbmIntegration::createCursor(QPlatformScreen *screen) const
 {
-    if (hwCursor())
-        return Q_NULLPTR;
-    else
+#if QT_CONFIG(opengl)
+    if (!screenConfig()->hwCursor()) {
+        qCDebug(qLcEglfsKmsDebug, "Using plain OpenGL mouse cursor");
         return new QEglFSCursor(screen);
+    }
+#endif
+    return nullptr;
 }
 
 void QEglFSKmsGbmIntegration::presentBuffer(QPlatformSurface *surface)
@@ -118,15 +122,14 @@ void QEglFSKmsGbmIntegration::presentBuffer(QPlatformSurface *surface)
     screen->flip();
 }
 
-QEglFSKmsDevice *QEglFSKmsGbmIntegration::createDevice(const QString &devicePath)
+QKmsDevice *QEglFSKmsGbmIntegration::createDevice()
 {
-    QString path = devicePath;
-    if (!devicePath.isEmpty()) {
-        qCDebug(qLcEglfsKmsDebug) << "Using DRM device" << path << "specified in config file";
+    QString path = screenConfig()->devicePath();
+    if (!path.isEmpty()) {
+        qCDebug(qLcEglfsKmsDebug) << "GBM: Using DRM device" << path << "specified in config file";
     } else {
-
         QDeviceDiscovery *d = QDeviceDiscovery::create(QDeviceDiscovery::Device_VideoMask);
-        QStringList devices = d->scanConnectedDevices();
+        const QStringList devices = d->scanConnectedDevices();
         qCDebug(qLcEglfsKmsDebug) << "Found the following video devices:" << devices;
         d->deleteLater();
 
@@ -137,7 +140,7 @@ QEglFSKmsDevice *QEglFSKmsGbmIntegration::createDevice(const QString &devicePath
         qCDebug(qLcEglfsKmsDebug) << "Using" << path;
     }
 
-    return new QEglFSKmsGbmDevice(this, path);
+    return new QEglFSKmsGbmDevice(screenConfig(), path);
 }
 
 QT_END_NAMESPACE

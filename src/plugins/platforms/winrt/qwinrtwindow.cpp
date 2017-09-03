@@ -50,7 +50,7 @@
 #include <QtGui/QGuiApplication>
 #include <QtGui/QOpenGLContext>
 #include <QtGui/QWindow>
-#include <QtPlatformSupport/private/qeglconvenience_p.h>
+#include <QtEglSupport/private/qeglconvenience_p.h>
 
 #include <functional>
 #include <wrl.h>
@@ -191,6 +191,11 @@ QWinRTWindow::~QWinRTWindow()
     });
     RETURN_VOID_IF_FAILED("Failed to completely destroy window resources, likely because the application is shutting down");
 
+    if (d->screen->mouseGrabWindow() == this)
+        d->screen->setMouseGrabWindow(this, false);
+    if (d->screen->keyboardGrabWindow() == this)
+        d->screen->setKeyboardGrabWindow(this, false);
+
     d->screen->removeWindow(window());
 
     if (!d->surface)
@@ -326,7 +331,6 @@ void QWinRTWindow::setWindowState(Qt::WindowState state)
     if (d->state == state)
         return;
 
-#if _MSC_VER >= 1900
     if (state == Qt::WindowFullScreen) {
         HRESULT hr;
         boolean success;
@@ -373,7 +377,6 @@ void QWinRTWindow::setWindowState(Qt::WindowState state)
             return;
         }
     }
-#endif // _MSC_VER >= 1900
 
     if (state == Qt::WindowMinimized)
         setUIElementVisibility(d->uiElement.Get(), false);
@@ -382,6 +385,24 @@ void QWinRTWindow::setWindowState(Qt::WindowState state)
         setUIElementVisibility(d->uiElement.Get(), true);
 
     d->state = state;
+}
+
+bool QWinRTWindow::setMouseGrabEnabled(bool grab)
+{
+    Q_D(QWinRTWindow);
+    if (!isActive() && grab) {
+        qWarning("%s: Not setting mouse grab for invisible window %s/'%s'",
+                 __FUNCTION__, window()->metaObject()->className(),
+                 qPrintable(window()->objectName()));
+        return false;
+    }
+    return d->screen->setMouseGrabWindow(this, grab);
+}
+
+bool QWinRTWindow::setKeyboardGrabEnabled(bool grab)
+{
+    Q_D(QWinRTWindow);
+    return d->screen->setKeyboardGrabWindow(this, grab);
 }
 
 EGLSurface QWinRTWindow::eglSurface() const

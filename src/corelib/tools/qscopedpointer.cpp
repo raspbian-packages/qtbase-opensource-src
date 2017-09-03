@@ -115,7 +115,7 @@ QT_BEGIN_NAMESPACE
 
     \snippet code/src_corelib_tools_qscopedpointer.cpp 4
 
-    Otherwise, the compiler output a warning about not being able to destruct
+    Otherwise, the compiler outputs a warning about not being able to destruct
     \c MyPrivateClass.
 
     \sa QSharedPointer
@@ -190,6 +190,48 @@ QT_BEGIN_NAMESPACE
     Inequality operator. Returns \c true if the scoped pointers
     \a lhs and \a rhs are \e not pointing to the same object.
     Otherwise returns \c false.
+*/
+
+/*!
+    \fn bool operator==(const QScopedPointer<T, Cleanup> &lhs, std::nullptr_t)
+    \relates QScopedPointer
+    \since 5.8
+
+    Returns \c true if the scoped pointer \a lhs is a null pointer.
+
+    \sa QScopedPointer::isNull()
+*/
+
+/*!
+    \fn bool operator==(std::nullptr_t, const QScopedPointer<T, Cleanup> &rhs)
+    \relates QScopedPointer
+    \since 5.8
+
+    Returns \c true if the scoped pointer \a rhs is a null pointer.
+
+    \sa QScopedPointer::isNull()
+*/
+
+/*!
+    \fn bool operator!=(const QScopedPointer<T, Cleanup> &lhs, std::nullptr_t)
+    \relates QScopedPointer
+    \since 5.8
+
+    Returns \c true if the scoped pointer \a lhs is a valid (i.e. a non-null)
+    pointer.
+
+    \sa QScopedPointer::isNull()
+*/
+
+/*!
+    \fn bool operator!=(std::nullptr_t, const QScopedPointer<T, Cleanup> &rhs)
+    \relates QScopedPointer
+    \since 5.8
+
+    Returns \c true if the scoped pointer \a rhs is a valid (i.e. a non-null)
+    pointer.
+
+    \sa QScopedPointer::isNull()
 */
 
 /*!

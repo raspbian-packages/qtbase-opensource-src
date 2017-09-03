@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include <QtCore/QList>
 #include <QtCore/QMargins>
 #include <QtCore/QHash>
@@ -59,7 +60,7 @@
 
 QT_BEGIN_NAMESPACE
 
-#if !defined(QT_NO_STYLE_ANDROID)
+#if QT_CONFIG(style_android)
 
 class Q_WIDGETS_EXPORT QAndroidStyle : public QFusionStyle
 {
@@ -387,7 +388,7 @@ private:
     AndroidCompoundButtonControl *checkBoxControl;
 };
 
-#endif // QT_NO_STYLE_ANDROID
+#endif // style_android
 
 QT_END_NAMESPACE
 

@@ -47,10 +47,6 @@
 #include <QtCore/QVector>
 #include <QtCore/QVarLengthArray>
 
-#ifndef QT_NO_XRENDER
-#include <X11/extensions/Xrender.h>
-#endif
-
 #include <GL/glxext.h>
 
 enum {
@@ -383,6 +379,11 @@ bool qglx_reduceFormat(QSurfaceFormat *format)
 
     if (format->stencilBufferSize() > 0) {
         format->setStencilBufferSize(0);
+        return true;
+    }
+
+    if (format->stereo()) {
+        format->setStereo(false);
         return true;
     }
 

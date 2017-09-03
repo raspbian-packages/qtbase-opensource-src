@@ -124,7 +124,7 @@ protected slots:
 private:
     QFtp *newFtp();
     void addCommand( QFtp::Command, int );
-    bool fileExists( const QString &host, quint16 port, const QString &user, const QString &password, const QString &file, const QString &cdDir = QString::null );
+    bool fileExists( const QString &host, quint16 port, const QString &user, const QString &password, const QString &file, const QString &cdDir = QString() );
     bool dirExists( const QString &host, quint16 port, const QString &user, const QString &password, const QString &cdDir, const QString &dirToCreate );
 
     void renameInit( const QString &host, const QString &user, const QString &password, const QString &createFile );
@@ -276,14 +276,9 @@ void tst_QFtp::init()
 
     inFileDirExistsFunction = false;
 
-#if !defined(Q_OS_WINCE)
     srand(time(0));
     uniqueExtension = QString::number((quintptr)this) + QString::number(rand())
         + QString::number((qulonglong)time(0));
-#else
-    srand(0);
-    uniqueExtension = QString::number((quintptr)this) + QString::number(rand()) + QLatin1Char('0');
-#endif
 }
 
 void tst_QFtp::cleanup()
@@ -1353,11 +1348,7 @@ void tst_QFtp::abort_data()
     QTest::newRow( "get_fluke02" ) << QtNetworkSettings::serverName() << (uint)21 << QString("qtest/rfc3252") << QByteArray();
 
     // Qt/CE test environment has too little memory for this test
-#if !defined(Q_OS_WINCE)
     QByteArray bigData( 10*1024*1024, 0 );
-#else
-    QByteArray bigData( 1*1024*1024, 0 );
-#endif
     bigData.fill( 'B' );
     QTest::newRow( "put_fluke01" ) << QtNetworkSettings::serverName() << (uint)21 << QString("qtest/upload/abort_put") << bigData;
 }

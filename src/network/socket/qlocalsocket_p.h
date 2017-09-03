@@ -51,6 +51,8 @@
 // We mean it.
 //
 
+#include <QtNetwork/private/qtnetworkglobal_p.h>
+
 #ifndef QT_NO_LOCALSOCKET
 
 #include "qlocalsocket.h"
@@ -97,12 +99,12 @@ public:
         QTcpSocket::setSocketError(error);
     }
 
-    inline qint64 readData(char *data, qint64 maxSize)
+    inline qint64 readData(char *data, qint64 maxSize) override
     {
         return QTcpSocket::readData(data, maxSize);
     }
 
-    inline qint64 writeData(const char *data, qint64 maxSize)
+    inline qint64 writeData(const char *data, qint64 maxSize) override
     {
         return QTcpSocket::writeData(data, maxSize);
     }

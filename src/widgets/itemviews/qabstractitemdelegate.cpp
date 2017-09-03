@@ -464,11 +464,13 @@ bool QAbstractItemDelegatePrivate::editorEventFilter(QObject *object, QEvent *ev
         if (editorHandlesKeyEvent(editor, keyEvent))
             return false;
 
+#ifndef QT_NO_SHORTCUT
         if (keyEvent->matches(QKeySequence::Cancel)) {
             // don't commit data
             emit q->closeEditor(editor, QAbstractItemDelegate::RevertModelCache);
             return true;
         }
+#endif
 
         switch (keyEvent->key()) {
         case Qt::Key_Tab:
@@ -519,11 +521,13 @@ bool QAbstractItemDelegatePrivate::editorEventFilter(QObject *object, QEvent *ev
 
             emit q->closeEditor(editor, QAbstractItemDelegate::NoHint);
         }
+#ifndef QT_NO_SHORTCUT
     } else if (event->type() == QEvent::ShortcutOverride) {
         if (static_cast<QKeyEvent*>(event)->matches(QKeySequence::Cancel)) {
             event->accept();
             return true;
         }
+#endif
     }
     return false;
 }
@@ -533,14 +537,18 @@ bool QAbstractItemDelegatePrivate::tryFixup(QWidget *editor)
 #ifndef QT_NO_LINEEDIT
     if (QLineEdit *e = qobject_cast<QLineEdit*>(editor)) {
         if (!e->hasAcceptableInput()) {
+#if QT_CONFIG(validator)
             if (const QValidator *validator = e->validator()) {
                 QString text = e->text();
                 validator->fixup(text);
                 e->setText(text);
             }
+#endif
             return e->hasAcceptableInput();
         }
     }
+#else
+    Q_UNUSED(editor)
 #endif // QT_NO_LINEEDIT
 
     return true;

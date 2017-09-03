@@ -242,6 +242,7 @@ QUnifiedTimer *QUnifiedTimer::instance(bool create)
         inst = unifiedTimer() ? unifiedTimer()->localData() : 0;
     }
 #else
+    Q_UNUSED(create);
     static QUnifiedTimer unifiedTimer;
     inst = &unifiedTimer;
 #endif
@@ -576,6 +577,7 @@ QAnimationTimer *QAnimationTimer::instance(bool create)
         inst = animationTimer() ? animationTimer()->localData() : 0;
     }
 #else
+    Q_UNUSED(create);
     static QAnimationTimer animationTimer;
     inst = &animationTimer;
 #endif
@@ -1482,5 +1484,6 @@ void QAbstractAnimation::updateDirection(QAbstractAnimation::Direction direction
 QT_END_NAMESPACE
 
 #include "moc_qabstractanimation.cpp"
+#include "moc_qabstractanimation_p.cpp"
 
 #endif //QT_NO_ANIMATION

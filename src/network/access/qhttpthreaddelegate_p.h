@@ -52,6 +52,7 @@
 // We mean it.
 //
 
+#include <QtNetwork/private/qtnetworkglobal_p.h>
 #include <QObject>
 #include <QThreadStorage>
 #include <QNetworkProxy>
@@ -111,6 +112,7 @@ public:
     bool isPipeliningUsed;
     bool isSpdyUsed;
     qint64 incomingContentLength;
+    qint64 removedContentLength;
     QNetworkReply::NetworkError incomingErrorCode;
     QString incomingErrorDetail;
 #ifndef QT_NO_BEARERMANAGEMENT
@@ -140,7 +142,7 @@ signals:
     void preSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticator *);
 #endif
     void downloadMetaData(const QList<QPair<QByteArray,QByteArray> > &, int, const QString &, bool,
-                          QSharedPointer<char>, qint64, bool);
+                          QSharedPointer<char>, qint64, qint64, bool);
     void downloadProgress(qint64, qint64);
     void downloadData(const QByteArray &);
     void error(QNetworkReply::NetworkError, const QString &);

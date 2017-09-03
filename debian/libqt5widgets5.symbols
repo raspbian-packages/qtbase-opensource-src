@@ -1,6 +1,6 @@
-# SymbolsHelper-Confirmed: 5.7.1 m68k
+# SymbolsHelper-Confirmed: 5.9.1 amd64 armel armhf hurd-i386 i386 kfreebsd-amd64 m68k mips mipsel powerpc powerpcspe x32
 libQt5Widgets.so.5 libqt5widgets5 #MINVER#
-| libqt5widgets5 #MINVER#, qtbase-abi-5-7-1
+| libqt5widgets5 #MINVER#, qtbase-abi-5-9-0
 * Build-Depends-Package: qtbase5-dev
  Qt_5.0@Qt_5.0 5.6.0~beta
  Qt_5.1@Qt_5.1 5.6.0~beta
@@ -10,6 +10,8 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  Qt_5.5@Qt_5.5 5.6.0~beta
  Qt_5.6@Qt_5.6 5.6.0~beta
  Qt_5.7@Qt_5.7 5.7.0
+ Qt_5.8@Qt_5.8 5.8.0
+ Qt_5.9@Qt_5.9 5.9.0~beta
  Qt_5@Qt_5 5.6.0~beta
  Qt_5_PRIVATE_API@Qt_5_PRIVATE_API 5.6.0~beta 1
  _Z11qFadeEffectP7QWidgeti@Qt_5 5.0.2
@@ -293,6 +295,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN10QUndoGroupD1Ev@Qt_5 5.0.2
  _ZN10QUndoGroupD2Ev@Qt_5 5.0.2
  _ZN10QUndoStack10beginMacroERK7QString@Qt_5 5.0.2
+ _ZN10QUndoStack10resetCleanEv@Qt_5 5.8.0
  _ZN10QUndoStack11qt_metacallEN11QMetaObject4CallEiPPv@Qt_5 5.0.2
  _ZN10QUndoStack11qt_metacastEPKc@Qt_5 5.0.2
  _ZN10QUndoStack12cleanChangedEb@Qt_5 5.0.2
@@ -493,12 +496,18 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN11QFormLayout6takeAtEi@Qt_5 5.0.2
  _ZN11QFormLayout7addItemEP11QLayoutItem@Qt_5 5.0.2
  _ZN11QFormLayout7setItemEiNS_8ItemRoleEP11QLayoutItem@Qt_5 5.0.2
+ _ZN11QFormLayout7takeRowEP7QLayout@Qt_5 5.8.0
+ _ZN11QFormLayout7takeRowEP7QWidget@Qt_5 5.8.0
+ _ZN11QFormLayout7takeRowEi@Qt_5 5.8.0
  _ZN11QFormLayout9insertRowEiP7QLayout@Qt_5 5.0.2
  _ZN11QFormLayout9insertRowEiP7QWidget@Qt_5 5.0.2
  _ZN11QFormLayout9insertRowEiP7QWidgetP7QLayout@Qt_5 5.0.2
  _ZN11QFormLayout9insertRowEiP7QWidgetS1_@Qt_5 5.0.2
  _ZN11QFormLayout9insertRowEiRK7QStringP7QLayout@Qt_5 5.0.2
  _ZN11QFormLayout9insertRowEiRK7QStringP7QWidget@Qt_5 5.0.2
+ _ZN11QFormLayout9removeRowEP7QLayout@Qt_5 5.8.0
+ _ZN11QFormLayout9removeRowEP7QWidget@Qt_5 5.8.0
+ _ZN11QFormLayout9removeRowEi@Qt_5 5.8.0
  _ZN11QFormLayout9setLayoutEiNS_8ItemRoleEP7QLayout@Qt_5 5.0.2
  _ZN11QFormLayout9setWidgetEiNS_8ItemRoleEP7QWidget@Qt_5 5.0.2
  _ZN11QFormLayoutC1EP7QWidget@Qt_5 5.0.2
@@ -700,6 +709,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN11QMainWindow18setToolButtonStyleEN2Qt15ToolButtonStyleE@Qt_5 5.0.2
  _ZN11QMainWindow21setDockNestingEnabledEb@Qt_5 5.0.2
  _ZN11QMainWindow22toolButtonStyleChangedEN2Qt15ToolButtonStyleE@Qt_5 5.0.2
+ _ZN11QMainWindow27tabifiedDockWidgetActivatedEP11QDockWidget@Qt_5 5.8.0
  _ZN11QMainWindow30setUnifiedTitleAndToolBarOnMacEb@Qt_5 5.0.2
  _ZN11QMainWindow5eventEP6QEvent@Qt_5 5.0.2
  _ZN11QMainWindow9setCornerEN2Qt6CornerENS0_14DockWidgetAreaE@Qt_5 5.0.2
@@ -1320,6 +1330,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN12QTextBrowserD0Ev@Qt_5 5.0.2
  _ZN12QTextBrowserD1Ev@Qt_5 5.0.2
  _ZN12QTextBrowserD2Ev@Qt_5 5.0.2
+ _ZN12QUndoCommand11setObsoleteEb@Qt_5 5.9.0~beta
  _ZN12QUndoCommand4redoEv@Qt_5 5.0.2
  _ZN12QUndoCommand4undoEv@Qt_5 5.0.2
  _ZN12QUndoCommand7setTextERK7QString@Qt_5 5.0.2
@@ -2455,6 +2466,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN15QSystemTrayIcon11qt_metacallEN11QMetaObject4CallEiPPv@Qt_5 5.0.2
  _ZN15QSystemTrayIcon11qt_metacastEPKc@Qt_5 5.0.2
  _ZN15QSystemTrayIcon11showMessageERK7QStringS2_NS_11MessageIconEi@Qt_5 5.0.2
+ _ZN15QSystemTrayIcon11showMessageERK7QStringS2_RK5QIconi@Qt_5 5.9.0~beta
  _ZN15QSystemTrayIcon14messageClickedEv@Qt_5 5.0.2
  _ZN15QSystemTrayIcon14setContextMenuEP5QMenu@Qt_5 5.0.2
  _ZN15QSystemTrayIcon16staticMetaObjectE@Qt_5 5.0.2
@@ -3127,6 +3139,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN18QWidgetTextControl11setDocumentEP13QTextDocument@Qt_5_PRIVATE_API 5.0.2 1
  _ZN18QWidgetTextControl11textChangedEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZN18QWidgetTextControl12drawContentsEP8QPainterRK6QRectFP7QWidget@Qt_5_PRIVATE_API 5.0.2 1
+ _ZN18QWidgetTextControl12isPreeditingEv@Qt_5_PRIVATE_API 5.8.0 1
  _ZN18QWidgetTextControl12loadResourceEiRK4QUrl@Qt_5_PRIVATE_API 5.0.2 1
  _ZN18QWidgetTextControl12processEventEP6QEventRK7QMatrixP7QWidget@Qt_5_PRIVATE_API 5.0.2 1
  _ZN18QWidgetTextControl12processEventEP6QEventRK7QPointFP7QWidget@Qt_5_PRIVATE_API 5.0.2 1
@@ -3260,7 +3273,6 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN19QApplicationPrivate18dispatchEnterLeaveEP7QWidgetS1_RK7QPointF@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate18notifyThemeChangedEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate18tryCloseAllWindowsEv@Qt_5_PRIVATE_API 5.3.0 1
- _ZN19QApplicationPrivate18wheel_scroll_linesE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate19hidden_focus_widgetE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate20initializeMultitouchEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate20translateTouchCancelEP12QTouchDevicem@Qt_5_PRIVATE_API 5.0.2 1
@@ -3287,7 +3299,6 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN19QApplicationPrivate7sys_palE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate8set_fontE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate8sys_fontE@Qt_5_PRIVATE_API 5.0.2 1
- _ZN19QApplicationPrivate9app_cspecE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate9app_strutE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate9app_styleE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN19QApplicationPrivate9openPopupEP7QWidget@Qt_5_PRIVATE_API 5.0.2 1
@@ -4310,6 +4321,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN7QTabBar17mouseReleaseEventEP11QMouseEvent@Qt_5 5.0.2
  _ZN7QTabBar17tabCloseRequestedEi@Qt_5 5.0.2
  _ZN7QTabBar19tabBarDoubleClickedEi@Qt_5 5.2.0~alpha1
+ _ZN7QTabBar20setAccessibleTabNameEiRK7QString@Qt_5 5.8.0
  _ZN7QTabBar20setUsesScrollButtonsEb@Qt_5 5.0.2
  _ZN7QTabBar22setChangeCurrentOnDragEb@Qt_5 5.4.0
  _ZN7QTabBar28setSelectionBehaviorOnRemoveENS_17SelectionBehaviorE@Qt_5 5.0.2
@@ -4379,6 +4391,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN7QWidget13setFocusProxyEPS_@Qt_5 5.0.2
  _ZN7QWidget13setSizePolicyE11QSizePolicy@Qt_5 5.0.2
  _ZN7QWidget13setStyleSheetERK7QString@Qt_5 5.0.2
+ _ZN7QWidget13setWindowFlagEN2Qt10WindowTypeEb@Qt_5 5.9.0~beta
  _ZN7QWidget13setWindowIconERK5QIcon@Qt_5 5.0.2
  _ZN7QWidget13setWindowRoleERK7QString@Qt_5 5.0.2
  _ZN7QWidget13showMaximizedEv@Qt_5 5.0.2
@@ -5063,6 +5076,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZN9QSplitter12insertWidgetEiP7QWidget@Qt_5 5.0.2
  _ZN9QSplitter12moveSplitterEii@Qt_5 5.0.2
  _ZN9QSplitter12restoreStateERK10QByteArray@Qt_5 5.0.2
+ _ZN9QSplitter13replaceWidgetEiP7QWidget@Qt_5 5.9.0~beta
  _ZN9QSplitter13setRubberBandEi@Qt_5 5.0.2
  _ZN9QSplitter13splitterMovedEii@Qt_5 5.0.2
  _ZN9QSplitter14setCollapsibleEib@Qt_5 5.0.2
@@ -5446,6 +5460,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZNK11QFileDialog16confirmOverwriteEv@Qt_5 5.0.2
  _ZNK11QFileDialog16supportedSchemesEv@Qt_5 5.6.0~beta
  _ZNK11QFileDialog18selectedNameFilterEv@Qt_5 5.0.2
+ _ZNK11QFileDialog22selectedMimeTypeFilterEv@Qt_5 5.9.0~beta
  _ZNK11QFileDialog26isNameFilterDetailsVisibleEv@Qt_5 5.0.2
  _ZNK11QFileDialog6filterEv@Qt_5 5.0.2
  _ZNK11QFileDialog7historyEv@Qt_5 5.0.2
@@ -5878,6 +5893,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZNK12QTextBrowser9openLinksEv@Qt_5 5.0.2
  _ZNK12QUndoCommand10actionTextEv@Qt_5 5.0.2
  _ZNK12QUndoCommand10childCountEv@Qt_5 5.0.2
+ _ZNK12QUndoCommand10isObsoleteEv@Qt_5 5.9.0~beta
  _ZNK12QUndoCommand2idEv@Qt_5 5.0.2
  _ZNK12QUndoCommand4textEv@Qt_5 5.0.2
  _ZNK12QUndoCommand5childEi@Qt_5 5.0.2
@@ -7115,6 +7131,7 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZNK7QTabBar12tabsClosableEv@Qt_5 5.0.2
  _ZNK7QTabBar15initStyleOptionEP15QStyleOptionTabi@Qt_5 5.0.2
  _ZNK7QTabBar15minimumSizeHintEv@Qt_5 5.0.2
+ _ZNK7QTabBar17accessibleTabNameEi@Qt_5 5.8.0
  _ZNK7QTabBar17usesScrollButtonsEv@Qt_5 5.0.2
  _ZNK7QTabBar18minimumTabSizeHintEi@Qt_5 5.0.2
  _ZNK7QTabBar19changeCurrentOnDragEv@Qt_5 5.4.0
@@ -7564,13 +7581,13 @@ libQt5Widgets.so.5 libqt5widgets5 #MINVER#
  _ZNK9QUndoView5groupEv@Qt_5 5.0.2
  _ZNK9QUndoView5stackEv@Qt_5 5.0.2
  _ZNK9QUndoView9cleanIconEv@Qt_5 5.0.2
- (optional=templinst|arch=!arm64)_ZNSt17_Temporary_bufferIP5QRectS0_EC1ES1_S1_@Qt_5 5.7.0
- (optional=templinst|arch=!arm64)_ZNSt17_Temporary_bufferIP5QRectS0_EC2ES1_S1_@Qt_5 5.7.0
+ (optional=templinst|arch=!amd64 !arm64 !kfreebsd-amd64 !x32)_ZNSt17_Temporary_bufferIP5QRectS0_EC1ES1_S1_@Qt_5 5.7.0
+ (optional=templinst|arch=!amd64 !arm64 !kfreebsd-amd64 !x32)_ZNSt17_Temporary_bufferIP5QRectS0_EC2ES1_S1_@Qt_5 5.7.0
  (optional=templinst)_ZNSt3_V28__rotateIP5QRectEET_S3_S3_S3_St26random_access_iterator_tag@Qt_5 5.7.0
  (optional=templinst)_ZNSt3_V28__rotateIPiEET_S2_S2_S2_St26random_access_iterator_tag@Qt_5 5.7.0
- (optional=templinst)_ZNSt6vectorIN18QWidgetLineControl7CommandESaIS1_EE19_M_emplace_back_auxIJS1_EEEvDpOT_@Qt_5_PRIVATE_API 5.7.1 1
+ (optional=templinst)_ZNSt6vectorIN18QWidgetLineControl7CommandESaIS1_EE17_M_realloc_insertIJRKS1_EEEvN9__gnu_cxx17__normal_iteratorIPS1_S3_EEDpOT_@Qt_5_PRIVATE_API 5.9.1 1
  (optional=templinst|arch=armel armhf hurd-i386 i386 kfreebsd-i386 m68k mips mipsel powerpc powerpcspe)_ZNSt6vectorIN18QWidgetLineControl7CommandESaIS1_EE8_M_eraseEN9__gnu_cxx17__normal_iteratorIPS1_S3_EES7_@Qt_5_PRIVATE_API 5.7.1 1
- (optional=templinst|arch=armel armhf hurd-i386 i386 kfreebsd-i386 m68k mips mipsel powerpc powerpcspe)_ZSt4swapIN8QVariant7PrivateEENSt9enable_ifIXsrSt6__and_IJSt21is_move_constructibleIT_ESt18is_move_assignableIS5_EEE5valueEvE4typeERS5_SC_@Qt_5 5.7.1
+ (optional=templinst|arch=armel armhf hurd-i386 i386 m68k mips mipsel powerpc powerpcspe)_ZSt4swapIN8QVariant7PrivateEENSt9enable_ifIXsrSt6__and_IJSt6__not_ISt15__is_tuple_likeIT_EESt21is_move_constructibleIS6_ESt18is_move_assignableIS6_EEE5valueEvE4typeERS6_SG_@Qt_5 5.9.1
  _ZTI10QBoxLayout@Qt_5 5.0.2
  _ZTI10QCompleter@Qt_5 5.0.2
  _ZTI10QLCDNumber@Qt_5 5.0.2

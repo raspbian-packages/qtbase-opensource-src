@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qgraphicsproxywidget.h"
 #include "private/qgraphicswidget_p.h"
 
@@ -79,7 +80,7 @@ public:
     void embedSubWindow(QWidget *);
     void unembedSubWindow(QWidget *);
 
-    bool isProxyWidget() const;
+    bool isProxyWidget() const override;
 
     QPointer<QWidget> widget;
     QPointer<QWidget> lastWidgetUnderMouse;

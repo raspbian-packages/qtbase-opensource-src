@@ -202,8 +202,8 @@ void tst_QSemaphore::tryAcquireWithTimeout_data()
 {
     QTest::addColumn<int>("timeout");
 
-    QTest::newRow("1s") << 1000;
-    QTest::newRow("10s") << 10000;
+    QTest::newRow("0.2s") << 200;
+    QTest::newRow("2s") << 2000;
 }
 
 void tst_QSemaphore::tryAcquireWithTimeout()
@@ -212,7 +212,7 @@ void tst_QSemaphore::tryAcquireWithTimeout()
 
     // timers are not guaranteed to be accurate down to the last millisecond,
     // so we permit the elapsed times to be up to this far from the expected value.
-    int fuzz = 50;
+    int fuzz = 50 + (timeout / 20);
 
     QSemaphore semaphore;
     QElapsedTimer time;
@@ -350,15 +350,9 @@ const int AlphabetSize = sizeof(alphabet) - 1;
 const int BufferSize = 4096; // GCD of BufferSize and alphabet size must be 1
 char buffer[BufferSize];
 
-#ifndef Q_OS_WINCE
 const int ProducerChunkSize = 3;
 const int ConsumerChunkSize = 7;
 const int Multiplier = 10;
-#else
-const int ProducerChunkSize = 2;
-const int ConsumerChunkSize = 5;
-const int Multiplier = 3;
-#endif
 
 // note: the code depends on the fact that DataSize is a multiple of
 // ProducerChunkSize, ConsumerChunkSize, and BufferSize
@@ -373,16 +367,18 @@ public:
     void run();
 };
 
+static const int Timeout = 60 * 1000; // 1min
+
 void Producer::run()
 {
     for (int i = 0; i < DataSize; ++i) {
-        freeSpace.acquire();
+        QVERIFY(freeSpace.tryAcquire(1, Timeout));
         buffer[i % BufferSize] = alphabet[i % AlphabetSize];
         usedSpace.release();
     }
     for (int i = 0; i < DataSize; ++i) {
         if ((i % ProducerChunkSize) == 0)
-            freeSpace.acquire(ProducerChunkSize);
+            QVERIFY(freeSpace.tryAcquire(ProducerChunkSize, Timeout));
         buffer[i % BufferSize] = alphabet[i % AlphabetSize];
         if ((i % ProducerChunkSize) == (ProducerChunkSize - 1))
             usedSpace.release(ProducerChunkSize);

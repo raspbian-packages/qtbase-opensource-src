@@ -44,6 +44,7 @@
 #include <QtCore/QVariant>
 #include <QtCore/QStringList>
 #include <QtCore/qfileinfo.h>
+#include <qicon.h>
 #include <qpalette.h>
 #include <qtextformat.h>
 #include <private/qiconloader_p.h>
@@ -79,6 +80,10 @@ QT_BEGIN_NAMESPACE
     \value MouseDoubleClickInterval (int) Mouse double click interval in ms,
                                     overriding QPlatformIntegration::styleHint.
 
+    \value MouseDoubleClickDistance (int) The maximum distance in logical pixels which the mouse can travel
+                        between clicks in order for the click sequence to be handled as a double click.
+                        The default value is 5 logical pixels.
+
     \value MousePressAndHoldInterval (int) Mouse press and hold interval in ms,
                                     overriding QPlatformIntegration::styleHint.
 
@@ -87,6 +92,9 @@ QT_BEGIN_NAMESPACE
 
     \value StartDragTime (int) Start drag time in ms,
                                overriding QPlatformIntegration::styleHint.
+
+    \value WheelScrollLines (int) The number of lines to scroll a widget, when the mouse wheel is rotated.
+                        The default value is 3.  \sa QApplication::wheelScrollLines()
 
     \value KeyboardAutoRepeatRate (int) Keyboard auto repeat rate,
                                   overriding QPlatformIntegration::styleHint.
@@ -148,10 +156,16 @@ QT_BEGIN_NAMESPACE
 
     \value ContextMenuOnMouseRelease (bool) Whether the context menu should be shown on mouse release.
 
+    \value TouchDoubleTapDistance (int) The maximum distance in logical pixels which a touchpoint can travel
+                        between taps in order for the tap sequence to be handled as a double tap.
+                        The default value is double the MouseDoubleClickDistance, or 10 logical pixels
+                        if that is not specified.
+
     \sa themeHint(), QStyle::pixelMetric()
 */
 
 
+#ifndef QT_NO_SHORTCUT
 // Table of key bindings. It must be sorted on key sequence:
 // The integer value of VK_KEY | Modifier Keys (e.g., VK_META, and etc.)
 // A priority of 1 indicates that this is the primary key binding when multiple are defined.
@@ -335,6 +349,7 @@ const QKeyBinding QPlatformThemePrivate::keyBindings[] = {
 };
 
 const uint QPlatformThemePrivate::numberOfKeyBindings = sizeof(QPlatformThemePrivate::keyBindings)/(sizeof(QKeyBinding));
+#endif
 
 QPlatformThemePrivate::QPlatformThemePrivate()
         : systemPalette(0)
@@ -405,14 +420,22 @@ QPixmap QPlatformTheme::standardPixmap(StandardPixmap sp, const QSizeF &size) co
     return QPixmap();
 }
 
-QPixmap QPlatformTheme::fileIconPixmap(const QFileInfo &fileInfo, const QSizeF &size,
-                                       QPlatformTheme::IconOptions iconOptions) const
+/*!
+    \brief Return an icon for \a fileInfo, observing \a iconOptions.
+
+    This function is queried by QFileIconProvider and similar classes to obtain
+    an icon for a file. If it does not return a non-null icon, fileIconPixmap()
+    is queried for a specific size.
+
+    \since 5.8
+*/
+
+QIcon QPlatformTheme::fileIcon(const QFileInfo &fileInfo, QPlatformTheme::IconOptions iconOptions) const
 {
     Q_UNUSED(fileInfo);
-    Q_UNUSED(size);
     Q_UNUSED(iconOptions);
     // TODO Should return QCommonStyle pixmaps?
-    return QPixmap();
+    return QIcon();
 }
 
 QVariant QPlatformTheme::themeHint(ThemeHint hint) const
@@ -444,6 +467,8 @@ QVariant QPlatformTheme::themeHint(ThemeHint hint) const
         return QGuiApplicationPrivate::platformIntegration()->styleHint(QPlatformIntegration::MousePressAndHoldInterval);
     case QPlatformTheme::ItemViewActivateItemOnSingleClick:
         return QGuiApplicationPrivate::platformIntegration()->styleHint(QPlatformIntegration::ItemViewActivateItemOnSingleClick);
+    case QPlatformTheme::UiEffects:
+        return QGuiApplicationPrivate::platformIntegration()->styleHint(QPlatformIntegration::UiEffects);
     default:
         return QPlatformTheme::defaultThemeHint(hint);
     }
@@ -520,6 +545,14 @@ QVariant QPlatformTheme::defaultThemeHint(ThemeHint hint)
         }
     case WheelScrollLines:
         return QVariant(3);
+    case TouchDoubleTapDistance:
+        {
+            bool ok = false;
+            int dist = qEnvironmentVariableIntValue("QT_DBL_TAP_DIST", &ok);
+            if (!ok)
+                dist = defaultThemeHint(MouseDoubleClickDistance).toInt(&ok) * 2;
+            return QVariant(ok ? dist : 10);
+        }
     }
     return QVariant();
 }
@@ -580,6 +613,7 @@ static inline int maybeSwapShortcut(int shortcut)
 }
 #endif
 
+#ifndef QT_NO_SHORTCUT
 // mixed-mode predicate: all of these overloads are actually needed (but not all for every compiler)
 struct ByStandardKey {
     typedef bool result_type;
@@ -630,6 +664,7 @@ QList<QKeySequence> QPlatformTheme::keyBindings(QKeySequence::StandardKey key) c
 
     return list;
 }
+#endif
 
 /*!
    Returns the text of a standard \a button.
@@ -641,6 +676,19 @@ QList<QKeySequence> QPlatformTheme::keyBindings(QKeySequence::StandardKey key) c
 QString QPlatformTheme::standardButtonText(int button) const
 {
     return QPlatformTheme::defaultStandardButtonText(button);
+}
+
+/*!
+   Returns the mnemonic that should be used for a standard \a button.
+
+  \since 5.9
+  \sa QPlatformDialogHelper::StandardButton
+ */
+
+QKeySequence QPlatformTheme::standardButtonShortcut(int button) const
+{
+    Q_UNUSED(button)
+    return QKeySequence();
 }
 
 QString QPlatformTheme::defaultStandardButtonText(int button)
@@ -727,10 +775,12 @@ unsigned QPlatformThemePrivate::currentKeyPlatforms()
 {
     const uint keyboardScheme = QGuiApplicationPrivate::platformTheme()->themeHint(QPlatformTheme::KeyboardScheme).toInt();
     unsigned result = 1u << keyboardScheme;
+#ifndef QT_NO_SHORTCUT
     if (keyboardScheme == QPlatformTheme::KdeKeyboardScheme
         || keyboardScheme == QPlatformTheme::GnomeKeyboardScheme
         || keyboardScheme == QPlatformTheme::CdeKeyboardScheme)
         result |= KB_X11;
+#endif
     return result;
 }
 

@@ -848,14 +848,15 @@ QAbstractOpenGLFunctions *QOpenGLContext::versionFunctions(const QOpenGLVersionP
 
     // Create object if suitable one not cached
     QAbstractOpenGLFunctions* funcs = 0;
-    if (!d->versionFunctions.contains(vp)) {
+    auto it = d->versionFunctions.constFind(vp);
+    if (it == d->versionFunctions.constEnd()) {
         funcs = QOpenGLVersionFunctionsFactory::create(vp);
         if (funcs) {
             funcs->setOwningContext(this);
             d->versionFunctions.insert(vp, funcs);
         }
     } else {
-        funcs = d->versionFunctions.value(vp);
+        funcs = it.value();
     }
 
     if (funcs && QOpenGLContext::currentContext() == this)
@@ -940,13 +941,20 @@ GLuint QOpenGLContext::defaultFramebufferObject() const
 
     If \a surface is 0 this is equivalent to calling doneCurrent().
 
-    Do not call this function from a different thread than the one the
+    Avoid calling this function from a different thread than the one the
     QOpenGLContext instance lives in. If you wish to use QOpenGLContext from a
     different thread you should first call make sure it's not current in the
     current thread, by calling doneCurrent() if necessary. Then call
     moveToThread(otherThread) before using it in the other thread.
 
-    \sa functions(), doneCurrent()
+    By default Qt employs a check that enforces the above condition on the
+    thread affinity. It is still possible to disable this check by setting the
+    \c{Qt::AA_DontCheckOpenGLContextThreadAffinity} application attribute. Be
+    sure to understand the consequences of using QObjects from outside
+    the thread they live in, as explained in the
+    \l{QObject#Thread Affinity}{QObject thread affinity} documentation.
+
+    \sa functions(), doneCurrent(), Qt::AA_DontCheckOpenGLContextThreadAffinity
 */
 bool QOpenGLContext::makeCurrent(QSurface *surface)
 {
@@ -954,8 +962,10 @@ bool QOpenGLContext::makeCurrent(QSurface *surface)
     if (!isValid())
         return false;
 
-    if (Q_UNLIKELY(thread() != QThread::currentThread()))
+    if (Q_UNLIKELY(!qApp->testAttribute(Qt::AA_DontCheckOpenGLContextThreadAffinity)
+                   && thread() != QThread::currentThread())) {
         qFatal("Cannot make QOpenGLContext current in a different thread");
+    }
 
     if (!surface) {
         doneCurrent();
@@ -972,6 +982,40 @@ bool QOpenGLContext::makeCurrent(QSurface *surface)
     QOpenGLContext *previous = QOpenGLContextPrivate::setCurrentContext(this);
 
     if (d->platformGLContext->makeCurrent(surface->surfaceHandle())) {
+        static bool needsWorkaroundSet = false;
+        static bool needsWorkaround = false;
+
+        if (!needsWorkaroundSet) {
+            QByteArray env;
+#ifdef Q_OS_ANDROID
+            env = qgetenv(QByteArrayLiteral("QT_ANDROID_DISABLE_GLYPH_CACHE_WORKAROUND"));
+            needsWorkaround = env.isEmpty() || env == QByteArrayLiteral("0") || env == QByteArrayLiteral("false");
+#endif
+            env = qgetenv(QByteArrayLiteral("QT_ENABLE_GLYPH_CACHE_WORKAROUND"));
+            if (env == QByteArrayLiteral("1") || env == QByteArrayLiteral("true"))
+                needsWorkaround = true;
+
+            if (!needsWorkaround) {
+                const char *rendererString = reinterpret_cast<const char *>(functions()->glGetString(GL_RENDERER));
+                if (rendererString)
+                    needsWorkaround =
+                            qstrncmp(rendererString, "Mali-4xx", 6) == 0 // Mali-400, Mali-450
+                            || qstrncmp(rendererString, "Adreno (TM) 2xx", 13) == 0 // Adreno 200, 203, 205
+                            || qstrncmp(rendererString, "Adreno 2xx", 8) == 0 // Same as above but without the '(TM)'
+                            || qstrncmp(rendererString, "Adreno (TM) 30x", 14) == 0 // Adreno 302, 305
+                            || qstrncmp(rendererString, "Adreno 30x", 9) == 0 // Same as above but without the '(TM)'
+                            || qstrncmp(rendererString, "Adreno (TM) 4xx", 13) == 0 // Adreno 405, 418, 420, 430
+                            || qstrncmp(rendererString, "Adreno 4xx", 8) == 0 // Same as above but without the '(TM)'
+                            || qstrcmp(rendererString, "GC800 core") == 0
+                            || qstrcmp(rendererString, "GC1000 core") == 0
+                            || qstrcmp(rendererString, "Immersion.16") == 0;
+            }
+            needsWorkaroundSet = true;
+        }
+
+        if (needsWorkaround)
+            d->workaround_brokenFBOReadBack = true;
+
         d->surface = surface;
 
         d->shareGroup->d_func()->deletePendingResources(this);

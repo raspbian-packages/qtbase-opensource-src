@@ -83,9 +83,10 @@ public:
     void init();
 
     QString appName() const;
+    QString appVersion() const;
 
-#ifdef Q_OS_MAC
-    static QString macMenuBarName();
+#ifdef Q_OS_DARWIN
+    static QString infoDictionaryStringProperty(const QString &propertyName);
 #endif
 
     static void initLocale();
@@ -145,6 +146,8 @@ public:
     static inline void clearApplicationFilePath() { delete cachedApplicationFilePath; cachedApplicationFilePath = 0; }
 
 #ifndef QT_NO_QOBJECT
+    void execCleanup();
+
     bool in_exec;
     bool aboutToQuitEmitted;
     bool threadData_clean;

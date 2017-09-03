@@ -52,11 +52,11 @@
 // We mean it.
 //
 
-#include "QtCore/qglobal.h"
+#include "QtCore/private/qglobal_p.h"
 #include <cmath>
 #include <limits>
 
-#if defined(Q_CC_MSVC) && !defined(Q_OS_WINCE)
+#if defined(Q_CC_MSVC)
 #  include <intrin.h>
 #elif defined(Q_CC_INTEL)
 #  include <immintrin.h>    // for _addcarry_u<nn>
@@ -66,9 +66,10 @@
 #include <float.h>
 #endif
 
-#if !defined(Q_CC_MSVC) && (defined(Q_OS_QNX) || defined(Q_CC_INTEL) || !defined(__cplusplus))
+#if !defined(Q_CC_MSVC) && (defined(Q_OS_QNX) || defined(Q_CC_INTEL))
 #  include <math.h>
-#  define QT_MATH_H_DEFINES_MACROS
+#  ifdef isnan
+#    define QT_MATH_H_DEFINES_MACROS
 QT_BEGIN_NAMESPACE
 namespace qnumeric_std_wrapper {
 // the 'using namespace std' below is cases where the stdlib already put the math.h functions in the std namespace and undefined the macros.
@@ -81,23 +82,17 @@ static inline bool math_h_isfinite(float f) { using namespace std; return isfini
 }
 QT_END_NAMESPACE
 // These macros from math.h conflict with the real functions in the std namespace.
-#undef signbit
-#undef isnan
-#undef isinf
-#undef isfinite
+#    undef signbit
+#    undef isnan
+#    undef isinf
+#    undef isfinite
+#  endif // defined(isnan)
 #endif
 
 QT_BEGIN_NAMESPACE
 
 namespace qnumeric_std_wrapper {
-#if defined(Q_CC_MSVC) && _MSC_VER < 1800
-static inline bool isnan(double d) { return !!_isnan(d); }
-static inline bool isinf(double d) { return !_finite(d) && !_isnan(d); }
-static inline bool isfinite(double d) { return !!_finite(d); }
-static inline bool isnan(float f) { return !!_isnan(f); }
-static inline bool isinf(float f) { return !_finite(f) && !_isnan(f); }
-static inline bool isfinite(float f) { return !!_finite(f); }
-#elif defined(QT_MATH_H_DEFINES_MACROS)
+#if defined(QT_MATH_H_DEFINES_MACROS)
 #  undef QT_MATH_H_DEFINES_MACROS
 static inline bool isnan(double d) { return math_h_isnan(d); }
 static inline bool isinf(double d) { return math_h_isinf(d); }
@@ -172,7 +167,7 @@ static inline bool qt_is_finite(float f)
 // Unsigned overflow math
 //
 namespace {
-template <typename T> inline typename QtPrivate::QEnableIf<QtPrivate::is_unsigned<T>::value, bool>::Type
+template <typename T> inline typename std::enable_if<std::is_unsigned<T>::value, bool>::type
 add_overflow(T v1, T v2, T *r)
 {
     // unsigned additions are well-defined
@@ -180,7 +175,7 @@ add_overflow(T v1, T v2, T *r)
     return v1 > T(v1 + v2);
 }
 
-template <typename T> inline typename QtPrivate::QEnableIf<QtPrivate::is_unsigned<T>::value, bool>::Type
+template <typename T> inline typename std::enable_if<std::is_unsigned<T>::value, bool>::type
 mul_overflow(T v1, T v2, T *r)
 {
     // use the next biggest type

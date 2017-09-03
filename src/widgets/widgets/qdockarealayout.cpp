@@ -266,6 +266,16 @@ bool QDockAreaLayoutInfo::isEmpty() const
     return next(-1) == -1;
 }
 
+bool QDockAreaLayoutInfo::onlyHasPlaceholders() const
+{
+    for (const QDockAreaLayoutItem &item : item_list) {
+        if (!item.placeHolderItem)
+            return false;
+    }
+
+    return true;
+}
+
 QSize QDockAreaLayoutInfo::minimumSize() const
 {
     if (isEmpty())
@@ -1493,8 +1503,10 @@ bool QDockAreaLayoutInfo::hasFixedSize() const
     return perp(o, minimumSize()) == perp(o, maximumSize());
 }
 
-
-void QDockAreaLayoutInfo::apply(bool animate)
+/*! \internal
+    Applies the layout and returns the activated QDockWidget or nullptr.
+ */
+QDockWidget *QDockAreaLayoutInfo::apply(bool animate)
 {
     QWidgetAnimator &widgetAnimator = mainWindowLayout()->widgetAnimator;
 
@@ -1533,6 +1545,8 @@ void QDockAreaLayoutInfo::apply(bool animate)
     }
 #endif // QT_NO_TABBAR
 
+    QDockWidget *activated = nullptr;
+
     for (int i = 0; i < item_list.size(); ++i) {
         QDockAreaLayoutItem &item = item_list[i];
 
@@ -1561,6 +1575,7 @@ void QDockAreaLayoutInfo::apply(bool animate)
             } else if (r.isValid()
                         && (geo.right() < 0 || geo.bottom() < 0)) {
                 emit dw->visibilityChanged(true);
+                activated = dw;
             }
         }
     }
@@ -1568,6 +1583,8 @@ void QDockAreaLayoutInfo::apply(bool animate)
     if (*sep == 1)
         updateSeparatorWidgets();
 #endif //QT_NO_TABBAR
+
+    return activated;
 }
 
 static void paintSep(QPainter *p, QWidget *w, const QRect &r, Qt::Orientation o, bool mouse_over)
@@ -1928,7 +1945,7 @@ bool QDockAreaLayoutInfo::restoreState(QDataStream &stream, QList<QDockWidget*> 
                 QDockAreaLayoutItem item(new QDockWidgetItem(widget));
                 if (flags & StateFlagFloating) {
                     bool drawer = false;
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC // drawer support
+#if 0 // Used to be included in Qt4 for Q_WS_MAC // drawer support
                     extern bool qt_mac_is_macdrawer(const QWidget *); //qwidget_mac.cpp
                     extern bool qt_mac_set_drawer_preferred_edge(QWidget *, Qt::DockWidgetArea); //qwidget_mac.cpp
                     drawer = qt_mac_is_macdrawer(widget);
@@ -1943,7 +1960,7 @@ bool QDockAreaLayoutInfo::restoreState(QDataStream &stream, QList<QDockWidget*> 
                     int x, y, w, h;
                     stream >> x >> y >> w >> h;
 
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC // drawer support
+#if 0 // Used to be included in Qt4 for Q_WS_MAC // drawer support
                     if (drawer) {
                         mainWindow->window()->createWinId();
                         widget->window()->createWinId();
@@ -2043,7 +2060,7 @@ void QDockAreaLayoutInfo::updateSeparatorWidgets() const
         }
         j++;
 
-#ifndef Q_DEAD_CODE_FROM_QT4_MAC
+#if 1 // Used to be excluded in Qt4 for Q_WS_MAC
         sepWidget->raise();
 #endif
         QRect sepRect = separatorRect(i).adjusted(-2, -2, 2, 2);
@@ -2075,15 +2092,15 @@ void QDockAreaLayoutInfo::reparentWidgets(QWidget *parent)
         const QDockAreaLayoutItem &item = item_list.at(i);
         if (item.flags & QDockAreaLayoutItem::GapItem)
             continue;
-        if (item.skip())
-            continue;
         if (item.subinfo)
             item.subinfo->reparentWidgets(parent);
         if (item.widgetItem) {
             QWidget *w = item.widgetItem->widget();
+            if (qobject_cast<QDockWidgetGroupWindow *>(w))
+                continue;
             if (w->parent() != parent) {
                 bool hidden = w->isHidden();
-                w->setParent(parent);
+                w->setParent(parent, w->windowFlags());
                 if (!hidden)
                     w->show();
             }
@@ -2588,10 +2605,16 @@ bool QDockAreaLayout::insertGap(const QList<int> &path, QLayoutItem *dockWidgetI
 
 QLayoutItem *QDockAreaLayout::plug(const QList<int> &path)
 {
+#if QT_CONFIG(tabbar)
     Q_ASSERT(!path.isEmpty());
     const int index = path.first();
     Q_ASSERT(index >= 0 && index < QInternal::DockCount);
-    return docks[index].plug(path.mid(1));
+    QLayoutItem *item = docks[index].plug(path.mid(1));
+    docks[index].reparentWidgets(mainWindow);
+    return item;
+#else
+    return nullptr;
+#endif
 }
 
 QLayoutItem *QDockAreaLayout::unplug(const QList<int> &path)
@@ -3078,7 +3101,7 @@ bool QDockAreaLayout::restoreDockWidget(QDockWidget *dockWidget)
         dockWidget->d_func()->setWindowState(true, true, r);
     }
     dockWidget->setVisible(!placeHolder->hidden);
-#ifdef Q_DEAD_CODE_FROM_QT4_X11
+#if 0 // Used to be included in Qt4 for Q_WS_X11
     if (placeHolder->window) // gets rid of the X11BypassWindowManager window flag
         dockWidget->d_func()->setWindowState(true);
 #endif
@@ -3158,6 +3181,7 @@ void QDockAreaLayout::resizeDocks(const QList<QDockWidget *> &docks,
 
         while (path.size() > 1) {
             QDockAreaLayoutInfo *info = this->info(path);
+#if QT_CONFIG(tabbar)
             if (!info->tabbed && info->o == o) {
                 info->item_list[path.constLast()].size = size;
                 int totalSize = 0;
@@ -3170,6 +3194,7 @@ void QDockAreaLayout::resizeDocks(const QList<QDockWidget *> &docks,
                 }
                 size = totalSize;
             }
+#endif // QT_CONFIG(tabbar)
             path.removeLast();
         }
 
@@ -3309,7 +3334,7 @@ void QDockAreaLayout::updateSeparatorWidgets() const
         }
         j++;
 
-#ifndef Q_DEAD_CODE_FROM_QT4_MAC
+#if 1 // Used to be excluded in Qt4 for Q_WS_MAC
         sepWidget->raise();
 #endif
         QRect sepRect = separatorRect(i).adjusted(-2, -2, 2, 2);

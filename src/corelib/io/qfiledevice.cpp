@@ -328,6 +328,9 @@ void QFileDevice::close()
     d->lastWasWrite = false;
     d->writeBuffer.clear();
 
+    // reset cached size
+    d->cachedSize = 0;
+
     // keep earlier error from flush
     if (d->fileEngine->close() && flushed)
         unsetError();
@@ -736,3 +739,7 @@ bool QFileDevice::unmap(uchar *address)
 }
 
 QT_END_NAMESPACE
+
+#ifndef QT_NO_QOBJECT
+#include "moc_qfiledevice.cpp"
+#endif

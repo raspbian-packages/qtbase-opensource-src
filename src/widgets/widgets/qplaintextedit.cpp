@@ -811,7 +811,7 @@ void QPlainTextEditPrivate::init(const QString &txt)
     viewport->setCursor(Qt::IBeamCursor);
 #endif
     originalOffsetY = 0;
-#ifdef Q_DEAD_CODE_FROM_QT4_WIN
+#if 0 // Used to be included in Qt4 for Q_WS_WIN
     setSingleFingerPanEnabled(true);
 #endif
 }
@@ -1978,7 +1978,7 @@ void QPlainTextEdit::paintEvent(QPaintEvent *e)
             }
 
 
-            if (!placeholderText().isEmpty() && document()->isEmpty()) {
+            if (!placeholderText().isEmpty() && document()->isEmpty() && layout->preeditAreaText().isEmpty()) {
               Q_D(QPlainTextEdit);
               QColor col = d->control->palette().text().color();
               col.setAlpha(128);

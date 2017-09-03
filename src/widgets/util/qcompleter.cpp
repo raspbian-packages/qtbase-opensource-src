@@ -480,7 +480,7 @@ QMatchData QCompletionEngine::filterHistory()
     for (int i = 0; i < source->rowCount(); i++) {
         QString str = source->index(i, c->column).data().toString();
         if (str.startsWith(c->prefix, c->cs)
-#if !defined(Q_OS_WIN) || defined(Q_OS_WINCE)
+#if !defined(Q_OS_WIN)
             && ((!isFsModel && !isDirModel) || QDir::toNativeSeparators(str) != QDir::separator())
 #endif
             )
@@ -493,7 +493,7 @@ QMatchData QCompletionEngine::filterHistory()
 bool QCompletionEngine::matchHint(QString part, const QModelIndex& parent, QMatchData *hint)
 {
     if (c->cs == Qt::CaseInsensitive)
-        part = part.toLower();
+        part = std::move(part).toLower();
 
     const CacheItem& map = cache[parent];
 
@@ -512,7 +512,7 @@ bool QCompletionEngine::matchHint(QString part, const QModelIndex& parent, QMatc
 bool QCompletionEngine::lookupCache(QString part, const QModelIndex& parent, QMatchData *m)
 {
    if (c->cs == Qt::CaseInsensitive)
-        part = part.toLower();
+        part = std::move(part).toLower();
    const CacheItem& map = cache[parent];
    if (!map.contains(part))
        return false;
@@ -548,7 +548,7 @@ void QCompletionEngine::saveInCache(QString part, const QModelIndex& parent, con
     }
 
     if (c->cs == Qt::CaseInsensitive)
-        part = part.toLower();
+        part = std::move(part).toLower();
     cache[parent][part] = m;
 }
 
@@ -558,7 +558,7 @@ QIndexMapper QSortedModelEngine::indexHint(QString part, const QModelIndex& pare
     const QAbstractItemModel *model = c->proxy->sourceModel();
 
     if (c->cs == Qt::CaseInsensitive)
-        part = part.toLower();
+        part = std::move(part).toLower();
 
     const CacheItem& map = cache[parent];
 
@@ -1055,7 +1055,7 @@ void QCompleter::setModel(QAbstractItemModel *model)
         delete oldModel;
 #ifndef QT_NO_DIRMODEL
     if (qobject_cast<QDirModel *>(model)) {
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
         setCaseSensitivity(Qt::CaseInsensitive);
 #else
         setCaseSensitivity(Qt::CaseSensitive);
@@ -1065,7 +1065,7 @@ void QCompleter::setModel(QAbstractItemModel *model)
 #ifndef QT_NO_FILESYSTEMMODEL
     QFileSystemModel *fsModel = qobject_cast<QFileSystemModel *>(model);
     if (fsModel) {
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
         setCaseSensitivity(Qt::CaseInsensitive);
 #else
         setCaseSensitivity(Qt::CaseSensitive);
@@ -1347,11 +1347,12 @@ bool QCompleter::eventFilter(QObject *o, QEvent *e)
         }
 
         // default implementation for keys not handled by the widget when popup is open
+#if QT_CONFIG(shortcut)
         if (ke->matches(QKeySequence::Cancel)) {
             d->popup->hide();
             return true;
         }
-
+#endif
         switch (key) {
 #ifdef QT_KEYPAD_NAVIGATION
         case Qt::Key_Select:
@@ -1790,7 +1791,7 @@ QString QCompleter::pathFromIndex(const QModelIndex& index) const
         idx = parent.sibling(parent.row(), index.column());
     } while (idx.isValid());
 
-#if !defined(Q_OS_WIN) || defined(Q_OS_WINCE)
+#if !defined(Q_OS_WIN)
     if (list.count() == 1) // only the separator or some other text
         return list[0];
     list[0].clear() ; // the join below will provide the separator
@@ -1830,7 +1831,7 @@ QStringList QCompleter::splitPath(const QString& path) const
         return QStringList(completionPrefix());
 
     QString pathCopy = QDir::toNativeSeparators(path);
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
     if (pathCopy == QLatin1String("\\") || pathCopy == QLatin1String("\\\\"))
         return QStringList(pathCopy);
     const bool startsWithDoubleSlash = pathCopy.startsWith(QLatin1String("\\\\"));
@@ -1841,7 +1842,7 @@ QStringList QCompleter::splitPath(const QString& path) const
     const QChar sep = QDir::separator();
     QStringList parts = pathCopy.split(sep);
 
-#if defined(Q_OS_WIN) && !defined(Q_OS_WINCE)
+#if defined(Q_OS_WIN)
     if (startsWithDoubleSlash)
         parts[0].prepend(QLatin1String("\\\\"));
 #else

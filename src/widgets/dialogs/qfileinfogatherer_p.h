@@ -51,6 +51,8 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
+
 #include <qthread.h>
 #include <qmutex.h>
 #include <qwaitcondition.h>
@@ -177,6 +179,10 @@ public Q_SLOTS:
     void updateFile(const QString &path);
     void setResolveSymlinks(bool enable);
     void setIconProvider(QFileIconProvider *provider);
+
+private Q_SLOTS:
+    void driveAdded();
+    void driveRemoved();
 
 private:
     void run() Q_DECL_OVERRIDE;

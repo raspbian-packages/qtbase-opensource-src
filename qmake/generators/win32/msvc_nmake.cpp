@@ -28,14 +28,13 @@
 
 #include "msvc_nmake.h"
 #include "option.h"
-#include "cesdkhandler.h"
 
 #include <qregexp.h>
 #include <qdir.h>
 #include <qdiriterator.h>
 #include <qset.h>
 
-#include <windows/registry_p.h>
+#include <registry_p.h>
 
 #include <time.h>
 
@@ -72,60 +71,48 @@ NmakeMakefileGenerator::writeMakefile(QTextStream &t)
             return MakefileGenerator::writeStubMakefile(t);
 #endif
         if (!project->isHostBuild()) {
-            const ProValueMap &variables = project->variables();
-            if (project->isActiveConfig("wince")) {
-                CeSdkHandler sdkhandler;
-                sdkhandler.retrieveAvailableSDKs();
-                const QString sdkName = variables["CE_SDK"].join(' ')
-                                        + " (" + variables["CE_ARCH"].join(' ') + ")";
-                const QList<CeSdkInfo> sdkList = sdkhandler.listAll();
-                CeSdkInfo sdk;
-                for (const CeSdkInfo &info : sdkList) {
-                    if (info.name().compare(sdkName, Qt::CaseInsensitive ) == 0) {
-                        sdk = info;
-                        break;
-                    }
-                }
-                if (sdk.isValid()) {
-                    t << "\nINCLUDE = " << sdk.includePath();
-                    t << "\nLIB = " << sdk.libPath();
-                    t << "\nPATH = " << sdk.binPath() << "\n";
-                } else {
-                    QStringList sdkStringList;
-                    sdkStringList.reserve(sdkList.size());
-                    for (const CeSdkInfo &info : sdkList)
-                        sdkStringList << info.name();
-
-                    fprintf(stderr, "Failed to find Windows CE SDK matching %s, found: %s\n"
-                                    "SDK needs to be specified in mkspec (using: %s/qmake.conf)\n"
-                                    "SDK name needs to match the following format: CE_SDK (CE_ARCH)\n",
-                            qPrintable(sdkName), qPrintable(sdkStringList.join(", ")),
-                            qPrintable(variables["QMAKESPEC"].first().toQString()));
-                    return false;
-                }
-            } else if (project->isActiveConfig(QStringLiteral("winrt"))) {
+            if (project->isActiveConfig(QStringLiteral("winrt"))) {
                 QString arch = project->first("VCPROJ_ARCH").toQString().toLower();
                 QString compiler;
                 QString compilerArch;
-                if (arch == QLatin1String("arm")) {
-                    compiler = QStringLiteral("x86_arm");
-                    compilerArch = QStringLiteral("arm");
-                } else if (arch == QLatin1String("x64")) {
-                    const ProStringList hostArch = project->values("QMAKE_TARGET.arch");
-                    if (hostArch.contains("x86_64"))
-                        compiler = QStringLiteral("amd64");
-                    else
-                        compiler = QStringLiteral("x86_amd64");
-                    compilerArch = QStringLiteral("amd64");
-                } else {
-                    arch = QStringLiteral("x86");
-                }
-
                 const QString msvcVer = project->first("MSVC_VER").toQString();
                 if (msvcVer.isEmpty()) {
                     fprintf(stderr, "Mkspec does not specify MSVC_VER. Cannot continue.\n");
                     return false;
                 }
+
+                if (msvcVer == QStringLiteral("15.0")) {
+                    const ProStringList hostArch = project->values("QMAKE_TARGET.arch");
+                    if (hostArch.contains("x86_64"))
+                        compiler = QStringLiteral("HostX64/");
+                    else
+                        compiler = QStringLiteral("HostX86/");
+                    if (arch == QLatin1String("arm")) {
+                        compiler += QStringLiteral("arm");
+                        compilerArch = QStringLiteral("arm");
+                    } else if (arch == QLatin1String("x64")) {
+                        compiler += QStringLiteral("x64");
+                        compilerArch = QStringLiteral("amd64");
+                    } else {
+                        arch = QStringLiteral("x86");
+                        compiler += QStringLiteral("x86");
+                    }
+                } else {
+                    if (arch == QLatin1String("arm")) {
+                        compiler = QStringLiteral("x86_arm");
+                        compilerArch = QStringLiteral("arm");
+                    } else if (arch == QLatin1String("x64")) {
+                        const ProStringList hostArch = project->values("QMAKE_TARGET.arch");
+                        if (hostArch.contains("x86_64"))
+                            compiler = QStringLiteral("amd64");
+                        else
+                            compiler = QStringLiteral("x86_amd64");
+                        compilerArch = QStringLiteral("amd64");
+                    } else {
+                        arch = QStringLiteral("x86");
+                    }
+                }
+
                 const QString winsdkVer = project->first("WINSDK_VER").toQString();
                 if (winsdkVer.isEmpty()) {
                     fprintf(stderr, "Mkspec does not specify WINSDK_VER. Cannot continue.\n");
@@ -137,21 +124,19 @@ NmakeMakefileGenerator::writeMakefile(QTextStream &t)
                     return false;
                 }
 
-                const bool isPhone = project->isActiveConfig(QStringLiteral("winphone"));
 #ifdef Q_OS_WIN
-                QString regKey = QStringLiteral("Software\\Microsoft\\VisualStudio\\") + msvcVer + ("\\Setup\\VC\\ProductDir");
+                QString regKey;
+                if (msvcVer == QStringLiteral("15.0"))
+                    regKey = QStringLiteral("Software\\Microsoft\\VisualStudio\\SxS\\VS7\\") + msvcVer;
+                else
+                    regKey = QStringLiteral("Software\\Microsoft\\VisualStudio\\") + msvcVer + ("\\Setup\\VC\\ProductDir");
                 const QString vcInstallDir = qt_readRegistryKey(HKEY_LOCAL_MACHINE, regKey, KEY_WOW64_32KEY);
                 if (vcInstallDir.isEmpty()) {
                     fprintf(stderr, "Failed to find the Visual Studio installation directory.\n");
                     return false;
                 }
 
-                QString windowsPath;
-                if (isPhone) {
-                    windowsPath = "Software\\Microsoft\\Microsoft SDKs\\WindowsPhoneApp\\v";
-                } else {
-                    windowsPath = "Software\\Microsoft\\Microsoft SDKs\\Windows\\v";
-                }
+                const QString windowsPath = "Software\\Microsoft\\Microsoft SDKs\\Windows\\v";
 
                 regKey = windowsPath + winsdkVer + QStringLiteral("\\InstallationFolder");
                 const QString kitDir = qt_readRegistryKey(HKEY_LOCAL_MACHINE, regKey, KEY_WOW64_32KEY);
@@ -166,7 +151,46 @@ NmakeMakefileGenerator::writeMakefile(QTextStream &t)
                 QStringList incDirs;
                 QStringList libDirs;
                 QStringList binDirs;
-                if (msvcVer == QStringLiteral("14.0")) {
+                if (msvcVer == QStringLiteral("15.0")) {
+                    const QString toolsInstallDir = qgetenv("VCToolsInstallDir");
+                    if (toolsInstallDir.isEmpty()) {
+                        fprintf(stderr, "Failed to access tools installation dir.\n");
+                        return false;
+                    }
+
+                    binDirs << toolsInstallDir + QStringLiteral("bin/") + compiler;
+                    if (arch == QStringLiteral("x64"))
+                        binDirs << toolsInstallDir + QStringLiteral("bin/HostX86/X86");
+                    binDirs << kitDir + QStringLiteral("bin/x86");
+                    binDirs << vcInstallDir + QStringLiteral("Common7/Tools");
+                    binDirs << vcInstallDir + QStringLiteral("Common7/ide");
+                    binDirs << vcInstallDir + QStringLiteral("MSBuild/15.0/bin");
+
+                    incDirs << toolsInstallDir + QStringLiteral("include");
+                    incDirs << vcInstallDir + QStringLiteral("VC/Auxiliary/VS/include");
+
+                    const QString crtVersion = qgetenv("UCRTVersion");
+                    if (crtVersion.isEmpty()) {
+                        fprintf(stderr, "Failed to access CRT version.\n");
+                        return false;
+                    }
+                    const QString crtInclude = kitDir + QStringLiteral("Include/") + crtVersion;
+                    const QString crtLib = kitDir + QStringLiteral("Lib/") + crtVersion;
+                    incDirs << crtInclude + QStringLiteral("/ucrt");
+                    incDirs << crtInclude + QStringLiteral("/um");
+                    incDirs << crtInclude + QStringLiteral("/shared");
+                    incDirs << crtInclude + QStringLiteral("/winrt");
+
+                    incDirs << kitDir + QStringLiteral("Extension SDKs/WindowsMobile/")
+                                      + crtVersion + QStringLiteral("/Include/WinRT");
+
+                    libDirs << toolsInstallDir + QStringLiteral("lib/") + arch + QStringLiteral("/store");
+
+                    libDirs << vcInstallDir + QStringLiteral("VC/Auxiliary/VS/lib/") + arch;
+
+                    libDirs << crtLib + QStringLiteral("/ucrt/") + arch;
+                    libDirs << crtLib + QStringLiteral("/um/") + arch;
+                } else if (msvcVer == QStringLiteral("14.0")) {
                     binDirs << vcInstallDir + QStringLiteral("bin/") + compiler;
                     binDirs << vcInstallDir + QStringLiteral("bin/"); // Maybe remove for x86 again?
                     binDirs << kitDir + QStringLiteral("bin/") + (arch == QStringLiteral("arm") ? QStringLiteral("x86") : arch);
@@ -198,23 +222,6 @@ NmakeMakefileGenerator::writeMakefile(QTextStream &t)
 
                     libDirs << crtLib + QStringLiteral("/ucrt/") + arch;
                     libDirs << crtLib + QStringLiteral("/um/") + arch;
-                } else if (isPhone) {
-                    QString sdkDir = vcInstallDir;
-                    if (!QDir(sdkDir).exists()) {
-                        fprintf(stderr, "Failed to find the Windows Phone SDK in %s.\n"
-                                        "Check that it is properly installed.\n",
-                                qPrintable(QDir::toNativeSeparators(sdkDir)));
-                        return false;
-                    }
-                    incDirs << sdkDir + QStringLiteral("/include");
-                    libDirs << sdkDir + QStringLiteral("/lib/store/") + compilerArch
-                            << sdkDir + QStringLiteral("/lib/") + compilerArch;
-                    binDirs << sdkDir + QStringLiteral("/bin/") + compiler;
-                    libDirs << kitDir + QStringLiteral("/lib/") + arch;
-                    incDirs << kitDir + QStringLiteral("/include")
-                            << kitDir + QStringLiteral("/include/abi")
-                            << kitDir + QStringLiteral("/include/mincore")
-                            << kitDir + QStringLiteral("/include/minwin");
                 } else {
                     incDirs << vcInstallDir + QStringLiteral("/include");
                     libDirs << vcInstallDir + QStringLiteral("/lib/store/") + compilerArch
@@ -406,14 +413,21 @@ void NmakeMakefileGenerator::init()
         project->values("QMAKE_DISTCLEAN").append(tgt + ".lib");
     }
     if (project->isActiveConfig("debug_info")) {
-        // Add the compiler's PDB file.
-        QString pdbfile = var("OBJECTS_DIR") + project->first("TARGET") + ".vc.pdb";
+        QString pdbfile;
+        QString distPdbFile = tgt + ".pdb";
+        if (project->isActiveConfig("staticlib")) {
+            // For static libraries, the compiler's pdb file and the dist pdb file are the same.
+            pdbfile = distPdbFile;
+        } else {
+            // Use $${TARGET}.vc.pdb in the OBJECTS_DIR for the compiler and
+            // $${TARGET}.pdb (the default) for the linker.
+            pdbfile = var("OBJECTS_DIR") + project->first("TARGET") + ".vc.pdb";
+        }
         QString escapedPdbFile = escapeFilePath(pdbfile);
         project->values("QMAKE_CFLAGS").append("/Fd" + escapedPdbFile);
         project->values("QMAKE_CXXFLAGS").append("/Fd" + escapedPdbFile);
         project->values("QMAKE_CLEAN").append(pdbfile);
-        // Add the linker's PDB file to the distclean target.
-        project->values("QMAKE_DISTCLEAN").append(tgt + ".pdb");
+        project->values("QMAKE_DISTCLEAN").append(distPdbFile);
     }
     if (project->isActiveConfig("debug")) {
         project->values("QMAKE_CLEAN").append(tgt + ".ilk");
@@ -544,14 +558,18 @@ void NmakeMakefileGenerator::writeBuildRulesPart(QTextStream &t)
     t << "all: " << escapeDependencyPath(fileFixify(Option::output.fileName()))
       << ' ' << depVar("ALL_DEPS") << " $(DESTDIR_TARGET)\n\n";
     t << "$(DESTDIR_TARGET): " << depVar("PRE_TARGETDEPS") << " $(OBJECTS) " << depVar("POST_TARGETDEPS");
+    if (templateName == "aux") {
+        t << "\n\n";
+        return;
+    }
 
     if(!project->isEmpty("QMAKE_PRE_LINK"))
         t << "\n\t" <<var("QMAKE_PRE_LINK");
     if(project->isActiveConfig("staticlib")) {
-        t << "\n\t$(LIBAPP) $(LIBFLAGS) " << var("QMAKE_LINK_O_FLAG") << "$(DESTDIR_TARGET) @<<\n\t  "
-          << "$(OBJECTS)"
-          << "\n<<";
-    } else if (templateName != "aux") {
+        t << "\n\t$(LIBAPP) $(LIBFLAGS) " << var("QMAKE_LINK_O_FLAG") << "$(DESTDIR_TARGET) @<<\n\t  ";
+        writeResponseFileFiles(t, project->values("OBJECTS"));
+        t << "<<";
+    } else {
         const bool embedManifest = ((templateName == "app" && project->isActiveConfig("embed_manifest_exe"))
                                     || (templateName == "lib" && project->isActiveConfig("embed_manifest_dll")
                                         && !(project->isActiveConfig("plugin") && project->isActiveConfig("no_plugin_manifest"))
@@ -623,12 +641,6 @@ void NmakeMakefileGenerator::writeBuildRulesPart(QTextStream &t)
             writeLinkCommand(t);
         }
     }
-    QString signature = !project->isEmpty("SIGNATURE_FILE") ? var("SIGNATURE_FILE") : var("DEFAULT_SIGNATURE");
-    bool useSignature = !signature.isEmpty() && !project->isActiveConfig("staticlib") &&
-                        !project->isEmpty("CE_SDK") && !project->isEmpty("CE_ARCH");
-    if(useSignature) {
-        t << "\n\tsigntool sign /F " << escapeFilePath(signature) << " $(DESTDIR_TARGET)";
-    }
     if(!project->isEmpty("QMAKE_POST_LINK")) {
         t << "\n\t" << var("QMAKE_POST_LINK");
     }
@@ -640,11 +652,36 @@ void NmakeMakefileGenerator::writeLinkCommand(QTextStream &t, const QString &ext
     t << "$(LINKER) $(LFLAGS)";
     if (!extraFlags.isEmpty())
         t << ' ' << extraFlags;
-    t << " " << var("QMAKE_LINK_O_FLAG") << "$(DESTDIR_TARGET) @<<\n"
-      << "$(OBJECTS) $(LIBS)";
+    t << " " << var("QMAKE_LINK_O_FLAG") << "$(DESTDIR_TARGET) @<<\n";
+    writeResponseFileFiles(t, project->values("OBJECTS"));
+    t << "$(LIBS)\n";
     if (!extraInlineFileContent.isEmpty())
-        t << ' ' << extraInlineFileContent;
-    t << "\n<<";
+        t << extraInlineFileContent << '\n';
+    t << "<<";
+}
+
+void NmakeMakefileGenerator::writeResponseFileFiles(QTextStream &t, const ProStringList &files)
+{
+    // Add line breaks in file lists in reponse files to work around LNK1170.
+    // The actual line length limit is 131070, but let's use a smaller limit
+    // in case other tools are similarly hampered.
+    const int maxLineLength = 1000;
+    int len = 0;
+    for (const ProString &file : files) {
+        const ProString escapedFilePath = escapeFilePath(file);
+        if (len) {
+            if (len + escapedFilePath.length() > maxLineLength) {
+                t << '\n';
+                len = 0;
+            } else {
+                t << ' ';
+                len++;
+            }
+        }
+        t << escapedFilePath;
+        len += escapedFilePath.length();
+    }
+    t << '\n';
 }
 
 int NmakeMakefileGenerator::msvcVersion() const

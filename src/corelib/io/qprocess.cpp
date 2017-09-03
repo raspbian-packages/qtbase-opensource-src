@@ -48,9 +48,6 @@
 #if defined QPROCESS_DEBUG
 #include <qstring.h>
 #include <ctype.h>
-#if !defined(Q_OS_WINCE)
-#include <errno.h>
-#endif
 
 QT_BEGIN_NAMESPACE
 /*
@@ -101,8 +98,6 @@ QT_END_NAMESPACE
 #else
 #include <private/qcore_unix_p.h>
 #endif
-
-#ifndef QT_NO_PROCESS
 
 QT_BEGIN_NAMESPACE
 
@@ -159,8 +154,8 @@ QT_BEGIN_NAMESPACE
 QStringList QProcessEnvironmentPrivate::toList() const
 {
     QStringList result;
-    result.reserve(hash.size());
-    for (Hash::const_iterator it = hash.cbegin(), end = hash.cend(); it != end; ++it)
+    result.reserve(vars.size());
+    for (auto it = vars.cbegin(), end = vars.cend(); it != end; ++it)
         result << nameToString(it.key()) + QLatin1Char('=') + valueToString(it.value());
     return result;
 }
@@ -186,9 +181,9 @@ QProcessEnvironment QProcessEnvironmentPrivate::fromList(const QStringList &list
 QStringList QProcessEnvironmentPrivate::keys() const
 {
     QStringList result;
-    result.reserve(hash.size());
-    Hash::ConstIterator it = hash.constBegin(),
-                       end = hash.constEnd();
+    result.reserve(vars.size());
+    auto it = vars.constBegin();
+    const auto end = vars.constEnd();
     for ( ; it != end; ++it)
         result << nameToString(it.key());
     return result;
@@ -196,14 +191,14 @@ QStringList QProcessEnvironmentPrivate::keys() const
 
 void QProcessEnvironmentPrivate::insert(const QProcessEnvironmentPrivate &other)
 {
-    Hash::ConstIterator it = other.hash.constBegin(),
-                       end = other.hash.constEnd();
+    auto it = other.vars.constBegin();
+    const auto end = other.vars.constEnd();
     for ( ; it != end; ++it)
-        hash.insert(it.key(), it.value());
+        vars.insert(it.key(), it.value());
 
 #ifdef Q_OS_UNIX
-    QHash<QString, Key>::ConstIterator nit = other.nameMap.constBegin(),
-                                      nend = other.nameMap.constEnd();
+    auto nit = other.nameMap.constBegin();
+    const auto nend = other.nameMap.constEnd();
     for ( ; nit != nend; ++nit)
         nameMap.insert(nit.key(), nit.value());
 #endif
@@ -276,7 +271,7 @@ bool QProcessEnvironment::operator==(const QProcessEnvironment &other) const
     if (d) {
         if (other.d) {
             QProcessEnvironmentPrivate::OrderedMutexLocker locker(d, other.d);
-            return d->hash == other.d->hash;
+            return d->vars == other.d->vars;
         } else {
             return isEmpty();
         }
@@ -294,7 +289,7 @@ bool QProcessEnvironment::operator==(const QProcessEnvironment &other) const
 bool QProcessEnvironment::isEmpty() const
 {
     // Needs no locking, as no hash nodes are accessed
-    return d ? d->hash.isEmpty() : true;
+    return d ? d->vars.isEmpty() : true;
 }
 
 /*!
@@ -306,7 +301,7 @@ bool QProcessEnvironment::isEmpty() const
 void QProcessEnvironment::clear()
 {
     if (d)
-        d->hash.clear();
+        d->vars.clear();
     // Unix: Don't clear d->nameMap, as the environment is likely to be
     // re-populated with the same keys again.
 }
@@ -323,7 +318,7 @@ bool QProcessEnvironment::contains(const QString &name) const
     if (!d)
         return false;
     QProcessEnvironmentPrivate::MutexLocker locker(d);
-    return d->hash.contains(d->prepareName(name));
+    return d->vars.contains(d->prepareName(name));
 }
 
 /*!
@@ -342,7 +337,7 @@ void QProcessEnvironment::insert(const QString &name, const QString &value)
 {
     // our re-impl of detach() detaches from null
     d.detach(); // detach before prepareName()
-    d->hash.insert(d->prepareName(name), d->prepareValue(value));
+    d->vars.insert(d->prepareName(name), d->prepareValue(value));
 }
 
 /*!
@@ -357,7 +352,7 @@ void QProcessEnvironment::remove(const QString &name)
 {
     if (d) {
         d.detach(); // detach before prepareName()
-        d->hash.remove(d->prepareName(name));
+        d->vars.remove(d->prepareName(name));
     }
 }
 
@@ -374,8 +369,8 @@ QString QProcessEnvironment::value(const QString &name, const QString &defaultVa
         return defaultValue;
 
     QProcessEnvironmentPrivate::MutexLocker locker(d);
-    QProcessEnvironmentPrivate::Hash::ConstIterator it = d->hash.constFind(d->prepareName(name));
-    if (it == d->hash.constEnd())
+    const auto it = d->vars.constFind(d->prepareName(name));
+    if (it == d->vars.constEnd())
         return defaultValue;
 
     return d->valueToString(it.value());
@@ -432,6 +427,8 @@ void QProcessEnvironment::insert(const QProcessEnvironment &e)
     QProcessEnvironmentPrivate::MutexLocker locker(e.d);
     d->insert(*e.d);
 }
+
+#if QT_CONFIG(process)
 
 void QProcessPrivate::Channel::clear()
 {
@@ -511,6 +508,9 @@ void QProcessPrivate::Channel::clear()
     any point in time, QProcess will emit the errorOccurred() signal.
     You can also call error() to find the type of error that occurred
     last, and state() to find the current process state.
+
+    \note QProcess is not supported on VxWorks, iOS, tvOS, watchOS,
+    or the Universal Windows Platform.
 
     \section1 Communicating via Channels
 
@@ -1529,7 +1529,7 @@ void QProcess::setStandardOutputProcess(QProcess *destination)
     dto->stdinChannel.pipeFrom(dfrom);
 }
 
-#if defined(Q_OS_WIN)
+#if defined(Q_OS_WIN) || defined(Q_CLANG_QDOC)
 
 /*!
     \since 4.7
@@ -1975,13 +1975,6 @@ qint64 QProcess::writeData(const char *data, qint64 len)
 {
     Q_D(QProcess);
 
-#if defined(Q_OS_WINCE)
-    Q_UNUSED(data);
-    Q_UNUSED(len);
-    d->setErrorAndEmit(QProcess::WriteError);
-    return -1;
-#endif
-
     if (d->stdinChannel.closed) {
 #if defined QPROCESS_DEBUG
     qDebug("QProcess::writeData(%p \"%s\", %lld) == 0 (write channel closing)",
@@ -2158,7 +2151,6 @@ void QProcessPrivate::start(QIODevice::OpenMode mode)
         mode &= ~QIODevice::ReadOnly;      // not open for reading
     if (mode == 0)
         mode = QIODevice::Unbuffered;
-#ifndef Q_OS_WINCE
     if ((mode & QIODevice::ReadOnly) == 0) {
         if (stdoutChannel.type == QProcessPrivate::Channel::Normal)
             q->setStandardOutputFile(q->nullDevice());
@@ -2166,7 +2158,6 @@ void QProcessPrivate::start(QIODevice::OpenMode mode)
             && processChannelMode != QProcess::MergedChannels)
             q->setStandardErrorFile(q->nullDevice());
     }
-#endif
 
     q->QIODevice::open(mode);
 
@@ -2524,7 +2515,7 @@ QT_BEGIN_INCLUDE_NAMESPACE
 #if defined(Q_OS_MACX)
 # include <crt_externs.h>
 # define environ (*_NSGetEnviron())
-#elif defined(Q_OS_WINCE) || defined(Q_OS_IOS)
+#elif defined(QT_PLATFORM_UIKIT)
   static char *qt_empty_environ[] = { 0 };
 #define environ qt_empty_environ
 #elif !defined(Q_OS_WIN)
@@ -2610,9 +2601,8 @@ QString QProcess::nullDevice()
     \sa QProcess::pid()
 */
 
+#endif // QT_CONFIG(process)
+
 QT_END_NAMESPACE
 
 #include "moc_qprocess.cpp"
-
-#endif // QT_NO_PROCESS
-

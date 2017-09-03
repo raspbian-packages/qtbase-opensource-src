@@ -24,12 +24,6 @@ QMAKE_MAC_SDK_PATH = $$xcodeSDKInfo(Path)
 QMAKE_MAC_SDK_PLATFORM_PATH = $$xcodeSDKInfo(PlatformPath)
 QMAKE_MAC_SDK_VERSION = $$xcodeSDKInfo(SDKVersion)
 
-!equals(MAKEFILE_GENERATOR, XCODE) {
-    QMAKE_CFLAGS += -isysroot $$QMAKE_MAC_SDK_PATH
-    QMAKE_CXXFLAGS += -isysroot $$QMAKE_MAC_SDK_PATH
-    QMAKE_LFLAGS += -Wl,-syslibroot,$$QMAKE_MAC_SDK_PATH
-}
-
 sysrootified =
 for(val, QMAKE_INCDIR_OPENGL): sysrootified += $${QMAKE_MAC_SDK_PATH}$$val
 QMAKE_INCDIR_OPENGL = $$sysrootified
@@ -52,22 +46,4 @@ for(tool, $$list(QMAKE_CC QMAKE_CXX QMAKE_FIX_RPATH QMAKE_AR QMAKE_RANLIB QMAKE_
 
     $$tool = $$sysrooted $$member(value, 1, -1)
     cache($$tool_variable, set stash, $$tool)
-}
-
-!equals(MAKEFILE_GENERATOR, XCODE) {
-    ios:!host_build {
-        simulator: \
-            version_identifier = $$simulator.deployment_identifier
-        else: \
-            version_identifier = $$device.deployment_identifier
-        deployment_target = $$QMAKE_IOS_DEPLOYMENT_TARGET
-    } else: osx {
-        version_identifier = macosx
-        deployment_target = $$QMAKE_MACOSX_DEPLOYMENT_TARGET
-    }
-
-    version_min_flag = -m$${version_identifier}-version-min=$$deployment_target
-    QMAKE_CFLAGS += $$version_min_flag
-    QMAKE_CXXFLAGS += $$version_min_flag
-    QMAKE_LFLAGS += $$version_min_flag
 }

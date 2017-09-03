@@ -56,8 +56,10 @@
 
 #include <QtCore/qfileinfo.h>
 #include <QtGui/private/qguiapplication_p.h>
+#include <QtGui/private/qcoregraphics_p.h>
 #include <QtGui/qpainter.h>
-#include <QtPlatformSupport/private/qcoretextfontdatabase_p.h>
+#include <QtFontDatabaseSupport/private/qcoretextfontdatabase_p.h>
+#include <QtThemeSupport/private/qabstractfileiconengine_p.h>
 #include <qpa/qplatformintegration.h>
 #include <qpa/qplatformnativeinterface.h>
 
@@ -136,8 +138,10 @@ bool QCocoaTheme::usePlatformNativeDialog(DialogType dialogType) const
 QPlatformDialogHelper * QCocoaTheme::createPlatformDialogHelper(DialogType dialogType) const
 {
     switch (dialogType) {
+#ifndef QT_NO_FILEDIALOG
     case QPlatformTheme::FileDialog:
         return new QCocoaFileDialogHelper();
+#endif
 #ifndef QT_NO_COLORDIALOG
     case QPlatformTheme::ColorDialog:
         return new QCocoaColorDialogHelper();
@@ -194,7 +198,7 @@ QPixmap qt_mac_convert_iconref(const IconRef icon, int width, int height)
 
     CGRect rect = CGRectMake(0, 0, width, height);
 
-    CGContextRef ctx = qt_mac_cg_context(&ret);
+    QMacCGContext ctx(&ret);
     CGAffineTransform old_xform = CGContextGetCTM(ctx);
     CGContextConcatCTM(ctx, CGAffineTransformInvert(old_xform));
     CGContextConcatCTM(ctx, CGAffineTransformIdentity);
@@ -202,7 +206,6 @@ QPixmap qt_mac_convert_iconref(const IconRef icon, int width, int height)
     ::RGBColor b;
     b.blue = b.green = b.red = 255*255;
     PlotIconRefInContext(ctx, &rect, kAlignNone, kTransformNone, &b, kPlotIconRefNormalFlags, icon);
-    CGContextRelease(ctx);
     return ret;
 }
 
@@ -274,16 +277,42 @@ QPixmap QCocoaTheme::standardPixmap(StandardPixmap sp, const QSizeF &size) const
     return QPlatformTheme::standardPixmap(sp, size);
 }
 
-QPixmap QCocoaTheme::fileIconPixmap(const QFileInfo &fileInfo, const QSizeF &size,
-                                    QPlatformTheme::IconOptions iconOptions) const
+class QCocoaFileIconEngine : public QAbstractFileIconEngine
 {
-    Q_UNUSED(iconOptions);
-    QMacAutoReleasePool pool;
+public:
+    explicit QCocoaFileIconEngine(const QFileInfo &info,
+                                  QPlatformTheme::IconOptions opts) :
+        QAbstractFileIconEngine(info, opts) {}
 
-    NSImage *iconImage = [[NSWorkspace sharedWorkspace] iconForFile:QCFString::toNSString(fileInfo.canonicalFilePath())];
-    if (!iconImage)
-        return QPixmap();
-    return qt_mac_toQPixmap(iconImage, size);
+    static QList<QSize> availableIconSizes()
+    {
+        const qreal devicePixelRatio = qGuiApp->devicePixelRatio();
+        const int sizes[] = {
+            qRound(16 * devicePixelRatio), qRound(32 * devicePixelRatio),
+            qRound(64 * devicePixelRatio), qRound(128 * devicePixelRatio),
+            qRound(256 * devicePixelRatio)
+        };
+        return QAbstractFileIconEngine::toSizeList(sizes, sizes + sizeof(sizes) / sizeof(sizes[0]));
+    }
+
+    QList<QSize> availableSizes(QIcon::Mode = QIcon::Normal, QIcon::State = QIcon::Off) const override
+    { return QCocoaFileIconEngine::availableIconSizes(); }
+
+protected:
+    QPixmap filePixmap(const QSize &size, QIcon::Mode, QIcon::State) override
+    {
+        QMacAutoReleasePool pool;
+
+        NSImage *iconImage = [[NSWorkspace sharedWorkspace] iconForFile:fileInfo().canonicalFilePath().toNSString()];
+        if (!iconImage)
+            return QPixmap();
+        return qt_mac_toQPixmap(iconImage, size);
+    }
+};
+
+QIcon QCocoaTheme::fileIcon(const QFileInfo &fileInfo, QPlatformTheme::IconOptions iconOptions) const
+{
+    return QIcon(new QCocoaFileIconEngine(fileInfo, iconOptions));
 }
 
 QVariant QCocoaTheme::themeHint(ThemeHint hint) const
@@ -298,17 +327,12 @@ QVariant QCocoaTheme::themeHint(ThemeHint hint) const
     case TabFocusBehavior:
         return QVariant([[NSApplication sharedApplication] isFullKeyboardAccessEnabled] ?
                     int(Qt::TabFocusAllControls) : int(Qt::TabFocusTextControls | Qt::TabFocusListControls));
-    case IconPixmapSizes: {
-        qreal devicePixelRatio = qGuiApp->devicePixelRatio();
-        QList<int> sizes;
-        sizes << 16 * devicePixelRatio
-              << 32 * devicePixelRatio
-              << 64 * devicePixelRatio
-              << 128 * devicePixelRatio;
-        return QVariant::fromValue(sizes);
-    }
+    case IconPixmapSizes:
+        return QVariant::fromValue(QCocoaFileIconEngine::availableIconSizes());
     case QPlatformTheme::PasswordMaskCharacter:
         return QVariant(QChar(kBulletUnicode));
+    case QPlatformTheme::UiEffects:
+        return QVariant(int(HoverEffect));
     default:
         break;
     }
@@ -318,6 +342,12 @@ QVariant QCocoaTheme::themeHint(ThemeHint hint) const
 QString QCocoaTheme::standardButtonText(int button) const
 {
     return button == QPlatformDialogHelper::Discard ? msgDialogButtonDiscard() : QPlatformTheme::standardButtonText(button);
+}
+
+QKeySequence QCocoaTheme::standardButtonShortcut(int button) const
+{
+    return button == QPlatformDialogHelper::Discard ? QKeySequence(Qt::CTRL | Qt::Key_Delete)
+                                                    : QPlatformTheme::standardButtonShortcut(button);
 }
 
 QPlatformMenuItem *QCocoaTheme::createPlatformMenuItem() const

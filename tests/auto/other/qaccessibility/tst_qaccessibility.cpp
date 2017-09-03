@@ -68,20 +68,6 @@ static inline void setFrameless(QWidget *w)
     w->setWindowFlags(flags);
 }
 
-#if defined(Q_OS_WINCE)
-extern "C" bool SystemParametersInfo(UINT uiAction, UINT uiParam, PVOID pvParam, UINT fWinIni);
-#define SPI_GETPLATFORMTYPE 257
-inline bool IsValidCEPlatform() {
-    wchar_t tszPlatform[64];
-    if (SystemParametersInfo(SPI_GETPLATFORMTYPE, sizeof(tszPlatform) / sizeof(*tszPlatform), tszPlatform, 0)) {
-        QString platform = QString::fromWCharArray(tszPlatform);
-        if ((platform == QLatin1String("PocketPC")) || (platform == QLatin1String("Smartphone")))
-            return false;
-    }
-    return true;
-}
-#endif
-
 static inline bool verifyChild(QWidget *child, QAccessibleInterface *interface,
                                int index, const QRect &domain)
 {
@@ -1315,6 +1301,16 @@ void tst_QAccessibility::tabTest()
     child2->actionInterface()->doAction(QAccessibleActionInterface::pressAction());
     QCOMPARE(tabBar->currentIndex(), 1);
 
+    // Test that setAccessibleTabName changes a tab's accessible name
+    tabBar->setAccessibleTabName(0, "AccFoo");
+    tabBar->setAccessibleTabName(1, "AccBar");
+    QCOMPARE(child1->text(QAccessible::Name), QLatin1String("AccFoo"));
+    QCOMPARE(child2->text(QAccessible::Name), QLatin1String("AccBar"));
+    tabBar->setCurrentIndex(0);
+    QCOMPARE(interface->text(QAccessible::Name), QLatin1String("AccFoo"));
+    tabBar->setCurrentIndex(1);
+    QCOMPARE(interface->text(QAccessible::Name), QLatin1String("AccBar"));
+
     delete tabBar;
     QTestAccessibility::clearEvents();
 }
@@ -1352,9 +1348,16 @@ void tst_QAccessibility::tabWidgetTest()
     QCOMPARE(tabButton1Interface->text(QAccessible::Name), QLatin1String("Tab 1"));
 
     QAccessibleInterface* tabButton2Interface = tabBarInterface->child(1);
-    QVERIFY(tabButton1Interface);
+    QVERIFY(tabButton2Interface);
     QCOMPARE(tabButton2Interface->role(), QAccessible::PageTab);
     QCOMPARE(tabButton2Interface->text(QAccessible::Name), QLatin1String("Tab 2"));
+
+    // Test that setAccessibleTabName changes a tab's accessible name
+    tabWidget->setCurrentIndex(0);
+    tabWidget->tabBar()->setAccessibleTabName(0, "Acc Tab");
+    QCOMPARE(tabButton1Interface->role(), QAccessible::PageTab);
+    QCOMPARE(tabButton1Interface->text(QAccessible::Name), QLatin1String("Acc Tab"));
+    QCOMPARE(tabBarInterface->text(QAccessible::Name), QLatin1String("Acc Tab"));
 
     QAccessibleInterface* tabButtonLeft = tabBarInterface->child(2);
     QVERIFY(tabButtonLeft);
@@ -1469,10 +1472,6 @@ void tst_QAccessibility::menuTest()
     QCOMPARE(iHelp->role(), QAccessible::MenuItem);
     QCOMPARE(iAction->role(), QAccessible::MenuItem);
 #ifndef Q_OS_MAC
-#ifdef Q_OS_WINCE
-    if (!IsValidCEPlatform())
-        QSKIP("Tests do not work on Mobile platforms due to native menus");
-#endif
     QCOMPARE(mw.mapFromGlobal(interface->rect().topLeft()), mw.menuBar()->geometry().topLeft());
     QCOMPARE(interface->rect().size(), mw.menuBar()->size());
 
@@ -2898,7 +2897,10 @@ void tst_QAccessibility::listTest()
     QAccessibleInterface *cellMunich3 = table2->cellAt(2,0);
     QCOMPARE(cell4, cellMunich3);
     QCOMPARE(axidMunich, QAccessible::uniqueId(cellMunich3));
-
+    delete listView->takeItem(2);
+    // list: Oslo, Helsinki
+    // verify that it doesn't return an invalid item from the cache
+    QVERIFY(table2->cellAt(2,0) == 0);
 
     delete listView;
     }
@@ -2999,11 +3001,11 @@ void tst_QAccessibility::treeTest()
     QVERIFY(table2);
     QCOMPARE(table2->columnCount(), 2);
     QCOMPARE(table2->rowCount(), 2);
-    QAccessibleInterface *cell1;
-    QVERIFY(cell1 = table2->cellAt(0,0));
+    QAccessibleInterface *cell1 = table2->cellAt(0,0);
+    QVERIFY(cell1);
     QCOMPARE(cell1->text(QAccessible::Name), QString("Spain"));
-    QAccessibleInterface *cell2;
-    QVERIFY(cell2 = table2->cellAt(1,0));
+    QAccessibleInterface *cell2 = table2->cellAt(1,0);
+    QVERIFY(cell2);
     QCOMPARE(cell2->text(QAccessible::Name), QString("Austria"));
     QCOMPARE(cell2->role(), QAccessible::TreeItem);
     QCOMPARE(cell2->tableCellInterface()->rowIndex(), 1);
@@ -3127,8 +3129,8 @@ void tst_QAccessibility::tableTest()
     QVERIFY(table2);
     QCOMPARE(table2->columnCount(), 3);
     QCOMPARE(table2->rowCount(), 3);
-    QAccessibleInterface *cell1;
-    QVERIFY(cell1 = table2->cellAt(0,0));
+    QAccessibleInterface *cell1 = table2->cellAt(0,0);
+    QVERIFY(cell1);
     QCOMPARE(cell1->text(QAccessible::Name), QString("0.0"));
     QCOMPARE(iface->indexOfChild(cell1), 5);
 
@@ -3561,10 +3563,6 @@ void tst_QAccessibility::dockWidgetTest()
 
 void tst_QAccessibility::comboBoxTest()
 {
-#if defined(Q_OS_WINCE)
-    if (!IsValidCEPlatform())
-        QSKIP("Test skipped on Windows Mobile test hardware");
-#endif
     { // not editable combobox
     QComboBox combo;
     combo.addItems(QStringList() << "one" << "two" << "three");

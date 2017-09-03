@@ -161,6 +161,42 @@ QString QScreen::name() const
 }
 
 /*!
+  \property QScreen::manufacturer
+  \brief the manufacturer of the screen
+
+  \since 5.9
+*/
+QString QScreen::manufacturer() const
+{
+    Q_D(const QScreen);
+    return d->platformScreen->manufacturer();
+}
+
+/*!
+  \property QScreen::model
+  \brief the model of the screen
+
+  \since 5.9
+*/
+QString QScreen::model() const
+{
+    Q_D(const QScreen);
+    return d->platformScreen->model();
+}
+
+/*!
+  \property QScreen::serialNumber
+  \brief the serial number of the screen
+
+  \since 5.9
+*/
+QString QScreen::serialNumber() const
+{
+    Q_D(const QScreen);
+    return d->platformScreen->serialNumber();
+}
+
+/*!
   \property QScreen::depth
   \brief the color depth of the screen
 */
@@ -666,6 +702,10 @@ void QScreenPrivate::updatePrimaryOrientation()
     identifier and not a QWidget, is to enable grabbing of windows
     that are not part of the application, window system frames, and so
     on.
+
+    \warning Grabbing windows that are not part of the application is
+    not supported on systems such as iOS, where sandboxing/security
+    prevents reading pixels of windows not owned by the application.
 
     The grabWindow() function grabs pixels from the screen, not from
     the window, i.e. if there is another window partially or entirely

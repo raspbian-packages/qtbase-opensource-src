@@ -1,6 +1,6 @@
-# SymbolsHelper-Confirmed: 5.7.1 m68k
+# SymbolsHelper-Confirmed: 5.9.1 amd64 armel armhf hppa hurd-i386 i386 m68k mips mipsel powerpc powerpcspe sh4 x32
 libQt5Core.so.5 libqt5core5a #MINVER#
-| libqt5core5a #MINVER#, qtbase-abi-5-7-1
+| libqt5core5a #MINVER#, qtbase-abi-5-9-0
 * Build-Depends-Package: qtbase5-dev
  Qt_5.0@Qt_5.0 5.6.0~beta
  Qt_5.1@Qt_5.1 5.6.0~beta
@@ -10,6 +10,8 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  Qt_5.5@Qt_5.5 5.6.0~beta
  Qt_5.6@Qt_5.6 5.6.0~beta
  Qt_5.7@Qt_5.7 5.7.0
+ Qt_5.8@Qt_5.8 5.8.0
+ Qt_5.9@Qt_5.9 5.9.0~beta
  Qt_5@Qt_5 5.6.0~beta
  Qt_5_PRIVATE_API@Qt_5_PRIVATE_API 5.6.0~beta 1
  _Z10forcepointR11QTextStream@Qt_5 5.0.2
@@ -129,8 +131,10 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _Z5resetR11QTextStream@Qt_5 5.0.2
  _Z5rightR11QTextStream@Qt_5 5.0.2
  _Z6centerR11QTextStream@Qt_5 5.0.2
+ _Z6qIsInf8qfloat16@Qt_5 5.9.0~beta
  _Z6qIsInfd@Qt_5 5.0.2
  _Z6qIsInff@Qt_5 5.0.2
+ _Z6qIsNaN8qfloat16@Qt_5 5.9.0~beta
  _Z6qIsNaNd@Qt_5 5.0.2
  _Z6qIsNaNf@Qt_5 5.0.2
  _Z6qsrandj@Qt_5 5.0.2
@@ -157,8 +161,10 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _Z9forcesignR11QTextStream@Qt_5 5.0.2
  _Z9qBadAllocv@Qt_5 5.0.2
  _Z9qChecksumPKcj@Qt_5 5.0.2
+ _Z9qChecksumPKcjN2Qt12ChecksumTypeE@Qt_5 5.9.0~beta
  _Z9qCompressPKhii@Qt_5 5.0.2
  (subst)_Z9qHashBitsPKv{size_t}j@Qt_5 5.4.0
+ _Z9qIsFinite8qfloat16@Qt_5 5.9.0~beta
  _Z9qIsFinited@Qt_5 5.0.2
  _Z9qIsFinitef@Qt_5 5.0.2
  (subst)_Z9qsnprintfPc{size_t}PKcz@Qt_5 5.0.2
@@ -167,6 +173,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _Z9qunsetenvPKc@Qt_5 5.1.0
  (subst)_ZN10QArrayData10deallocateEPS_{size_t}{size_t}@Qt_5 5.0.2
  _ZN10QArrayData11shared_nullE@Qt_5 5.0.2
+ (subst)_ZN10QArrayData19reallocateUnalignedEPS_{size_t}{size_t}6QFlagsINS_16AllocationOptionEE@Qt_5 5.9.0~beta
  (subst)_ZN10QArrayData8allocateE{size_t}{size_t}{size_t}6QFlagsINS_16AllocationOptionEE@Qt_5 5.0.2
  _ZN10QByteArray10fromBase64ERKS_6QFlagsINS_12Base64OptionEE@Qt_5 5.2.0~alpha1
  _ZN10QByteArray10fromBase64ERKS_@Qt_5 5.0.2
@@ -366,6 +373,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN11QDataStreamC2Ev@Qt_5 5.0.2
  _ZN11QDataStreamD1Ev@Qt_5 5.0.2
  _ZN11QDataStreamD2Ev@Qt_5 5.0.2
+ _ZN11QDataStreamlsE8qfloat16@Qt_5 5.9.0~beta
  _ZN11QDataStreamlsEPKc@Qt_5 5.0.2
  _ZN11QDataStreamlsEa@Qt_5 5.0.2
  _ZN11QDataStreamlsEb@Qt_5 5.0.2
@@ -374,6 +382,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN11QDataStreamlsEi@Qt_5 5.0.2
  _ZN11QDataStreamlsEs@Qt_5 5.0.2
  _ZN11QDataStreamlsEx@Qt_5 5.0.2
+ _ZN11QDataStreamrsER8qfloat16@Qt_5 5.9.0~beta
  _ZN11QDataStreamrsERPc@Qt_5 5.0.2
  _ZN11QDataStreamrsERa@Qt_5 5.0.2
  _ZN11QDataStreamrsERb@Qt_5 5.0.2
@@ -563,6 +572,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN11QThreadPool5clearEv@Qt_5 5.2.0~alpha1
  _ZN11QThreadPool5startEP9QRunnablei@Qt_5 5.0.2
  _ZN11QThreadPool6cancelEP9QRunnable@Qt_5 5.5.0
+ _ZN11QThreadPool7tryTakeEP9QRunnable@Qt_5 5.9.0~beta
  _ZN11QThreadPool8tryStartEP9QRunnable@Qt_5 5.0.2
  _ZN11QThreadPoolC1EP7QObject@Qt_5 5.0.2
  _ZN11QThreadPoolC2EP7QObject@Qt_5 5.0.2
@@ -614,6 +624,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN12QLibraryInfo16licensedProductsEv@Qt_5 5.0.2
  _ZN12QLibraryInfo23platformPluginArgumentsERK7QString@Qt_5 5.3.0
  _ZN12QLibraryInfo5buildEv@Qt_5 5.3.0
+ _ZN12QLibraryInfo7versionEv@Qt_5 5.8.0
  _ZN12QLibraryInfo8licenseeEv@Qt_5 5.0.2
  _ZN12QLibraryInfo8locationENS_15LibraryLocationE@Qt_5 5.0.2
  _ZN12QLibraryInfo9buildDateEv@Qt_5 5.0.2
@@ -925,6 +936,15 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN14QAbstractStateD0Ev@Qt_5 5.0.2
  _ZN14QAbstractStateD1Ev@Qt_5 5.0.2
  _ZN14QAbstractStateD2Ev@Qt_5 5.0.2
+ _ZN14QDeadlineTimer11setDeadlineExN2Qt9TimerTypeE@Qt_5 5.8.0
+ _ZN14QDeadlineTimer12setTimerTypeEN2Qt9TimerTypeE@Qt_5 5.8.0
+ _ZN14QDeadlineTimer16setRemainingTimeExN2Qt9TimerTypeE@Qt_5 5.8.0
+ _ZN14QDeadlineTimer18setPreciseDeadlineExxN2Qt9TimerTypeE@Qt_5 5.8.0
+ _ZN14QDeadlineTimer23setPreciseRemainingTimeExxN2Qt9TimerTypeE@Qt_5 5.8.0
+ _ZN14QDeadlineTimer7currentEN2Qt9TimerTypeE@Qt_5 5.8.0
+ _ZN14QDeadlineTimer8addNSecsES_x@Qt_5 5.8.0
+ _ZN14QDeadlineTimerC1ExN2Qt9TimerTypeE@Qt_5 5.8.0
+ _ZN14QDeadlineTimerC2ExN2Qt9TimerTypeE@Qt_5 5.8.0
  _ZN14QFactoryLoader10refreshAllEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZN14QFactoryLoader11qt_metacallEN11QMetaObject4CallEiPPv@Qt_5_PRIVATE_API 5.0.2 1
  _ZN14QFactoryLoader11qt_metacastEPKc@Qt_5_PRIVATE_API 5.0.2 1
@@ -987,6 +1007,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN14QStandardPaths11displayNameENS_16StandardLocationE@Qt_5 5.0.2
  _ZN14QStandardPaths14enableTestModeEb@Qt_5 5.0.2
  _ZN14QStandardPaths14findExecutableERK7QStringRK11QStringList@Qt_5 5.0.2
+ _ZN14QStandardPaths16staticMetaObjectE@Qt_5 5.8.0
  _ZN14QStandardPaths16writableLocationENS_16StandardLocationE@Qt_5 5.0.2
  _ZN14QStandardPaths17isTestModeEnabledEv@Qt_5 5.0.2
  _ZN14QStandardPaths17standardLocationsENS_16StandardLocationE@Qt_5 5.0.2
@@ -1073,6 +1094,9 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN15QAnimationGroupD2Ev@Qt_5 5.0.2
  _ZN15QDateTimeParser11SectionNode4nameENS_7SectionE@Qt_5_PRIVATE_API 5.6.1 1
  _ZN15QDateTimeParser11parseFormatERK7QString@Qt_5_PRIVATE_API 5.0.2 1
+ _ZN15QDateTimeParserD0Ev@Qt_5_PRIVATE_API 5.9.0~beta 1
+ _ZN15QDateTimeParserD1Ev@Qt_5_PRIVATE_API 5.9.0~beta 1
+ _ZN15QDateTimeParserD2Ev@Qt_5_PRIVATE_API 5.9.0~beta 1
  _ZN15QIPAddressUtils8parseIp4ERjPK5QCharS3_@Qt_5 5.0.2
  _ZN15QIPAddressUtils8parseIp6ERA16_hPK5QCharS4_@Qt_5 5.0.2
  _ZN15QIPAddressUtils8toStringER7QStringPh@Qt_5 5.0.2
@@ -1132,11 +1156,9 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN16QAnimationDriverD0Ev@Qt_5 5.0.2
  _ZN16QAnimationDriverD1Ev@Qt_5 5.0.2
  _ZN16QAnimationDriverD2Ev@Qt_5 5.0.2
- _ZN16QCollatorPrivate4initEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QCollatorPrivate7cleanupEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QCollatorSortKeyC1EP23QCollatorSortKeyPrivate@Qt_5_PRIVATE_API 5.2.0~alpha1 1
+ _ZN16QCollatorSortKeyC1EP23QCollatorSortKeyPrivate@Qt_5 5.9.0~beta
  _ZN16QCollatorSortKeyC1ERKS_@Qt_5 5.2.0~alpha1
- _ZN16QCollatorSortKeyC2EP23QCollatorSortKeyPrivate@Qt_5_PRIVATE_API 5.2.0~alpha1 1
+ _ZN16QCollatorSortKeyC2EP23QCollatorSortKeyPrivate@Qt_5 5.9.0~beta
  _ZN16QCollatorSortKeyC2ERKS_@Qt_5 5.2.0~alpha1
  _ZN16QCollatorSortKeyD1Ev@Qt_5 5.2.0~alpha1
  _ZN16QCollatorSortKeyD2Ev@Qt_5 5.2.0~alpha1
@@ -1240,6 +1262,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN16QIODevicePrivate20setWriteChannelCountEi@Qt_5_PRIVATE_API 5.7.0 1
  _ZN16QIODevicePrivate4peekEPcx@Qt_5_PRIVATE_API 5.0.2 1
  _ZN16QIODevicePrivate4peekEx@Qt_5_PRIVATE_API 5.0.2 1
+ _ZN16QIODevicePrivate4readEPcxb@Qt_5_PRIVATE_API 5.9.0~beta 1
  _ZN16QIODevicePrivateC1Ev@Qt_5_PRIVATE_API 5.0.2 1
  _ZN16QIODevicePrivateC2Ev@Qt_5_PRIVATE_API 5.0.2 1
  _ZN16QIODevicePrivateD0Ev@Qt_5_PRIVATE_API 5.0.2 1
@@ -1264,8 +1287,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN16QMetaStringTable5enterERK10QByteArray@Qt_5_PRIVATE_API 5.0.2 1
  _ZN16QMetaStringTableC1ERK10QByteArray@Qt_5_PRIVATE_API 5.2.1 1
  _ZN16QMetaStringTableC2ERK10QByteArray@Qt_5_PRIVATE_API 5.2.1 1
- _ZN16QSegfaultHandler10initializeEPPci@Qt_5_PRIVATE_API 5.0.2 1
- _ZN16QSegfaultHandler8callbackE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN16QStringListModel10insertRowsEiiRK11QModelIndex@Qt_5 5.0.2
  _ZN16QStringListModel10removeRowsEiiRK11QModelIndex@Qt_5 5.0.2
  _ZN16QStringListModel11qt_metacallEN11QMetaObject4CallEiPPv@Qt_5 5.0.2
@@ -1285,24 +1306,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN16QSystemSemaphoreC2ERK7QStringiNS_10AccessModeE@Qt_5 5.0.2
  _ZN16QSystemSemaphoreD1Ev@Qt_5 5.0.2
  _ZN16QSystemSemaphoreD2Ev@Qt_5 5.0.2
- _ZN16QTimeZonePrivate11invalidDataEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivate12toOffsetDataERKNS_4DataE@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivate15isoOffsetFormatEi@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivate17ianaIdToWindowsIdERK10QByteArray@Qt_5_PRIVATE_API 5.2.0~rc1 1
- _ZN16QTimeZonePrivate17invalidOffsetDataEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivate18windowsIdToIanaIdsERK10QByteArray@Qt_5_PRIVATE_API 5.2.0~rc1 1
- _ZN16QTimeZonePrivate18windowsIdToIanaIdsERK10QByteArrayN7QLocale7CountryE@Qt_5_PRIVATE_API 5.2.0~rc1 1
- _ZN16QTimeZonePrivate24windowsIdToDefaultIanaIdERK10QByteArray@Qt_5_PRIVATE_API 5.2.0~rc1 1
- _ZN16QTimeZonePrivate24windowsIdToDefaultIanaIdERK10QByteArrayN7QLocale7CountryE@Qt_5_PRIVATE_API 5.2.0~rc1 1
- _ZN16QTimeZonePrivate5cloneEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivate9isValidIdERK10QByteArray@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivateC1ERKS_@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivateC1Ev@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivateC2ERKS_@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivateC2Ev@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivateD0Ev@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivateD1Ev@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZN16QTimeZonePrivateD2Ev@Qt_5_PRIVATE_API 5.2.0~alpha1 1
  _ZN16QXmlStreamReader10raiseErrorERK7QString@Qt_5 5.0.2
  _ZN16QXmlStreamReader15readElementTextENS_24ReadElementTextBehaviourE@Qt_5 5.0.2
  _ZN16QXmlStreamReader17setEntityResolverEP24QXmlStreamEntityResolver@Qt_5 5.0.2
@@ -1526,6 +1529,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN18QCommandLineOption14setDescriptionERK7QString@Qt_5 5.2.0~alpha1
  _ZN18QCommandLineOption15setDefaultValueERK7QString@Qt_5 5.2.0~alpha1
  _ZN18QCommandLineOption16setDefaultValuesERK11QStringList@Qt_5 5.2.0~alpha1
+ _ZN18QCommandLineOption8setFlagsE6QFlagsINS_4FlagEE@Qt_5 5.8.0
  _ZN18QCommandLineOption9setHiddenEb@Qt_5 5.6.0~beta
  _ZN18QCommandLineOptionC1ERK11QStringList@Qt_5 5.4.0
  _ZN18QCommandLineOptionC1ERK11QStringListRK7QStringS5_S5_@Qt_5 5.2.0~alpha1
@@ -1558,6 +1562,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN18QCommandLineParserC2Ev@Qt_5 5.2.0~alpha1
  _ZN18QCommandLineParserD1Ev@Qt_5 5.2.0~alpha1
  _ZN18QCommandLineParserD2Ev@Qt_5 5.2.0~alpha1
+ _ZN18QCryptographicHash16staticMetaObjectE@Qt_5 5.8.0
  _ZN18QCryptographicHash4hashERK10QByteArrayNS_9AlgorithmE@Qt_5 5.0.2
  _ZN18QCryptographicHash5resetEv@Qt_5 5.0.2
  _ZN18QCryptographicHash7addDataEP9QIODevice@Qt_5 5.0.2
@@ -1697,7 +1702,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN18QThreadPoolPrivate11enqueueTaskEP9QRunnablei@Qt_5_PRIVATE_API 5.0.2 1
  _ZN18QThreadPoolPrivate11startThreadEP9QRunnable@Qt_5_PRIVATE_API 5.0.2 1
  _ZN18QThreadPoolPrivate11waitForDoneEi@Qt_5_PRIVATE_API 5.0.2 1
- _ZN18QThreadPoolPrivate13stealRunnableEP9QRunnable@Qt_5_PRIVATE_API 5.0.2 1
  _ZN18QThreadPoolPrivate19stealAndRunRunnableEP9QRunnable@Qt_5_PRIVATE_API 5.5.0 1
  _ZN18QThreadPoolPrivate21tryToStartMoreThreadsEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZN18QThreadPoolPrivate5clearEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
@@ -1969,6 +1973,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN20QEventDispatcherUNIXD1Ev@Qt_5_PRIVATE_API 5.0.2 1
  _ZN20QEventDispatcherUNIXD2Ev@Qt_5_PRIVATE_API 5.0.2 1
  _ZN20QFileSelectorPrivate10addStaticsERK11QStringList@Qt_5_PRIVATE_API 5.2.0~alpha1 1
+ _ZN20QFileSelectorPrivate15selectionHelperERK7QStringS2_RK11QStringListRK5QChar@Qt_5_PRIVATE_API 5.8.0 1
  _ZN20QFileSelectorPrivate15updateSelectorsEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
  _ZN20QFileSelectorPrivate17platformSelectorsEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
  _ZN20QFileSelectorPrivateC1Ev@Qt_5_PRIVATE_API 5.2.0~alpha1 1
@@ -2156,6 +2161,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN23QAbstractAnimationTimer16staticMetaObjectE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN23QCoreApplicationPrivate10initLocaleEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZN23QCoreApplicationPrivate10mainThreadEv@Qt_5_PRIVATE_API 5.0.2 1
+ _ZN23QCoreApplicationPrivate11execCleanupEv@Qt_5_PRIVATE_API 5.8.0 1
  _ZN23QCoreApplicationPrivate13checkInstanceEPKc@Qt_5_PRIVATE_API 5.0.2 1
  _ZN23QCoreApplicationPrivate13notify_helperEP7QObjectP6QEvent@Qt_5_PRIVATE_API 5.0.2 1
  _ZN23QCoreApplicationPrivate13setuidAllowedE@Qt_5_PRIVATE_API 5.3.0 1
@@ -2195,6 +2201,26 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN23QEventTransitionPrivateD0Ev@Qt_5_PRIVATE_API 5.6.0~beta 1
  _ZN23QEventTransitionPrivateD1Ev@Qt_5_PRIVATE_API 5.6.0~beta 1
  _ZN23QEventTransitionPrivateD2Ev@Qt_5_PRIVATE_API 5.6.0~beta 1
+ _ZN23QOperatingSystemVersion10Windows8_1E@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion11MacOSSierraE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion11OSXYosemiteE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion12OSXElCapitanE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion12OSXMavericksE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion13AndroidKitKatE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion13AndroidNougatE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion15AndroidLollipopE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion15MacOSHighSierraE@Qt_5 5.9.1
+ _ZN23QOperatingSystemVersion16AndroidJellyBeanE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion17AndroidNougat_MR1E@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion18AndroidMarshmallowE@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion19AndroidLollipop_MR1E@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion20AndroidJellyBean_MR1E@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion20AndroidJellyBean_MR2E@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion7compareERKS_S1_@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion7currentEv@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion8Windows7E@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion8Windows8E@Qt_5 5.9.0~beta
+ _ZN23QOperatingSystemVersion9Windows10E@Qt_5 5.9.0~beta
  _ZN23QParallelAnimationGroup11qt_metacallEN11QMetaObject4CallEiPPv@Qt_5 5.0.2
  _ZN23QParallelAnimationGroup11qt_metacastEPKc@Qt_5 5.0.2
  _ZN23QParallelAnimationGroup11updateStateEN18QAbstractAnimation5StateES1_@Qt_5 5.0.2
@@ -2269,6 +2295,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN25QAbstractItemModelPrivate15variantLessThanERK8QVariantS2_@Qt_5_PRIVATE_API 5.0.2 1
  _ZN25QAbstractItemModelPrivate16defaultRoleNamesEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZN25QAbstractItemModelPrivate16staticEmptyModelEv@Qt_5_PRIVATE_API 5.0.2 1
+ _ZN25QAbstractItemModelPrivate17isVariantLessThanERK8QVariantS2_N2Qt15CaseSensitivityEb@Qt_5_PRIVATE_API 5.8.0 1
  _ZN25QAbstractItemModelPrivate19itemsAboutToBeMovedERK11QModelIndexiiS2_iN2Qt11OrientationE@Qt_5_PRIVATE_API 5.0.2 1
  _ZN25QAbstractItemModelPrivate20rowsAboutToBeRemovedERK11QModelIndexii@Qt_5_PRIVATE_API 5.0.2 1
  _ZN25QAbstractItemModelPrivate21movePersistentIndexesERK7QVectorIP25QPersistentModelIndexDataEiRK11QModelIndexN2Qt11OrientationE@Qt_5_PRIVATE_API 5.5.0 1
@@ -2821,7 +2848,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  (arch=hppa m68k mips mips64el mipsel sparc64)_ZN7QString8vsprintfEPKcPv@Qt_5 5.4.2
  (arch=arm64 armel armhf)_ZN7QString8vsprintfEPKcSt9__va_list@Qt_5 5.3.0
  _ZN7QString9fromUtf16EPKti@Qt_5 5.0.2
- (arch=alpha)_ZN7QString9vasprintfEPKc13__va_list_tag@Qt_5 5.5.0
+ (arch=alpha sh4)_ZN7QString9vasprintfEPKc13__va_list_tag@Qt_5 5.9.1
  (arch=amd64 kfreebsd-amd64 powerpc powerpcspe s390x x32)_ZN7QString9vasprintfEPKcP13__va_list_tag@Qt_5 5.6.1
  (arch=hurd-i386 i386 kfreebsd-i386 ppc64 ppc64el)_ZN7QString9vasprintfEPKcPc@Qt_5 5.5.0
  (arch=hppa m68k mips mips64el mipsel sparc64)_ZN7QString9vasprintfEPKcPv@Qt_5 5.7.1
@@ -3059,6 +3086,11 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN8QVariantD1Ev@Qt_5 5.0.2
  _ZN8QVariantD2Ev@Qt_5 5.0.2
  _ZN8QVariantaSERKS_@Qt_5 5.0.2
+ (arch=!arm64)_ZN8qfloat1610shifttableE@Qt_5 5.9.0~beta
+ (arch=!arm64)_ZN8qfloat1611offsettableE@Qt_5 5.9.0~beta
+ (arch=!arm64)_ZN8qfloat1613exponenttableE@Qt_5 5.9.0~beta
+ (arch=!arm64)_ZN8qfloat1613mantissatableE@Qt_5 5.9.0~beta
+ (arch=!arm64)_ZN8qfloat169basetableE@Qt_5 5.9.0~beta
  _ZN9QBitArray4fillEbii@Qt_5 5.0.2
  _ZN9QBitArray6resizeEi@Qt_5 5.0.2
  _ZN9QBitArrayC1Eib@Qt_5 5.0.2
@@ -3088,21 +3120,31 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN9QDateTime12setUtcOffsetEi@Qt_5 5.0.2
  _ZN9QDateTime15currentDateTimeEv@Qt_5 5.0.2
  _ZN9QDateTime16setOffsetFromUtcEi@Qt_5 5.2.0~alpha1
+ _ZN9QDateTime17setSecsSinceEpochEx@Qt_5 5.8.0
  _ZN9QDateTime18currentDateTimeUtcEv@Qt_5 5.0.2
+ _ZN9QDateTime18fromSecsSinceEpochExN2Qt8TimeSpecEi@Qt_5 5.8.0
+ _ZN9QDateTime18fromSecsSinceEpochExRK9QTimeZone@Qt_5 5.8.0
  _ZN9QDateTime18setMSecsSinceEpochEx@Qt_5 5.0.2
  _ZN9QDateTime19fromMSecsSinceEpochEx@Qt_5 5.0.2
  _ZN9QDateTime19fromMSecsSinceEpochExN2Qt8TimeSpecEi@Qt_5 5.2.0~alpha1
  _ZN9QDateTime19fromMSecsSinceEpochExRK9QTimeZone@Qt_5 5.2.0~alpha1
+ _ZN9QDateTime21currentSecsSinceEpochEv@Qt_5 5.8.0
  _ZN9QDateTime22currentMSecsSinceEpochEv@Qt_5 5.0.2
+ (optional=inline|arch=alpha amd64 arm64 kfreebsd-amd64 mips64el ppc64 ppc64el s390x sparc64)_ZN9QDateTime4DataC1EN2Qt8TimeSpecE@Qt_5 5.9.1
+ (optional=inline|arch=alpha amd64 arm64 kfreebsd-amd64 mips64el ppc64 ppc64el s390x sparc64)_ZN9QDateTime4DataC2EN2Qt8TimeSpecE@Qt_5 5.9.1
+ _ZN9QDateTime4DataD1Ev@Qt_5 5.8.0
+ _ZN9QDateTime4DataD2Ev@Qt_5 5.8.0
  _ZN9QDateTime7setDateERK5QDate@Qt_5 5.0.2
  _ZN9QDateTime7setTimeERK5QTime@Qt_5 5.0.2
  _ZN9QDateTime9setTime_tEj@Qt_5 5.0.2
+ _ZN9QDateTimeC1EOS_@Qt_5 5.8.0
  _ZN9QDateTimeC1ERK5QDate@Qt_5 5.0.2
  _ZN9QDateTimeC1ERK5QDateRK5QTimeN2Qt8TimeSpecE@Qt_5 5.0.2
  _ZN9QDateTimeC1ERK5QDateRK5QTimeN2Qt8TimeSpecEi@Qt_5 5.2.0~alpha1
  _ZN9QDateTimeC1ERK5QDateRK5QTimeRK9QTimeZone@Qt_5 5.2.0~alpha1
  _ZN9QDateTimeC1ERKS_@Qt_5 5.0.2
  _ZN9QDateTimeC1Ev@Qt_5 5.0.2
+ _ZN9QDateTimeC2EOS_@Qt_5 5.8.0
  _ZN9QDateTimeC2ERK5QDate@Qt_5 5.0.2
  _ZN9QDateTimeC2ERK5QDateRK5QTimeN2Qt8TimeSpecE@Qt_5 5.0.2
  _ZN9QDateTimeC2ERK5QDateRK5QTimeN2Qt8TimeSpecEi@Qt_5 5.2.0~alpha1
@@ -3458,7 +3500,11 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZN9QtPrivate15ResultStoreBase9addResultEiPKv@Qt_5 5.0.2
  _ZN9QtPrivate15ResultStoreBaseC1Ev@Qt_5 5.0.2
  _ZN9QtPrivate15ResultStoreBaseC2Ev@Qt_5 5.0.2
+ _ZN9QtPrivate15ResultStoreBaseD0Ev@Qt_5 5.9.0~beta
+ _ZN9QtPrivate15ResultStoreBaseD1Ev@Qt_5 5.9.0~beta
+ _ZN9QtPrivate15ResultStoreBaseD2Ev@Qt_5 5.9.0~beta
  _ZN9QtPrivate16QStringList_joinEPK11QStringListPK5QChari@Qt_5 5.0.2
+ _ZN9QtPrivate16QStringList_joinERK11QStringList13QLatin1String@Qt_5 5.8.0
  _ZN9QtPrivate16QStringList_sortEP11QStringListN2Qt15CaseSensitivityE@Qt_5 5.0.2
  _ZN9QtPrivate18QStringList_filterEPK11QStringListRK18QRegularExpression@Qt_5 5.0.2
  _ZN9QtPrivate18QStringList_filterEPK11QStringListRK7QRegExp@Qt_5 5.0.2
@@ -3502,6 +3548,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK10QByteArray5countEc@Qt_5 5.0.2
  _ZNK10QByteArray5rightEi@Qt_5 5.0.2
  _ZNK10QByteArray5splitEc@Qt_5 5.0.2
+ _ZNK10QByteArray5toHexEc@Qt_5 5.9.0~beta
  _ZNK10QByteArray5toHexEv@Qt_5 5.0.2
  _ZNK10QByteArray5toIntEPbi@Qt_5 5.0.2
  _ZNK10QByteArray6isNullEv@Qt_5 5.0.2
@@ -3563,6 +3610,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK10QStringRef11lastIndexOfERKS_iN2Qt15CaseSensitivityE@Qt_5 5.0.2
  _ZNK10QStringRef11toLocal8BitEv@Qt_5 5.0.2
  _ZNK10QStringRef11toULongLongEPbi@Qt_5 5.1.0
+ _ZNK10QStringRef13isRightToLeftEv@Qt_5 5.9.0~beta
  _ZNK10QStringRef3midEii@Qt_5 5.2.0~alpha1
  _ZNK10QStringRef4leftEi@Qt_5 5.2.0~alpha1
  _ZNK10QStringRef5countE5QCharN2Qt15CaseSensitivityE@Qt_5 5.0.2
@@ -3733,6 +3781,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK12QStorageInfo8rootPathEv@Qt_5 5.4.0
  _ZNK12QStorageInfo9blockSizeEv@Qt_5 5.6.0~beta
  _ZNK12QStorageInfo9bytesFreeEv@Qt_5 5.4.0
+ _ZNK12QStorageInfo9subvolumeEv@Qt_5 5.9.0~beta
  _ZNK12QSystemError8toStringEv@Qt_5_PRIVATE_API 5.6.0~beta 1
  _ZNK12QTextDecoder10hasFailureEv@Qt_5 5.0.2
  _ZNK12QTextEncoder10hasFailureEv@Qt_5 5.0.2
@@ -3862,12 +3911,19 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK13QTemporaryDir11errorStringEv@Qt_5 5.6.0~beta
  _ZNK13QTemporaryDir4pathEv@Qt_5 5.0.2
  _ZNK13QTemporaryDir7isValidEv@Qt_5 5.0.2
+ _ZNK13QTemporaryDir8filePathERK7QString@Qt_5 5.9.0~beta
  _ZNK13QUnifiedTimer10metaObjectEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZNK13QUnifiedTimer7elapsedEv@Qt_5_PRIVATE_API 5.4.0 1
  _ZNK14QAbstractState10metaObjectEv@Qt_5 5.0.2
  _ZNK14QAbstractState11parentStateEv@Qt_5 5.0.2
  _ZNK14QAbstractState6activeEv@Qt_5 5.4.0
  _ZNK14QAbstractState7machineEv@Qt_5 5.0.2
+ _ZNK14QDeadlineTimer10hasExpiredEv@Qt_5 5.8.0
+ _ZNK14QDeadlineTimer13deadlineNSecsEv@Qt_5 5.8.0
+ _ZNK14QDeadlineTimer13remainingTimeEv@Qt_5 5.8.0
+ _ZNK14QDeadlineTimer18remainingTimeNSecsEv@Qt_5 5.8.0
+ _ZNK14QDeadlineTimer21rawRemainingTimeNSecsEv@Qt_5 5.8.0
+ _ZNK14QDeadlineTimer8deadlineEv@Qt_5 5.8.0
  _ZNK14QFactoryLoader10metaObjectEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZNK14QFactoryLoader6keyMapEv@Qt_5_PRIVATE_API 5.0.2 1
  _ZNK14QFactoryLoader7indexOfERK7QString@Qt_5_PRIVATE_API 5.0.2 1
@@ -3972,6 +4028,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK16QEventTransition10metaObjectEv@Qt_5 5.0.2
  _ZNK16QEventTransition11eventSourceEv@Qt_5 5.0.2
  _ZNK16QEventTransition9eventTypeEv@Qt_5 5.0.2
+ _ZNK16QIODevicePrivate20allWriteBuffersEmptyEv@Qt_5_PRIVATE_API 5.8.0 1
  _ZNK16QLoggingCategory9isEnabledE9QtMsgType@Qt_5 5.2.0~alpha1
  _ZNK16QMetaEnumBuilder3keyEi@Qt_5_PRIVATE_API 5.0.2 1
  _ZNK16QMetaEnumBuilder4nameEv@Qt_5_PRIVATE_API 5.0.2 1
@@ -3991,31 +4048,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK16QSystemSemaphore11errorStringEv@Qt_5 5.0.2
  _ZNK16QSystemSemaphore3keyEv@Qt_5 5.0.2
  _ZNK16QSystemSemaphore5errorEv@Qt_5 5.0.2
- _ZNK16QTimeZonePrivate11displayNameEN9QTimeZone8TimeTypeENS0_8NameTypeERK7QLocale@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate11displayNameExN9QTimeZone8NameTypeERK7QLocale@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate11transitionsExx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate12abbreviationEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate13offsetFromUtcEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate14hasTransitionsEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate14isDaylightTimeEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate14nextTransitionEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate15hasDaylightTimeEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate16dataForLocalTimeEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate16systemTimeZoneIdEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate18daylightTimeOffsetEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate18previousTransitionEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate18standardTimeOffsetEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate20availableTimeZoneIdsEN7QLocale7CountryE@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate20availableTimeZoneIdsEi@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate20availableTimeZoneIdsEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate2idEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate4dataEx@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate7commentEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate7countryEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate7isValidEv@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivate9serializeER11QDataStream@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivateeqERKS_@Qt_5_PRIVATE_API 5.2.0~alpha1 1
- _ZNK16QTimeZonePrivateneERKS_@Qt_5_PRIVATE_API 5.2.0~alpha1 1
  _ZNK16QXmlStreamReader10attributesEv@Qt_5 5.0.2
  _ZNK16QXmlStreamReader10lineNumberEv@Qt_5 5.0.2
  _ZNK16QXmlStreamReader11dtdPublicIdEv@Qt_5 5.0.2
@@ -4102,6 +4134,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK18QAbstractListModel7siblingEiiRK11QModelIndex@Qt_5 5.5.0
  _ZNK18QCommandLineOption11descriptionEv@Qt_5 5.2.0~alpha1
  _ZNK18QCommandLineOption13defaultValuesEv@Qt_5 5.2.0~alpha1
+ _ZNK18QCommandLineOption5flagsEv@Qt_5 5.8.0
  _ZNK18QCommandLineOption5namesEv@Qt_5 5.2.0~alpha1
  _ZNK18QCommandLineOption8isHiddenEv@Qt_5 5.6.0~beta
  _ZNK18QCommandLineOption9valueNameEv@Qt_5 5.2.0~alpha1
@@ -4259,6 +4292,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK19QItemSelectionRange11intersectedERKS_@Qt_5 5.0.2
  _ZNK19QItemSelectionRange7indexesEv@Qt_5 5.0.2
  _ZNK19QItemSelectionRange7isEmptyEv@Qt_5 5.0.2
+ _ZNK19QItemSelectionRangeltERKS_@Qt_5 5.9.0~beta
  _ZNK19QProcessEnvironment12toStringListEv@Qt_5 5.0.2
  _ZNK19QProcessEnvironment4keysEv@Qt_5 5.0.2
  _ZNK19QProcessEnvironment5valueERK7QStringS2_@Qt_5 5.0.2
@@ -4406,7 +4440,10 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK21QSortFilterProxyModel9mimeTypesEv@Qt_5 5.0.2
  _ZNK21QSortFilterProxyModel9sortOrderEv@Qt_5 5.0.2
  _ZNK23QAbstractAnimationTimer10metaObjectEv@Qt_5_PRIVATE_API 5.0.2 1
+ _ZNK23QCoreApplicationPrivate10appVersionEv@Qt_5_PRIVATE_API 5.9.0~beta 1
  _ZNK23QCoreApplicationPrivate7appNameEv@Qt_5_PRIVATE_API 5.0.2 1
+ _ZNK23QOperatingSystemVersion11isAnyOfTypeESt16initializer_listINS_6OSTypeEE@Qt_5 5.9.0~beta
+ _ZNK23QOperatingSystemVersion4nameEv@Qt_5 5.9.0~beta
  _ZNK23QParallelAnimationGroup10metaObjectEv@Qt_5 5.0.2
  _ZNK23QParallelAnimationGroup8durationEv@Qt_5 5.0.2
  _ZNK23QRegularExpressionMatch11capturedEndERK7QString@Qt_5 5.0.2
@@ -4442,6 +4479,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK27QAbstractFileEngineIterator4pathEv@Qt_5_PRIVATE_API 5.1.0 1
  _ZNK27QAbstractFileEngineIterator7filtersEv@Qt_5_PRIVATE_API 5.1.0 1
  _ZNK27QAbstractFileEngineIterator9entryInfoENS_13EntryInfoTypeE@Qt_5_PRIVATE_API 5.1.0 1
+ _ZNK27QStaticByteArrayMatcherBase9indexOfInEPKcjS1_ii@Qt_5 5.9.0~beta
  _ZNK31QRegularExpressionMatchIterator12matchOptionsEv@Qt_5 5.0.2
  _ZNK31QRegularExpressionMatchIterator17regularExpressionEv@Qt_5 5.0.2
  _ZNK31QRegularExpressionMatchIterator7hasNextEv@Qt_5 5.0.2
@@ -4468,6 +4506,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK4QDir6mkpathERK7QString@Qt_5 5.0.2
  _ZNK4QDir6rmpathERK7QString@Qt_5 5.0.2
  _ZNK4QDir7dirNameEv@Qt_5 5.0.2
+ _ZNK4QDir7isEmptyE6QFlagsINS_6FilterEE@Qt_5 5.9.0~beta
  _ZNK4QDir7refreshEv@Qt_5 5.0.2
  _ZNK4QDir7sortingEv@Qt_5 5.0.2
  _ZNK4QDir8filePathERK7QString@Qt_5 5.0.2
@@ -4658,6 +4697,8 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK7QLocaleneERKS_@Qt_5 5.0.2
  _ZNK7QObject10metaObjectEv@Qt_5 5.0.2
  _ZNK7QObject10objectNameEv@Qt_5 5.0.2
+ _ZNK7QObject14dumpObjectInfoEv@Qt_5 5.9.0~beta
+ _ZNK7QObject14dumpObjectTreeEv@Qt_5 5.9.0~beta
  _ZNK7QObject17isSignalConnectedERK11QMetaMethod@Qt_5 5.0.2
  _ZNK7QObject17senderSignalIndexEv@Qt_5 5.0.2
  _ZNK7QObject20dynamicPropertyNamesEv@Qt_5 5.0.2
@@ -4868,6 +4909,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK9QDateTime13offsetFromUtcEv@Qt_5 5.2.0~alpha1
  _ZNK9QDateTime14isDaylightTimeEv@Qt_5 5.2.0~alpha1
  _ZNK9QDateTime15toOffsetFromUtcEi@Qt_5 5.2.0~alpha1
+ _ZNK9QDateTime16toSecsSinceEpochEv@Qt_5 5.8.0
  _ZNK9QDateTime17toMSecsSinceEpochEv@Qt_5 5.0.2
  _ZNK9QDateTime20timeZoneAbbreviationEv@Qt_5 5.2.0~alpha1
  _ZNK9QDateTime4dateEv@Qt_5 5.0.2
@@ -4961,6 +5003,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK9QMetaEnum5scopeEv@Qt_5 5.0.2
  _ZNK9QMetaEnum5valueEi@Qt_5 5.0.2
  _ZNK9QMetaEnum6isFlagEv@Qt_5 5.0.2
+ _ZNK9QMetaEnum8isScopedEv@Qt_5 5.8.0
  _ZNK9QMetaEnum8keyCountEv@Qt_5 5.0.2
  _ZNK9QMetaType12sizeExtendedEv@Qt_5 5.0.2
  _ZNK9QMetaType13flagsExtendedEv@Qt_5 5.0.2
@@ -5000,6 +5043,7 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK9QMimeType9isDefaultEv@Qt_5 5.0.2
  _ZNK9QMimeTypeeqERKS_@Qt_5 5.0.2
  _ZNK9QResource12isCompressedEv@Qt_5 5.0.2
+ _ZNK9QResource12lastModifiedEv@Qt_5 5.8.0
  _ZNK9QResource16absoluteFilePathEv@Qt_5 5.0.2
  _ZNK9QResource4dataEv@Qt_5 5.0.2
  _ZNK9QResource4sizeEv@Qt_5 5.0.2
@@ -5088,12 +5132,13 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZNK9QtPrivate18ResultIteratorBase9batchSizeEv@Qt_5 5.0.2
  _ZNK9QtPrivate18ResultIteratorBaseeqERKS0_@Qt_5 5.0.2
  _ZNK9QtPrivate18ResultIteratorBaseneERKS0_@Qt_5 5.0.2
+ (optional=templinst)_ZNSt17_Temporary_bufferIP21QPersistentModelIndexS0_ED1Ev@Qt_5 5.9.1
+ (optional=templinst)_ZNSt17_Temporary_bufferIP21QPersistentModelIndexS0_ED2Ev@Qt_5 5.9.1
  (optional=templinst)_ZNSt3_V28__rotateIP21QPersistentModelIndexEET_S3_S3_S3_St26random_access_iterator_tag@Qt_5 5.5.0
  (optional=templinst)_ZNSt3_V28__rotateIPiEET_S2_S2_S2_St26random_access_iterator_tag@Qt_5 5.5.0
- (optional=templinst)_ZSt13move_backwardIPiS0_ET0_T_S2_S1_@Qt_5 5.5.0
  (optional=templinst|subst)_ZSt17__rotate_adaptiveIP21QPersistentModelIndexS1_{ssize_t}ET_S2_S2_S2_T1_S3_T0_S3_@Qt_5 5.0.2
  (optional=templinst|subst)_ZSt17__rotate_adaptiveIPiS0_{ssize_t}ET_S1_S1_S1_T1_S2_T0_S2_@Qt_5 5.0.2
- (optional=templinst|arch=armel armhf hurd-i386 i386 kfreebsd-i386 m68k mips mipsel powerpc powerpcspe)_ZSt4swapIN8QVariant7PrivateEENSt9enable_ifIXsrSt6__and_IJSt21is_move_constructibleIT_ESt18is_move_assignableIS5_EEE5valueEvE4typeERS5_SC_@Qt_5 5.7.1
+ (optional=templinst|arch=armel armhf hurd-i386 i386 m68k mips mipsel powerpc powerpcspe)_ZSt4swapIN8QVariant7PrivateEENSt9enable_ifIXsrSt6__and_IJSt6__not_ISt15__is_tuple_likeIT_EESt21is_move_constructibleIS6_ESt18is_move_assignableIS6_EEE5valueEvE4typeERS6_SG_@Qt_5 5.9.1
  _ZTI10QEventLoop@Qt_5 5.0.2
  _ZTI10QException@Qt_5 5.0.2
  _ZTI10QTextCodec@Qt_5 5.0.2
@@ -5133,7 +5178,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZTI16QEventTransition@Qt_5 5.0.2
  _ZTI16QIODevicePrivate@Qt_5_PRIVATE_API 5.0.2 1
  _ZTI16QStringListModel@Qt_5 5.0.2
- _ZTI16QTimeZonePrivate@Qt_5_PRIVATE_API 5.2.0~alpha1 1
  _ZTI17QFactoryInterface@Qt_5 5.6.0~beta
  _ZTI17QSignalTransition@Qt_5 5.0.2
  _ZTI17QVariantAnimation@Qt_5 5.0.2
@@ -5239,7 +5283,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZTS16QEventTransition@Qt_5 5.0.2
  _ZTS16QIODevicePrivate@Qt_5_PRIVATE_API 5.0.2 1
  _ZTS16QStringListModel@Qt_5 5.0.2
- _ZTS16QTimeZonePrivate@Qt_5_PRIVATE_API 5.2.0~alpha1 1
  _ZTS17QFactoryInterface@Qt_5 5.6.0~beta
  _ZTS17QSignalTransition@Qt_5 5.0.2
  _ZTS17QVariantAnimation@Qt_5 5.0.2
@@ -5343,7 +5386,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZTV16QEventTransition@Qt_5 5.0.2
  _ZTV16QIODevicePrivate@Qt_5_PRIVATE_API 5.0.2 1
  _ZTV16QStringListModel@Qt_5 5.0.2
- _ZTV16QTimeZonePrivate@Qt_5_PRIVATE_API 5.2.0~alpha1 1
  _ZTV17QFactoryInterface@Qt_5 5.6.0~beta
  _ZTV17QSignalTransition@Qt_5 5.0.2
  _ZTV17QVariantAnimation@Qt_5 5.0.2
@@ -5410,8 +5452,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  _ZTVN13QStateMachine11SignalEventE@Qt_5 5.0.2
  _ZTVN13QStateMachine12WrappedEventE@Qt_5 5.0.2
  _ZTVN9QtPrivate15ResultStoreBaseE@Qt_5 5.0.2
- _ZZZN16QTimeZonePrivate10utcQStringEvENKUlvE_clEvE15qstring_literal@Qt_5_PRIVATE_API 5.4.0 1
- _ZZZN16QTimeZonePrivate13utcQByteArrayEvENKUlvE_clEvE18qbytearray_literal@Qt_5_PRIVATE_API 5.4.0 1
  _ZanRK9QBitArrayS1_@Qt_5 5.0.2
  _ZeoRK9QBitArrayS1_@Qt_5 5.0.2
  _Zeq13QLatin1StringRK10QStringRef@Qt_5 5.0.2
@@ -5524,7 +5564,6 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  qt_addObject@Qt_5 5.0.2
  qt_cpu_features@Qt_5 5.0.2
  qt_disable_lowpriority_timers@Qt_5 5.0.2
- qt_qhash_seed@Qt_5 5.0.2
  qt_removeObject@Qt_5 5.0.2
  qt_signal_spy_callback_set@Qt_5 5.0.2
  qt_sine_table@Qt_5 5.0.2
@@ -5537,6 +5576,8 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  qt_version_tag@Qt_5.5 5.6.0~beta
  qt_version_tag@Qt_5.6 5.6.0~beta
  qt_version_tag@Qt_5.7 5.7.0
+ qt_version_tag@Qt_5.8 5.8.0
+ qt_version_tag@Qt_5.9 5.9.0~beta
  qt_version_tag_5_0@Qt_5 5.6.0~beta
  qt_version_tag_5_1@Qt_5 5.6.0~beta
  qt_version_tag_5_2@Qt_5 5.6.0~beta
@@ -5545,3 +5586,5 @@ libQt5Core.so.5 libqt5core5a #MINVER#
  qt_version_tag_5_5@Qt_5 5.6.0~beta
  qt_version_tag_5_6@Qt_5 5.6.0~beta
  qt_version_tag_5_7@Qt_5 5.7.0
+ qt_version_tag_5_8@Qt_5 5.8.0
+ qt_version_tag_5_9@Qt_5 5.9.0~beta

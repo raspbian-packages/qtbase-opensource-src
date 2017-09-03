@@ -1225,15 +1225,15 @@ bool QGraphicsScenePrivate::filterEvent(QGraphicsItem *item, QEvent *event)
 */
 bool QGraphicsScenePrivate::sendEvent(QGraphicsItem *item, QEvent *event)
 {
+#if QT_CONFIG(gestures)
     if (QGraphicsObject *object = item->toGraphicsObject()) {
-#ifndef QT_NO_GESTURES
         QGestureManager *gestureManager = QApplicationPrivate::instance()->gestureManager;
         if (gestureManager) {
             if (gestureManager->filterEvent(object, event))
                 return true;
         }
-#endif // QT_NO_GESTURES
     }
+#endif // QT_CONFIG(gestures)
 
     if (filterEvent(item, event))
         return false;
@@ -4160,7 +4160,7 @@ void QGraphicsScene::wheelEvent(QGraphicsSceneWheelEvent *wheelEvent)
                                                                       wheelEvent->scenePos(),
                                                                       wheelEvent->widget());
 
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     // On Mac, ignore the event if the first item under the mouse is not the last opened
     // popup (or one of its descendant)
     if (!d->popupWidgets.isEmpty() && !wheelCandidates.isEmpty() && wheelCandidates.first() != d->popupWidgets.back() && !d->popupWidgets.back()->isAncestorOf(wheelCandidates.first())) {
@@ -4399,7 +4399,7 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
 
     // Render directly, using no cache.
     if (cacheMode == QGraphicsItem::NoCache
-#ifdef Q_DEAD_CODE_FROM_QT4_X11
+#if 0 // Used to be included in Qt4 for Q_WS_X11
         || !X11->use_xrender
 #endif
         ) {
@@ -4658,8 +4658,7 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
                 for (int i = 0; i < exposed.size(); ++i)
                     br |= exposed.at(i);
                 QTransform pixmapToItem = itemToPixmap.inverted();
-                const auto rects = scrollExposure.rects();
-                for (const QRect &r : rects)
+                for (const QRect &r : scrollExposure)
                     br |= pixmapToItem.mapRect(r);
             }
             styleOptionTmp = *option;
@@ -5432,12 +5431,14 @@ bool QGraphicsScene::focusNextPrevChild(bool next)
                 return true;
             }
             if (d->activePanel->isWidget()) {
-                QGraphicsWidget *fw = static_cast<QGraphicsWidget *>(d->activePanel)->d_func()->focusNext;
+                QGraphicsWidget *test = static_cast<QGraphicsWidget *>(d->activePanel);
+                QGraphicsWidget *fw = next ? test->d_func()->focusNext : test->d_func()->focusPrev;
                 do {
                     if (fw->focusPolicy() & Qt::TabFocus) {
                         setFocusItem(fw, next ? Qt::TabFocusReason : Qt::BacktabFocusReason);
                         return true;
                     }
+                    fw = next ? fw->d_func()->focusNext : fw->d_func()->focusPrev;
                 } while (fw != d->activePanel);
             }
         }

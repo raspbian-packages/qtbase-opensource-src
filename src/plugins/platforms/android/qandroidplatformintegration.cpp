@@ -46,7 +46,7 @@
 #include <QThread>
 #include <QOffscreenSurface>
 
-#include <QtPlatformSupport/private/qeglpbuffer_p.h>
+#include <QtEglSupport/private/qeglpbuffer_p.h>
 #include <qpa/qwindowsysteminterface.h>
 #include <qpa/qplatformwindow.h>
 #include <qpa/qplatformoffscreensurface.h>
@@ -65,6 +65,9 @@
 #include "qandroidplatformservices.h"
 #include "qandroidplatformtheme.h"
 #include "qandroidsystemlocale.h"
+#include "qandroidplatformoffscreensurface.h"
+
+#include <QtPlatformHeaders/QEGLNativeContext>
 
 QT_BEGIN_NAMESPACE
 
@@ -78,7 +81,7 @@ int QAndroidPlatformIntegration::m_defaultPhysicalSizeHeight = 71;
 Qt::ScreenOrientation QAndroidPlatformIntegration::m_orientation = Qt::PrimaryOrientation;
 Qt::ScreenOrientation QAndroidPlatformIntegration::m_nativeOrientation = Qt::PrimaryOrientation;
 
-Qt::ApplicationState QAndroidPlatformIntegration::m_defaultApplicationState = Qt::ApplicationActive;
+bool QAndroidPlatformIntegration::m_showPasswordEnabled = false;
 
 void *QAndroidPlatformNativeInterface::nativeResourceForIntegration(const QByteArray &resource)
 {
@@ -116,6 +119,12 @@ void *QAndroidPlatformNativeInterface::nativeResourceForIntegration(const QByteA
     return 0;
 }
 
+void QAndroidPlatformNativeInterface::customEvent(QEvent *event)
+{
+    if (event->type() == QEvent::User)
+        QtAndroid::setAndroidPlatformIntegration(static_cast<QAndroidPlatformIntegration *>(QGuiApplicationPrivate::platformIntegration()));
+}
+
 QAndroidPlatformIntegration::QAndroidPlatformIntegration(const QStringList &paramList)
     : m_touchDevice(nullptr)
 #ifndef QT_NO_ACCESSIBILITY
@@ -143,7 +152,6 @@ QAndroidPlatformIntegration::QAndroidPlatformIntegration(const QStringList &para
     m_primaryScreen->setAvailableGeometry(QRect(0, 0, m_defaultGeometryWidth, m_defaultGeometryHeight));
 
     m_mainThread = QThread::currentThread();
-    QtAndroid::setAndroidPlatformIntegration(this);
 
     m_androidFDB = new QAndroidPlatformFontDatabase();
     m_androidPlatformServices = new QAndroidPlatformServices();
@@ -191,9 +199,24 @@ QAndroidPlatformIntegration::QAndroidPlatformIntegration(const QStringList &para
             }
             QWindowSystemInterface::registerTouchDevice(m_touchDevice);
         }
+
+        auto contentResolver = javaActivity.callObjectMethod("getContentResolver", "()Landroid/content/ContentResolver;");
+        Q_ASSERT(contentResolver.isValid());
+        QJNIObjectPrivate txtShowPassValue = QJNIObjectPrivate::callStaticObjectMethod("android/provider/Settings$System",
+                                                                                       "getString",
+                                                                                       "(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;",
+                                                                                       contentResolver.object(),
+                                                                                       QJNIObjectPrivate::getStaticObjectField("android/provider/Settings$System", "TEXT_SHOW_PASSWORD", "Ljava/lang/String;").object());
+        if (txtShowPassValue.isValid()) {
+            bool ok = false;
+            const int txtShowPass = txtShowPassValue.toString().toInt(&ok);
+            m_showPasswordEnabled = ok ? (txtShowPass == 1) : false;
+        }
     }
 
-    QGuiApplicationPrivate::instance()->setApplicationState(m_defaultApplicationState);
+    // We can't safely notify the jni bridge that we're up and running just yet, so let's postpone
+    // it for now.
+    QCoreApplication::postEvent(m_androidPlatformNativeInterface, new QEvent(QEvent::User));
 }
 
 static bool needsBasicRenderloopWorkaround()
@@ -236,18 +259,28 @@ QPlatformOpenGLContext *QAndroidPlatformIntegration::createPlatformOpenGLContext
     format.setRedBufferSize(8);
     format.setGreenBufferSize(8);
     format.setBlueBufferSize(8);
-    return new QAndroidPlatformOpenGLContext(format, context->shareHandle(), m_eglDisplay);
+    auto ctx = new QAndroidPlatformOpenGLContext(format, context->shareHandle(), m_eglDisplay, context->nativeHandle());
+    context->setNativeHandle(QVariant::fromValue<QEGLNativeContext>(QEGLNativeContext(ctx->eglContext(), m_eglDisplay)));
+    return ctx;
 }
 
 QPlatformOffscreenSurface *QAndroidPlatformIntegration::createPlatformOffscreenSurface(QOffscreenSurface *surface) const
 {
     if (!QtAndroid::activity())
         return nullptr;
+
     QSurfaceFormat format(surface->requestedFormat());
     format.setAlphaBufferSize(8);
     format.setRedBufferSize(8);
     format.setGreenBufferSize(8);
     format.setBlueBufferSize(8);
+
+    if (surface->nativeHandle()) {
+        // Adopt existing offscreen Surface
+        // The expectation is that nativeHandle is an ANativeWindow* representing
+        // an android.view.Surface
+        return new QAndroidPlatformOffscreenSurface(m_eglDisplay, format, surface);
+    }
 
     return new QEGLPbuffer(m_eglDisplay, format, surface);
 }
@@ -256,10 +289,13 @@ QPlatformWindow *QAndroidPlatformIntegration::createPlatformWindow(QWindow *wind
 {
     if (!QtAndroid::activity())
         return nullptr;
-    if (window->type() == Qt::ForeignWindow)
-        return new QAndroidPlatformForeignWindow(window);
-    else
-        return new QAndroidPlatformOpenGLWindow(window, m_eglDisplay);
+
+    return new QAndroidPlatformOpenGLWindow(window, m_eglDisplay);
+}
+
+QPlatformWindow *QAndroidPlatformIntegration::createForeignWindow(QWindow *window, WId nativeHandle) const
+{
+    return new QAndroidPlatformForeignWindow(window, nativeHandle);
 }
 
 QAbstractEventDispatcher *QAndroidPlatformIntegration::createEventDispatcher() const
@@ -313,6 +349,9 @@ QPlatformServices *QAndroidPlatformIntegration::services() const
 QVariant QAndroidPlatformIntegration::styleHint(StyleHint hint) const
 {
     switch (hint) {
+    case PasswordMaskDelay:
+        // this number is from a hard-coded value in Android code (cf. PasswordTransformationMethod)
+        return m_showPasswordEnabled ? 1500 : 0;
     case ShowIsMaximized:
         return true;
     default:
@@ -364,6 +403,14 @@ void QAndroidPlatformIntegration::setScreenOrientation(Qt::ScreenOrientation cur
 {
     m_orientation = currentOrientation;
     m_nativeOrientation = nativeOrientation;
+}
+
+void QAndroidPlatformIntegration::flushPendingUpdates()
+{
+    m_primaryScreen->setPhysicalSize(QSize(m_defaultPhysicalSizeWidth,
+                                           m_defaultPhysicalSizeHeight));
+    m_primaryScreen->setSize(QSize(m_defaultScreenWidth, m_defaultScreenHeight));
+    m_primaryScreen->setAvailableGeometry(QRect(0, 0, m_defaultGeometryWidth, m_defaultGeometryHeight));
 }
 
 #ifndef QT_NO_ACCESSIBILITY

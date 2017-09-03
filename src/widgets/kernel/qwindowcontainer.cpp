@@ -97,11 +97,14 @@ public:
         }
         QWidget *p = q->parentWidget();
         while (p) {
-            if (
+            if (false
 #ifndef QT_NO_MDIAREA
-                qobject_cast<QMdiSubWindow *>(p) != 0 ||
+                || qobject_cast<QMdiSubWindow *>(p) != 0
 #endif
-                qobject_cast<QAbstractScrollArea *>(p) != 0) {
+#ifndef QT_NO_SCROLLAREA
+                || qobject_cast<QAbstractScrollArea *>(p) != 0
+#endif
+                    ) {
                 q->winId();
                 usesNativeWidgets = true;
                 break;
@@ -238,6 +241,14 @@ QWindow *QWindowContainer::containedWindow() const
 QWindowContainer::~QWindowContainer()
 {
     Q_D(QWindowContainer);
+
+    // Call destroy() explicitly first. The dtor would do this too, but
+    // QEvent::PlatformSurface delivery relies on virtuals. Getting
+    // SurfaceAboutToBeDestroyed can be essential for OpenGL, Vulkan, etc.
+    // QWindow subclasses in particular. Keep these working.
+    if (d->window)
+        d->window->destroy();
+
     delete d->window;
 }
 

@@ -63,7 +63,7 @@ QT_BEGIN_NAMESPACE
  */
 static QString qt_strippedText(QString s)
 {
-    s.remove( QString::fromLatin1("...") );
+    s.remove(QStringLiteral("..."));
     for (int i = 0; i < s.size(); ++i) {
         if (s.at(i) == QLatin1Char('&'))
             s.remove(i, 1);
@@ -279,12 +279,8 @@ void QActionPrivate::setShortcutEnabled(bool enable, QShortcutMap &map)
     group the action will be automatically inserted into the group.
 */
 QAction::QAction(QObject* parent)
-    : QObject(*(new QActionPrivate), parent)
+    : QAction(*new QActionPrivate, parent)
 {
-    Q_D(QAction);
-    d->group = qobject_cast<QActionGroup *>(parent);
-    if (d->group)
-        d->group->addAction(this);
 }
 
 
@@ -302,13 +298,10 @@ QAction::QAction(QObject* parent)
 
 */
 QAction::QAction(const QString &text, QObject* parent)
-    : QObject(*(new QActionPrivate), parent)
+    : QAction(parent)
 {
     Q_D(QAction);
     d->text = text;
-    d->group = qobject_cast<QActionGroup *>(parent);
-    if (d->group)
-        d->group->addAction(this);
 }
 
 /*!
@@ -324,14 +317,10 @@ QAction::QAction(const QString &text, QObject* parent)
     setToolTip().
 */
 QAction::QAction(const QIcon &icon, const QString &text, QObject* parent)
-    : QObject(*(new QActionPrivate), parent)
+    : QAction(text, parent)
 {
     Q_D(QAction);
     d->icon = icon;
-    d->text = text;
-    d->group = qobject_cast<QActionGroup *>(parent);
-    if (d->group)
-        d->group->addAction(this);
 }
 
 /*!
@@ -636,7 +625,7 @@ QActionGroup *QAction::actionGroup() const
     it is displayed to the left of the menu text. There is no default
     icon.
 
-    If a null icon (QIcon::isNull() is passed into this function,
+    If a null icon (QIcon::isNull()) is passed into this function,
     the icon of the action is cleared.
 */
 void QAction::setIcon(const QIcon &icon)
@@ -1315,8 +1304,10 @@ Q_WIDGETS_EXPORT QDebug operator<<(QDebug d, const QAction *action)
             d << " toolTip=" << action->toolTip();
         if (action->isCheckable())
             d << " checked=" << action->isChecked();
+#ifndef QT_NO_SHORTCUT
         if (!action->shortcut().isEmpty())
             d << " shortcut=" << action->shortcut();
+#endif
         d << " menuRole=";
         QtDebugUtils::formatQEnum(d, action->menuRole());
         d << " visible=" << action->isVisible();

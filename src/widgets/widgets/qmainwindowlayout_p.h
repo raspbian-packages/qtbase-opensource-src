@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "qmainwindow.h"
 
 #ifndef QT_NO_MAINWINDOW
@@ -82,9 +83,14 @@ public:
     QDockWidget *topDockWidget() const;
     void destroyOrHideIfEmpty();
     void adjustFlags();
+    bool hasNativeDecos() const;
+
 protected:
     bool event(QEvent *) Q_DECL_OVERRIDE;
     void paintEvent(QPaintEvent*) Q_DECL_OVERRIDE;
+
+private:
+    QSize m_removedFrameSize;
 };
 
 // This item will be used in the layout for the gap item. We cannot use QWidgetItem directly
@@ -225,9 +231,9 @@ public:
     void raise(QDockWidget *widget);
     void setVerticalTabsEnabled(bool enabled);
     bool restoreDockWidget(QDockWidget *dockwidget);
-    QDockAreaLayoutInfo *dockInfo(QWidget *w);
 
 #ifndef QT_NO_TABBAR
+    QDockAreaLayoutInfo *dockInfo(QWidget *w);
     bool _documentMode;
     bool documentMode() const;
     void setDocumentMode(bool enabled);
@@ -300,13 +306,13 @@ public:
 #endif
 #ifndef QT_NO_DOCKWIDGET
     QPointer<QWidget> currentHoveredFloat; // set when dragging over a floating dock widget
+    void setCurrentHoveredFloat(QWidget *w);
 #endif
 
     void hover(QLayoutItem *widgetItem, const QPoint &mousePos);
     bool plug(QLayoutItem *widgetItem);
     QLayoutItem *unplug(QWidget *widget, bool group = false);
     void revert(QLayoutItem *widgetItem);
-    void updateGapIndicator();
     void paintDropIndicator(QPainter *p, QWidget *widget, const QRegion &clip);
     void applyState(QMainWindowLayoutState &newState, bool animate = true);
     void restore(bool keepSavedState = false);
@@ -314,6 +320,7 @@ public:
     void animationFinished(QWidget *widget);
 
 private Q_SLOTS:
+    void updateGapIndicator();
 #ifndef QT_NO_DOCKWIDGET
 #ifndef QT_NO_TABBAR
     void tabChanged();
@@ -324,7 +331,7 @@ private:
 #ifndef QT_NO_TABBAR
     void updateTabBarShapes();
 #endif
-#ifdef Q_DEAD_CODE_FROM_QT4_MAC
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     static OSStatus qtmacToolbarDelegate(EventHandlerCallRef, EventRef , void *);
     static OSStatus qtoolbarInHIToolbarHandler(EventHandlerCallRef inCallRef, EventRef event,
                                                void *data);
@@ -357,7 +364,7 @@ public:
     QUnifiedToolbarSurface *unifiedSurface;
     void updateUnifiedToolbarOffset();
 
-#endif // Q_DEAD_CODE_FROM_QT4_MAC
+#endif
 };
 
 #if !defined(QT_NO_DOCKWIDGET) && !defined(QT_NO_DEBUG_STREAM)

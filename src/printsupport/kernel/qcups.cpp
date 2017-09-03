@@ -41,8 +41,6 @@
 
 #include "qprintengine.h"
 
-#ifndef QT_NO_CUPS
-
 QT_BEGIN_NAMESPACE
 
 QStringList QCUPSSupport::cupsOptionsList(QPrinter *printer)
@@ -101,6 +99,7 @@ static inline QString jobHoldToString(const QCUPSSupport::JobHoldUntil jobHold, 
             return localDateTime.toUTC().time().toString(QStringLiteral("HH:mm"));
         }
         // else fall through:
+        Q_FALLTHROUGH();
     case QCUPSSupport::NoHold:
         return QString();
     }
@@ -204,5 +203,3 @@ void QCUPSSupport::setPageRange(QPrinter *printer, int pageFrom, int pageTo)
 }
 
 QT_END_NAMESPACE
-
-#endif // QT_NO_CUPS

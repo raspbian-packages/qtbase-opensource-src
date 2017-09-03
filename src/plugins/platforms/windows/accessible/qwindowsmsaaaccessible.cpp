@@ -50,7 +50,6 @@
 #include <QtCore/qdebug.h>
 #include <QtCore/qmap.h>
 #include <QtCore/qpair.h>
-#include <QtCore/qsettings.h>
 #include <QtGui/qaccessible.h>
 #include <QtGui/qguiapplication.h>
 #include <qpa/qplatformnativeinterface.h>
@@ -67,7 +66,7 @@
 #endif
 
 
-#include "../qtwindows_additional.h"
+#include <QtCore/qt_windows.h>
 
 
 QT_BEGIN_NAMESPACE
@@ -891,7 +890,7 @@ HRESULT STDMETHODCALLTYPE QWindowsMsaaAccessible::get_accName(VARIANT varID, BST
 
     QString shortcut = accessible->text(QAccessible::Accelerator);
     if (!shortcut.isEmpty())
-        name.append(QLatin1Char(' ') + shortcut);
+        name += QLatin1Char(' ') + shortcut;
 
     if (name.size()) {
         *pszName = QStringToBSTR(name);
@@ -1053,11 +1052,24 @@ HRESULT STDMETHODCALLTYPE QWindowsMsaaAccessible::get_accValue(VARIANT varID, BS
     return S_FALSE;
 }
 
-HRESULT STDMETHODCALLTYPE QWindowsMsaaAccessible::put_accValue(VARIANT, BSTR)
+HRESULT STDMETHODCALLTYPE QWindowsMsaaAccessible::put_accValue(VARIANT, BSTR value)
 {
     QAccessibleInterface *accessible = accessibleInterface();
     accessibleDebugClientCalls(accessible);
-    return DISP_E_MEMBERNOTFOUND;
+
+    if (!accessible || !accessible->isValid()) {
+        return E_FAIL;
+    }
+
+    QString qstrValue = QString::fromWCharArray(value);
+
+    if (accessible->valueInterface()) {
+        accessible->valueInterface()->setCurrentValue(qstrValue);
+    } else {
+        accessible->setText(QAccessible::Value, qstrValue);
+    }
+
+    return S_OK;
 }
 
 // moz: [important]

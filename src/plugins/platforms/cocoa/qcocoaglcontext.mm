@@ -42,7 +42,7 @@
 #include "qcocoahelpers.h"
 #include <qdebug.h>
 #include <QtCore/private/qcore_mac_p.h>
-#include <QtPlatformSupport/private/cglconvenience_p.h>
+#include <QtCglSupport/private/cglconvenience_p.h>
 #include <QtPlatformHeaders/qcocoanativecontext.h>
 #include <dlfcn.h>
 
@@ -255,7 +255,8 @@ void QCocoaGLContext::setActiveWindow(QWindow *window)
     QCocoaWindow *cocoaWindow = static_cast<QCocoaWindow *>(window->handle());
     cocoaWindow->setCurrentContext(this);
 
-    [(QNSView *) cocoaWindow->contentView() setQCocoaGLContext:this];
+    Q_ASSERT(!cocoaWindow->isForeignWindow());
+    [qnsview_cast(cocoaWindow->view()) setQCocoaGLContext:this];
 }
 
 void QCocoaGLContext::updateSurfaceFormat()

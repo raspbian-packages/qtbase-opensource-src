@@ -123,16 +123,14 @@
     \value AA_PluginApplication Indicates that Qt is used to author a plugin. Depending
            on the operating system, it suppresses specific initializations that do not
            necessarily make sense in the plugin case.
-
            For example on OS X, this includes avoiding loading our nib for the main
            menu and not taking possession of the native menu bar. Setting this
            attribute to true will also set the AA_DontUseNativeMenuBar attribute
            to true. It also disables native event filters.
-
            This attribute has been added in Qt 5.7. It must be set before
            \l {QGuiApplication}{Q(Gui)Application} is constructed.
 
-     \value AA_MacPluginApplication This attribute has been deprecated.
+    \value AA_MacPluginApplication This attribute has been deprecated.
            Use AA_PluginApplication instead.
 
     \value AA_DontUseNativeMenuBar All menubars created while this attribute is
@@ -166,7 +164,6 @@
     \value AA_UseHighDpiPixmaps Make QIcon::pixmap() generate high-dpi pixmaps
            that can be larger than the requested size. Such pixmaps will have
            \l {QPixmap::devicePixelRatio}{devicePixelRatio()} set to a value higher than 1.
-
            After setting this attribute, application code that uses pixmap
            sizes in layout geometry calculations should typically divide by
            \l {QPixmap::devicePixelRatio}{devicePixelRatio()} to get device-independent layout geometry.
@@ -206,7 +203,7 @@
     \value AA_SetPalette Indicates whether a palette was explicitly set on the
            QApplication/QGuiApplication. This value has been added in Qt 5.5.
 
-    \value AA_EnableHighDpiScaling. Enables high-DPI scaling in Qt on supported
+    \value AA_EnableHighDpiScaling Enables high-DPI scaling in Qt on supported
            platforms (see also \l{High DPI Displays}). Supported platforms are
            X11, Windows and Android. Enabling makes Qt scale the main (device
            independent) coordinate system according to display scale factors
@@ -249,6 +246,22 @@
            You can test the attribute to see whether compression is enabled.
            If your application needs to handle all events with no compression,
            you can unset this attribute. This value has been added in Qt 5.7.
+
+    \value AA_DontCheckOpenGLContextThreadAffinity When making a context
+           current using QOpenGLContext, do not check that the
+           \l{QObject#Thread Affinity}{QObject thread affinity}
+           of the QOpenGLContext object is the same thread calling
+           \l{QOpenGLContext::makeCurrent}{makeCurrent()}. This value has been
+           added in Qt 5.8.
+
+    \value AA_DisableShaderDiskCache Disables caching of shader program binaries
+           on disk. By default Qt Quick, QPainter's OpenGL backend, and any
+           application using QOpenGLShaderProgram with one of its
+           \e addCacheableShaderFromSource overloads will employ a disk-based
+           \l{Caching Program Binaries}{program binary cache} in either the shared
+           or per-process cache storage location, on systems that support
+           \e glProgramBinary(). In the unlikely event of this being problematic,
+           set this attribute to disable all disk-based caching of shaders.
 
     The following values are obsolete:
 
@@ -351,7 +364,7 @@
     \omitvalue KeyboardModifierMask
 
     \note On \macos, the \c ControlModifier value corresponds to
-    the Command keys on the Macintosh keyboard, and the \c MetaModifier value
+    the Command keys on the keyboard, and the \c MetaModifier value
     corresponds to the Control keys. The \c KeypadModifier value will also be set
     when an arrow key is pressed as the arrow keys are considered part of the
     keypad.
@@ -369,7 +382,7 @@
     supported by Qt.
 
     \note On \macos, the \c CTRL value corresponds to
-    the Command keys on the Macintosh keyboard, and the \c META value
+    the Command keys on the keyboard, and the \c META value
     corresponds to the Control keys.
 
     \value SHIFT The Shift keys provided on all standard keyboards.
@@ -651,6 +664,8 @@
     \c{YYYY-MM-DDTHH:mm:ss}, \c{YYYY-MM-DDTHH:mm:ssTZD} (e.g., 1997-07-16T19:20:30+01:00)
     for combined dates and times.
 
+    \value ISODateWithMs \l{ISO 8601} extended format, including milliseconds if applicable.
+
     \value SystemLocaleShortDate The \l{QLocale::ShortFormat}{short format} used
     by the \l{QLocale::system()}{operating system}.
 
@@ -753,27 +768,25 @@
     \value MonoOnly The pixmap becomes monochrome. If necessary,
            it is dithered using the chosen dithering algorithm.
 
-    Dithering mode preference for RGB channels:
+    Dithering mode preference:
 
-    \value DiffuseDither (default) - A high-quality dither.
-    \value OrderedDither A faster, more ordered dither.
+    \value DiffuseDither (default) - A high-quality dither using error diffusion.
+    \value OrderedDither A faster, ordered dither.
     \value ThresholdDither No dithering; closest color is used.
 
-    Dithering mode preference for alpha channel:
+    Dithering mode preference for 1-bit alpha masks:
 
     \value ThresholdAlphaDither (default) - No dithering.
-    \value OrderedAlphaDither A faster, more ordered dither.
-    \value DiffuseAlphaDither A high-quality dither.
+    \value OrderedAlphaDither A faster, ordered dither.
+    \value DiffuseAlphaDither A high-quality dither using error diffusion.
     \omitvalue NoAlpha
 
     Color matching versus dithering preference:
 
-    \value PreferDither (default when converting to a pixmap) - Always dither
-           32-bit images when the image is converted to 8 bits.
-    \value AvoidDither (default when converting for the purpose of saving to
-           file) - Dither 32-bit images only if the image has more than 256
-           colors and it is being converted to 8 bits.
-    \omitvalue AutoDither
+    \value PreferDither Always dither images when converting to smaller color-spaces.
+    \value AvoidDither Only dither to indexed formats if the source image uses more
+           different colors than the size of the color table of the destination format.
+    \value AutoDither (default) - Only dither when down-converting to 1 or 8-bit indexed formats.
 
     \omitvalue ColorMode_Mask
     \omitvalue Dither_Mask
@@ -1126,6 +1139,9 @@
     \value WA_StyleSheet Indicates that the widget is styled using a
     \l{Qt Style Sheets}{style sheet}.
 
+    \value WA_TabletTracking Indicates that the widget has tablet
+    tracking enabled. See QWidget::tabletTracking.
+
     \value WA_TranslucentBackground Indicates that the widget should have a
     translucent background, i.e., any non-opaque regions of the widgets will be
     translucent because the widget will have an alpha channel. Setting this
@@ -1147,8 +1163,8 @@
     and Windows) the window will take a modified appearance. This flag is set
     or cleared by QWidget::setWindowModified().
 
-    \value WA_WindowPropagation Makes a toplevel window inherit font and
-    palette from its parent.
+    \value WA_WindowPropagation Makes a toplevel window inherit font, palette
+    and locale from its parent.
 
     \value WA_MacAlwaysShowToolWindow On \macos, show the tool window even
     when the application is not active.  By default, all tool windows are
@@ -2068,12 +2084,12 @@
                    We refer to a top-level window that has a parent
                    as a \e secondary window.
 
-    \value Sheet   Indicates that the window is a Macintosh sheet. Since
+    \value Sheet   Indicates that the window is a sheet on \macos. Since
                    using a sheet implies window modality, the recommended
                    way is to use QWidget::setWindowModality(), or
                    QDialog::open(), instead.
 
-    \value Drawer  Indicates that the widget is a Macintosh drawer.
+    \value Drawer  Indicates that the widget is a drawer on \macos.
 
     \value Popup   Indicates that the widget is a pop-up top-level
                    window, i.e. that it is modal, but has a window
@@ -2092,7 +2108,7 @@
                    On \macos, tool windows correspond to the
                    \l{http://developer.apple.com/documentation/Carbon/Conceptual/HandlingWindowsControls/hitb-wind_cont_concept/chapter_2_section_2.html}{Floating}
                    class of windows. This means that the window lives on a
-                   level above normal windows; it impossible to put a normal
+                   level above normal windows making it impossible to put a normal
                    window on top of it. By default, tool windows will disappear
                    when the application is inactive.  This can be controlled by
                    the Qt::WA_MacAlwaysShowToolWindow attribute.
@@ -2206,10 +2222,6 @@
            on the bottom has a parent, the parent will also be left on
            the bottom.  This window hint is currently not implemented
            for \macos.
-
-    \omitvalue WindowOkButtonHint
-
-    \omitvalue WindowCancelButtonHint
 
     \value WindowTransparentForInput Informs the window system that this window
            is used only for output (displaying something) and does not take input.
@@ -2648,7 +2660,7 @@
     \value FontRole             The font used for items rendered with the default
                                 delegate. (QFont)
     \value TextAlignmentRole    The alignment of the text for items rendered with the
-                                default delegate. (Qt::AlignmentFlag)
+                                default delegate. (Qt::Alignment)
     \value BackgroundRole       The background brush used for items rendered with
                                 the default delegate. (QBrush)
     \value BackgroundColorRole  This role is obsolete. Use BackgroundRole instead.
@@ -3145,4 +3157,15 @@
     \l {QEvent::MouseButtonPress}{MouseButtonPress}, and not in the resulting \l {QEvent::MouseButtonDblClick}{MouseButtonDblClick}.
 
     \omitvalue MouseEventFlagMask
+*/
+
+/*!
+  \enum Qt::ChecksumType
+  \since 5.9
+
+  This enum describes the possible standards used by qChecksum().
+
+  \value ChecksumIso3309 Checksum calculation based on ISO 3309.
+
+  \value ChecksumItuV41 Checksum calculation based on ITU-V.41.
 */

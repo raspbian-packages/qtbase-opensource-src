@@ -56,7 +56,7 @@ QT_BEGIN_NAMESPACE
 */
 
 QThreadData::QThreadData(int initialRefCount)
-    : _ref(initialRefCount), loopLevel(0), scopeLevel(0), thread(0), threadId(0),
+    : _ref(initialRefCount), loopLevel(0), scopeLevel(0),
       eventDispatcher(0),
       quitNow(false), canWait(true), isAdopted(false), requiresCoreApplication(true)
 {
@@ -149,6 +149,14 @@ QThreadPrivate::QThreadPrivate(QThreadData *d)
       exited(false), returnCode(-1),
       stackSize(0), priority(QThread::InheritPriority), data(d)
 {
+
+// INTEGRITY doesn't support self-extending stack. The default stack size for
+// a pthread on INTEGRITY is too small so we have to increase the default size
+// to 128K.
+#ifdef Q_OS_INTEGRITY
+    stackSize = 128 * 1024;
+#endif
+
 #if defined (Q_OS_WIN)
     handle = 0;
 #  ifndef Q_OS_WINRT
@@ -403,7 +411,7 @@ QThread::QThread(QThreadPrivate &dd, QObject *parent)
 
     Note that deleting a QThread object will not stop the execution
     of the thread it manages. Deleting a running QThread (i.e.
-    isFinished() returns \c false) will probably result in a program
+    isFinished() returns \c false) will result in a program
     crash. Wait for the finished() signal before deleting the
     QThread.
 */
@@ -418,7 +426,7 @@ QThread::~QThread()
             locker.relock();
         }
         if (d->running && !d->finished && !d->data->isAdopted)
-            qWarning("QThread: Destroyed while thread is still running");
+            qFatal("QThread: Destroyed while thread is still running");
 
         d->data->thread = 0;
     }
@@ -893,3 +901,5 @@ QDaemonThread::~QDaemonThread()
 }
 
 QT_END_NAMESPACE
+
+#include "moc_qthread.cpp"

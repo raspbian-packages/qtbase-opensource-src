@@ -51,6 +51,7 @@
 // We mean it.
 //
 
+#include <QtCore/private/qglobal_p.h>
 #include <QtCore/qatomic.h>
 
 QT_BEGIN_NAMESPACE
@@ -236,7 +237,7 @@ inline int QFreeList<T, ConstantsType>::next()
     int id, newid, at;
     ElementType *v;
     do {
-        id = _next.load();
+        id = _next.loadAcquire();
 
         at = id & ConstantsType::IndexMask;
         const int block = blockfor(at);
@@ -253,7 +254,7 @@ inline int QFreeList<T, ConstantsType>::next()
         }
 
         newid = v[at].next.load() | (id & ~ConstantsType::IndexMask);
-    } while (!_next.testAndSetRelaxed(id, newid));
+    } while (!_next.testAndSetRelease(id, newid));
     // qDebug("QFreeList::next(): returning %d (_next now %d, serial %d)",
     //        id & ConstantsType::IndexMask,
     //        newid & ConstantsType::IndexMask,

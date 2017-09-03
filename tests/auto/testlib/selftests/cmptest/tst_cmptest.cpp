@@ -128,6 +128,7 @@ private slots:
     void compare_registered_enums();
     void compare_class_enums();
     void compare_boolfuncs();
+    void compare_to_nullptr();
     void compare_pointerfuncs();
     void compare_tostring();
     void compare_tostring_data();
@@ -148,6 +149,7 @@ private slots:
     void verify2();
     void tryVerify();
     void tryVerify2();
+    void verifyExplicitOperatorBool();
 };
 
 enum MyUnregisteredEnum { MyUnregisteredEnumValue1, MyUnregisteredEnumValue2 };
@@ -181,6 +183,24 @@ void tst_Cmptest::compare_boolfuncs()
     QCOMPARE(!boolfunc(), !boolfunc2());
     QCOMPARE(boolfunc(), true);
     QCOMPARE(!boolfunc(), false);
+}
+
+namespace {
+template <typename T>
+T *null() Q_DECL_NOTHROW { return nullptr; }
+}
+
+void tst_Cmptest::compare_to_nullptr()
+{
+    QCOMPARE(null<int>(), nullptr);
+    QCOMPARE(null<const int>(), nullptr);
+    QCOMPARE(null<volatile int>(), nullptr);
+    QCOMPARE(null<const volatile int>(), nullptr);
+
+    QCOMPARE(nullptr, null<int>());
+    QCOMPARE(nullptr, null<const int>());
+    QCOMPARE(nullptr, null<volatile int>());
+    QCOMPARE(nullptr, null<const volatile int>());
 }
 
 static int i = 0;
@@ -463,6 +483,22 @@ void tst_Cmptest::tryVerify2()
 {
     QTRY_VERIFY2(opaqueFunc() > 2, QByteArray::number(opaqueFunc()).constData());
     QTRY_VERIFY2_WITH_TIMEOUT(opaqueFunc() < 2, QByteArray::number(opaqueFunc()).constData(), 1);
+}
+
+void tst_Cmptest::verifyExplicitOperatorBool()
+{
+    struct ExplicitOperatorBool {
+        int m_i;
+        explicit ExplicitOperatorBool(int i) : m_i(i) {}
+        explicit operator bool() const { return m_i > 0; }
+        bool operator !() const { return !bool(*this); }
+    };
+
+    ExplicitOperatorBool val1(42);
+    QVERIFY(val1);
+
+    ExplicitOperatorBool val2(-273);
+    QVERIFY(!val2);
 }
 
 QTEST_MAIN(tst_Cmptest)

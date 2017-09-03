@@ -293,8 +293,7 @@ QDateTime &QFileInfoPrivate::getFileTime(QAbstractFileEngine::FileTime request) 
     \note To speed up performance, QFileInfo caches information about
     the file.
 
-    To speed up performance, QFileInfo caches information about the
-    file. Because files can be changed by other users or programs, or
+    Because files can be changed by other users or programs, or
     even by other parts of the same program, there is a function that
     refreshes the file information: refresh(). If you want to switch
     off a QFileInfo's caching and force it to access the file system
@@ -1296,7 +1295,7 @@ qint64 QFileInfo::size() const
 }
 
 /*!
-    Returns the date and time when the file was created.
+    Returns the date and local time when the file was created.
 
     On most Unix systems, this function returns the time of the last
     status change. A status change occurs when the file is created,
@@ -1317,13 +1316,13 @@ QDateTime QFileInfo::created() const
         if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::CreationTime))
             if (!QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::CreationTime))
                 return QDateTime();
-        return d->metaData.creationTime();
+        return d->metaData.creationTime().toLocalTime();
     }
-    return d->getFileTime(QAbstractFileEngine::CreationTime);
+    return d->getFileTime(QAbstractFileEngine::CreationTime).toLocalTime();
 }
 
 /*!
-    Returns the date and time when the file was last modified.
+    Returns the date and local time when the file was last modified.
 
     \sa created(), lastRead()
 */
@@ -1336,13 +1335,13 @@ QDateTime QFileInfo::lastModified() const
         if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::ModificationTime))
             if (!QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::ModificationTime))
                 return QDateTime();
-        return d->metaData.modificationTime();
+        return d->metaData.modificationTime().toLocalTime();
     }
-    return d->getFileTime(QAbstractFileEngine::ModificationTime);
+    return d->getFileTime(QAbstractFileEngine::ModificationTime).toLocalTime();
 }
 
 /*!
-    Returns the date and time when the file was last read (accessed).
+    Returns the date and local time when the file was last read (accessed).
 
     On platforms where this information is not available, returns the
     same as lastModified().
@@ -1358,9 +1357,9 @@ QDateTime QFileInfo::lastRead() const
         if (!d->cache_enabled || !d->metaData.hasFlags(QFileSystemMetaData::AccessTime))
             if (!QFileSystemEngine::fillMetaData(d->fileEntry, d->metaData, QFileSystemMetaData::AccessTime))
                 return QDateTime();
-        return d->metaData.accessTime();
+        return d->metaData.accessTime().toLocalTime();
     }
-    return d->getFileTime(QAbstractFileEngine::AccessTime);
+    return d->getFileTime(QAbstractFileEngine::AccessTime).toLocalTime();
 }
 
 /*!

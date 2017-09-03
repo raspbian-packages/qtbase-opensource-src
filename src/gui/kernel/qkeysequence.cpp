@@ -1153,7 +1153,7 @@ int QKeySequencePrivate::decodeString(const QString &str, QKeySequence::Sequence
         lastI = i + 1;
     }
 
-    int p = accel.lastIndexOf(QLatin1Char('+'), str.length() - 2); // -2 so that Ctrl++ works
+    int p = accel.lastIndexOf(QLatin1Char('+'), accel.length() - 2); // -2 so that Ctrl++ works
     QStringRef accelRef(&accel);
     if(p > 0)
         accelRef = accelRef.mid(p + 1);
@@ -1183,7 +1183,7 @@ int QKeySequencePrivate::decodeString(const QString &str, QKeySequence::Sequence
                 QString keyName(tran == 0
                                 ? QCoreApplication::translate("QShortcut", keyname[i].name)
                                 : QString::fromLatin1(keyname[i].name));
-                if (accelRef == keyName.toLower()) {
+                if (accelRef == std::move(keyName).toLower()) {
                     ret |= keyname[i].key;
                     found = true;
                     break;
@@ -1211,9 +1211,13 @@ QString QKeySequence::encodeString(int key)
 
 static inline void addKey(QString &str, const QString &theKey, QKeySequence::SequenceFormat format)
 {
-    if (!str.isEmpty())
-        str += (format == QKeySequence::NativeText) ? QCoreApplication::translate("QShortcut", "+")
-                                                    : QString::fromLatin1("+");
+    if (!str.isEmpty()) {
+        if (format == QKeySequence::NativeText)
+            str += QCoreApplication::translate("QShortcut", "+");
+        else
+            str += QLatin1Char('+');
+    }
+
     str += theKey;
 }
 
@@ -1524,7 +1528,9 @@ bool QKeySequence::isDetached() const
     If the key sequence has no keys, an empty string is returned.
 
     On \macos, the string returned resembles the sequence that is
-    shown in the menu bar.
+    shown in the menu bar if \a format is
+    QKeySequence::NativeText; otherwise, the string uses the
+    "portable" format, suitable for writing to a file.
 
     \sa fromString()
 */

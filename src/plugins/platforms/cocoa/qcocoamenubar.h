@@ -76,13 +76,14 @@ private:
     static QCocoaWindow *findWindowForMenubar();
     static QCocoaMenuBar *findGlobalMenubar();
 
+    bool needsImmediateUpdate();
     bool shouldDisable(QCocoaWindow *active) const;
 
     NSMenuItem *nativeItemForMenu(QCocoaMenu *menu) const;
 
     QList<QPointer<QCocoaMenu> > m_menus;
     NSMenu *m_nativeMenu;
-    QCocoaWindow *m_window;
+    QPointer<QCocoaWindow> m_window;
 };
 
 QT_END_NAMESPACE

@@ -40,7 +40,7 @@
 #ifndef QSSLELLIPTICCURVE_H
 #define QSSLELLIPTICCURVE_H
 
-#include <QtCore/QtGlobal>
+#include <QtNetwork/qtnetworkglobal.h>
 #include <QtCore/QString>
 #include <QtCore/QMetaType>
 #if QT_DEPRECATED_SINCE(5, 6)
@@ -64,8 +64,8 @@ public:
     Q_NETWORK_EXPORT static QSslEllipticCurve fromShortName(const QString &name);
     Q_NETWORK_EXPORT static QSslEllipticCurve fromLongName(const QString &name);
 
-    Q_NETWORK_EXPORT QString shortName() const Q_REQUIRED_RESULT;
-    Q_NETWORK_EXPORT QString longName() const Q_REQUIRED_RESULT;
+    Q_REQUIRED_RESULT Q_NETWORK_EXPORT QString shortName() const;
+    Q_REQUIRED_RESULT Q_NETWORK_EXPORT QString longName() const;
 
     Q_DECL_CONSTEXPR bool isValid() const Q_DECL_NOTHROW
     {

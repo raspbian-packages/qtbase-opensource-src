@@ -64,7 +64,7 @@
 #ifndef QT_NO_ACCESSIBILITY
 #include <qaccessible.h>
 #endif
-#ifndef QT_NO_GESTURES
+#if QT_CONFIG(gestures) && QT_CONFIG(scroller)
 #  include <qscroller.h>
 #endif
 
@@ -196,7 +196,7 @@ void QAbstractItemViewPrivate::checkMouseMove(const QPersistentModelIndex &index
     }
 }
 
-#ifndef QT_NO_GESTURES
+#if QT_CONFIG(gestures) && QT_CONFIG(scroller)
 
 // stores and restores the selection and current item when flicking
 void QAbstractItemViewPrivate::_q_scrollerStateChanged()
@@ -340,8 +340,8 @@ void QAbstractItemViewPrivate::_q_scrollerStateChanged()
     This enum indicates how the view responds to user selections:
 
     \value SingleSelection  When the user selects an item, any already-selected
-    item becomes unselected, and the user cannot unselect the selected item by
-    clicking on it.
+    item becomes unselected. It is possible for the user to deselect the selected
+    item.
 
     \value ContiguousSelection When the user selects an item in the usual way,
     the selection is cleared and the new item selected. However, if the user
@@ -1703,6 +1703,7 @@ bool QAbstractItemView::viewportEvent(QEvent *event)
         d->viewportEnteredNeeded = true;
         break;
     case QEvent::Leave:
+        d->setHoverIndex(QModelIndex()); // If we've left, no hover should be needed anymore
     #ifndef QT_NO_STATUSTIP
         if (d->shouldClearStatusTip && d->parent) {
             QString empty;
@@ -1736,7 +1737,7 @@ bool QAbstractItemView::viewportEvent(QEvent *event)
         break;
     case QEvent::ScrollPrepare:
         executeDelayedItemsLayout();
-#ifndef QT_NO_GESTURES
+#if QT_CONFIG(gestures) && QT_CONFIG(scroller)
         connect(QScroller::scroller(d->viewport), SIGNAL(stateChanged(QScroller::State)), this, SLOT(_q_scrollerStateChanged()), Qt::UniqueConnection);
 #endif
         break;
@@ -1786,13 +1787,18 @@ void QAbstractItemView::mousePressEvent(QMouseEvent *event)
         d->autoScroll = false;
         d->selectionModel->setCurrentIndex(index, QItemSelectionModel::NoUpdate);
         d->autoScroll = autoScroll;
-        QRect rect(visualRect(d->currentSelectionStartIndex).center(), pos);
         if (command.testFlag(QItemSelectionModel::Toggle)) {
             command &= ~QItemSelectionModel::Toggle;
             d->ctrlDragSelectionFlag = d->selectionModel->isSelected(index) ? QItemSelectionModel::Deselect : QItemSelectionModel::Select;
             command |= d->ctrlDragSelectionFlag;
         }
-        setSelection(rect, command);
+
+        if ((command & QItemSelectionModel::Current) == 0) {
+            setSelection(QRect(pos, QSize(1, 1)), command);
+        } else {
+            QRect rect(visualRect(d->currentSelectionStartIndex).center(), pos);
+            setSelection(rect, command);
+        }
 
         // signal handlers may change the model
         emit pressed(index);
@@ -2473,10 +2479,12 @@ void QAbstractItemView::keyPressEvent(QKeyEvent *event)
         break;
 #endif
     default: {
+#ifndef QT_NO_SHORTCUT
        if (event == QKeySequence::SelectAll && selectionMode() != NoSelection) {
             selectAll();
             break;
         }
+#endif
 #ifdef Q_OS_OSX
         if (event->key() == Qt::Key_O && event->modifiers() & Qt::ControlModifier && currentIndex().isValid()) {
             emit activated(currentIndex());
@@ -3691,7 +3699,7 @@ QStyleOptionViewItem QAbstractItemView::viewOptions() const
     option.state &= ~QStyle::State_MouseOver;
     option.font = font();
 
-#ifndef Q_DEAD_CODE_FROM_QT4_MAC
+#if 1 // Used to be excluded in Qt4 for Q_WS_MAC
     // On mac the focus appearance follows window activation
     // not widget activation
     if (!hasFocus())
@@ -4027,6 +4035,7 @@ QItemSelectionModel::SelectionFlags QAbstractItemViewPrivate::extendedSelectionC
             switch (static_cast<const QKeyEvent*>(event)->key()) {
             case Qt::Key_Backtab:
                 modifiers = modifiers & ~Qt::ShiftModifier; // special case for backtab
+                Q_FALLTHROUGH();
             case Qt::Key_Down:
             case Qt::Key_Up:
             case Qt::Key_Left:

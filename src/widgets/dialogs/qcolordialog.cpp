@@ -92,7 +92,7 @@ public:
         SetColorAll = ShowColor | SelectColor
     };
 
-    QColorDialogPrivate() : options(new QColorDialogOptions)
+    QColorDialogPrivate() : options(QColorDialogOptions::create())
 #ifdef Q_OS_WIN32
         , updateTimer(0)
 #endif
@@ -355,7 +355,7 @@ void QWellArray::paintCell(QPainter* p, int row, int col, const QRect &rect)
     paintCellContents(p, row, col, opt.rect.adjusted(dfw, dfw, -dfw, -dfw));
 }
 
-/*!
+/*
   Reimplement this function to change the contents of the well array.
  */
 void QWellArray::paintCellContents(QPainter *p, int row, int col, const QRect &r)
@@ -441,16 +441,12 @@ void QWellArray::focusInEvent(QFocusEvent*)
     emit currentChanged(curRow, curCol);
 }
 
-/*!\reimp
-*/
 
 void QWellArray::focusOutEvent(QFocusEvent*)
 {
     updateCell(curRow, curCol);
 }
 
-/*\reimp
-*/
 void QWellArray::keyPressEvent(QKeyEvent* e)
 {
     switch(e->key()) {                        // Look at the key code
@@ -1180,14 +1176,10 @@ QColorShower::QColorShower(QColorDialog *parent)
     gl->setMargin(gl->spacing());
     lab = new QColorShowLabel(this);
 
-#ifndef Q_OS_WINCE
 #ifdef QT_SMALL_COLORDIALOG
     lab->setMinimumHeight(60);
 #endif
     lab->setMinimumWidth(60);
-#else
-    lab->setMinimumWidth(20);
-#endif
 
 // For QVGA screens only the comboboxes and color label are visible.
 // For nHD screens only color and luminence pickers and color label are visible.
@@ -1702,7 +1694,7 @@ void QColorDialogPrivate::initWidgets()
 
     leftLay = 0;
 
-#if defined(Q_OS_WINCE) || defined(QT_SMALL_COLORDIALOG)
+#if defined(QT_SMALL_COLORDIALOG)
     smallDisplay = true;
     const int lumSpace = 20;
 #else
@@ -1725,7 +1717,7 @@ void QColorDialogPrivate::initWidgets()
         leftLay->addWidget(lblBasicColors);
         leftLay->addWidget(standard);
 
-#if !defined(Q_OS_WINCE) && !defined(QT_SMALL_COLORDIALOG)
+#if !defined(QT_SMALL_COLORDIALOG)
         // The screen color picker button
         screenColorPickerButton = new QPushButton();
         leftLay->addWidget(screenColorPickerButton);
@@ -1734,9 +1726,7 @@ void QColorDialogPrivate::initWidgets()
         q->connect(screenColorPickerButton, SIGNAL(clicked()), SLOT(_q_pickScreenColor()));
 #endif
 
-#if !defined(Q_OS_WINCE)
         leftLay->addStretch();
-#endif
 
         custom = new QColorWell(q, customColorRows, colorColumns, QColorDialogOptions::customColors());
         custom->setAcceptDrops(true);
@@ -1933,10 +1923,8 @@ static const Qt::WindowFlags DefaultWindowFlags =
     Constructs a color dialog with the given \a parent.
 */
 QColorDialog::QColorDialog(QWidget *parent)
-    : QDialog(*new QColorDialogPrivate, parent, DefaultWindowFlags)
+    : QColorDialog(QColor(Qt::white), parent)
 {
-    Q_D(QColorDialog);
-    d->init(Qt::white);
 }
 
 /*!
@@ -2258,10 +2246,13 @@ bool QColorDialogPrivate::handleColorPickingMouseButtonRelease(QMouseEvent *e)
 bool QColorDialogPrivate::handleColorPickingKeyPress(QKeyEvent *e)
 {
     Q_Q(QColorDialog);
+#if QT_CONFIG(shortcut)
     if (e->matches(QKeySequence::Cancel)) {
         releaseColorPicking();
         q->setCurrentColor(beforeScreenColorPicking);
-    } else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+    } else
+#endif
+      if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
         q->setCurrentColor(grabScreenColor(QCursor::pos()));
         releaseColorPicking();
     }

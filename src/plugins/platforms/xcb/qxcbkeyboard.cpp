@@ -711,7 +711,7 @@ void QXcbKeyboard::updateKeymap()
     xkb_keymap = 0;
 
     struct xkb_state *new_state = 0;
-#ifndef QT_NO_XKB
+#if QT_CONFIG(xkb)
     if (connection()->hasXKB()) {
         xkb_keymap = xkb_x11_keymap_new_from_device(xkb_context, xcb_connection(), core_device_id, (xkb_keymap_compile_flags)0);
         if (xkb_keymap) {
@@ -753,7 +753,7 @@ void QXcbKeyboard::updateKeymap()
     checkForLatinLayout();
 }
 
-#ifndef QT_NO_XKB
+#if QT_CONFIG(xkb)
 void QXcbKeyboard::updateXKBState(xcb_xkb_state_notify_event_t *state)
 {
     if (m_config && connection()->hasXKB()) {
@@ -1136,15 +1136,9 @@ int QXcbKeyboard::keysymToQtKey(xcb_keysym_t keysym, Qt::KeyboardModifiers &modi
 
 QXcbKeyboard::QXcbKeyboard(QXcbConnection *connection)
     : QXcbObject(connection)
-    , m_autorepeat_code(0)
-    , xkb_context(0)
-    , xkb_keymap(0)
-    , xkb_state(0)
-    , latin_keymap(0)
-    , m_hasLatinLayout(false)
 {
     memset(&xkb_names, 0, sizeof(xkb_names));
-#ifndef QT_NO_XKB
+#if QT_CONFIG(xkb)
     core_device_id = 0;
     if (connection->hasXKB()) {
         updateVModMapping();
@@ -1158,7 +1152,7 @@ QXcbKeyboard::QXcbKeyboard(QXcbConnection *connection)
 #endif
         m_key_symbols = xcb_key_symbols_alloc(xcb_connection());
         updateModifiers();
-#ifndef QT_NO_XKB
+#if QT_CONFIG(xkb)
     }
 #endif
     updateKeymap();
@@ -1177,7 +1171,7 @@ QXcbKeyboard::~QXcbKeyboard()
 
 void QXcbKeyboard::updateVModMapping()
 {
-#ifndef QT_NO_XKB
+#if QT_CONFIG(xkb)
     xcb_xkb_get_names_cookie_t names_cookie;
     xcb_xkb_get_names_reply_t *name_reply;
     xcb_xkb_get_names_value_list_t names_list;
@@ -1246,7 +1240,7 @@ void QXcbKeyboard::updateVModMapping()
 
 void QXcbKeyboard::updateVModToRModMapping()
 {
-#ifndef QT_NO_XKB
+#if QT_CONFIG(xkb)
     xcb_xkb_get_map_cookie_t map_cookie;
     xcb_xkb_get_map_reply_t *map_reply;
     xcb_xkb_get_map_map_t map;

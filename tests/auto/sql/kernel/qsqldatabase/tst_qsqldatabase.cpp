@@ -100,6 +100,8 @@ private slots:
     void eventNotificationIBase();
     void eventNotificationPSQL_data() { generic_data("QPSQL"); }
     void eventNotificationPSQL();
+    void eventNotificationSQLite_data() { generic_data("QSQLITE"); }
+    void eventNotificationSQLite();
 
     //database specific 64 bit integer test
     void bigIntField_data() { generic_data(); }
@@ -2109,6 +2111,35 @@ void tst_QSqlDatabase::eventNotificationPSQL()
     QVERIFY_SQL(driver, unsubscribeFromNotification(procedureName));
 }
 
+void tst_QSqlDatabase::eventNotificationSQLite()
+{
+    QFETCH(QString, dbName);
+    QSqlDatabase db = QSqlDatabase::database(dbName);
+    CHECK_DATABASE(db);
+    if (db.driverName().compare(QLatin1String("QSQLITE"), Qt::CaseInsensitive)) {
+        QSKIP("QSQLITE specific test");
+    }
+    const QString tableName(qTableName("sqlitnotifytest", __FILE__, db));
+    tst_Databases::safeDropTable(db, tableName);
+
+    QSignalSpy notificationSpy(db.driver(), SIGNAL(notification(QString)));
+    QSignalSpy notificationSpyExt(db.driver(), SIGNAL(notification(QString,QSqlDriver::NotificationSource,QVariant)));
+    QSqlQuery q(db);
+    QVERIFY_SQL(q, exec("CREATE TABLE " + tableName + " (id INTEGER, realVal REAL)"));
+    db.driver()->subscribeToNotification(tableName);
+    QVERIFY_SQL(q, exec("INSERT INTO " + tableName + " (id, realVal) VALUES (1, 2.3)"));
+    QTRY_COMPARE(notificationSpy.count(), 1);
+    QTRY_COMPARE(notificationSpyExt.count(), 1);
+    QList<QVariant> arguments = notificationSpy.takeFirst();
+    QCOMPARE(arguments.at(0).toString(), tableName);
+    arguments = notificationSpyExt.takeFirst();
+    QCOMPARE(arguments.at(0).toString(), tableName);
+    db.driver()->unsubscribeFromNotification(tableName);
+    QVERIFY_SQL(q, exec("INSERT INTO " + tableName + " (id, realVal) VALUES (1, 2.3)"));
+    QTRY_COMPARE(notificationSpy.count(), 0);
+    QTRY_COMPARE(notificationSpyExt.count(), 0);
+}
+
 void tst_QSqlDatabase::sqlite_bindAndFetchUInt()
 {
     QFETCH(QString, dbName);
@@ -2160,7 +2191,7 @@ void tst_QSqlDatabase::sqlStatementUseIsNull_189093()
     CHECK_DATABASE(db);
 
     // select a record with NULL value
-    QSqlQuery q(QString::null, db);
+    QSqlQuery q(QString(), db);
     QVERIFY_SQL(q, exec("select * from " + qTableName("qtest", __FILE__, db) + " where id = 4"));
     QVERIFY_SQL(q, next());
 

@@ -396,8 +396,7 @@ void QAbstractButtonPrivate::click()
     }
     blockRefresh = false;
     refresh();
-    q->repaint(); //flush paint event before invoking potentially expensive operation
-    QApplication::flush();
+    q->repaint();
     if (guard)
         emitReleased();
     if (guard)
@@ -834,8 +833,7 @@ void QAbstractButton::animateClick(int msec)
     if (d->checkable && focusPolicy() & Qt::ClickFocus)
         setFocus();
     setDown(true);
-    repaint(); //flush paint event before invoking potentially expensive operation
-    QApplication::flush();
+    repaint();
     if (!d->animateTimer.isActive())
         d->emitPressed();
     d->animateTimer.start(msec, this);
@@ -977,8 +975,7 @@ void QAbstractButton::mousePressEvent(QMouseEvent *e)
     if (hitButton(e->pos())) {
         setDown(true);
         d->pressed = true;
-        repaint(); //flush paint event before invoking potentially expensive operation
-        QApplication::flush();
+        repaint();
         d->emitPressed();
         e->accept();
     } else {
@@ -1025,8 +1022,7 @@ void QAbstractButton::mouseMoveEvent(QMouseEvent *e)
 
     if (hitButton(e->pos()) != d->down) {
         setDown(!d->down);
-        repaint(); //flush paint event before invoking potentially expensive operation
-        QApplication::flush();
+        repaint();
         if (d->down)
             d->emitPressed();
         else
@@ -1051,14 +1047,13 @@ void QAbstractButton::keyPressEvent(QKeyEvent *e)
     case Qt::Key_Space:
         if (!e->isAutoRepeat()) {
             setDown(true);
-            repaint(); //flush paint event before invoking potentially expensive operation
-            QApplication::flush();
+            repaint();
             d->emitPressed();
         }
         break;
     case Qt::Key_Up:
         next = false;
-        // fall through
+        Q_FALLTHROUGH();
     case Qt::Key_Left:
     case Qt::Key_Right:
     case Qt::Key_Down: {
@@ -1100,13 +1095,14 @@ void QAbstractButton::keyPressEvent(QKeyEvent *e)
         break;
     }
     default:
+#ifndef QT_NO_SHORTCUT
         if (e->matches(QKeySequence::Cancel) && d->down) {
             setDown(false);
-            repaint(); //flush paint event before invoking potentially expensive operation
-            QApplication::flush();
+            repaint();
             d->emitReleased();
             return;
         }
+#endif
         e->ignore();
     }
 }

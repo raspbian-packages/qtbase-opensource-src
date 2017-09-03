@@ -1,7 +1,8 @@
 /****************************************************************************
 **
-** Copyright (C) 2014 BogDan Vatra <bogdan@kde.org>
+** Copyright (C) 2017 BogDan Vatra <bogdan@kde.org>
 ** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2016 Olivier Goffart <ogoffart@woboq.com>
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the Android port of the Qt Toolkit.
@@ -46,6 +47,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -143,6 +145,11 @@ public class QtActivityDelegate
     private int m_portraitKeyboardHeight = 0;
     private int m_landscapeKeyboardHeight = 0;
     private int m_probeKeyboardHeightDelay = 50; // ms
+    private CursorHandle m_cursorHandle;
+    private CursorHandle m_leftSelectionHandle;
+    private CursorHandle m_rightSelectionHandle;
+    private EditMenu m_editMenu;
+    private EditPopupMenu m_editPopupMenu;
 
     public void setFullScreen(boolean enterFullScreen)
     {
@@ -270,6 +277,9 @@ public class QtActivityDelegate
 
         if (m_softInputMode != 0) {
             m_activity.getWindow().setSoftInputMode(m_softInputMode);
+            final boolean softInputIsHidden = (m_softInputMode & WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN) != 0;
+            if (softInputIsHidden)
+                return;
         } else {
             if (height > visibleHeight)
                 m_activity.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
@@ -470,6 +480,80 @@ public class QtActivityDelegate
         m_imm.updateSelection(m_editText, selStart, selEnd, candidatesStart, candidatesEnd);
     }
 
+    // Values coming from QAndroidInputContext::CursorHandleShowMode
+    private static final int CursorHandleNotShown = 0;
+    private static final int CursorHandleShowNormal = 1;
+    private static final int CursorHandleShowSelection = 2;
+    private static final int CursorHandleShowPopup = 3;
+
+    /* called from the C++ code when the position of the cursor or selection handles needs to
+       be adjusted.
+       mode is one of QAndroidInputContext::CursorHandleShowMode
+    */
+    public void updateHandles(int mode, int x1, int y1, int x2, int y2, boolean rtl)
+    {
+        if (mode == CursorHandleNotShown) {
+            if (m_cursorHandle != null)
+                m_cursorHandle.hide();
+            if (m_rightSelectionHandle != null) {
+                m_rightSelectionHandle.hide();
+                m_leftSelectionHandle.hide();
+                m_rightSelectionHandle = null;
+                m_leftSelectionHandle = null;
+            }
+            if (m_editMenu != null)
+                m_editMenu.hide();
+            if (m_editPopupMenu != null)
+                m_editPopupMenu.hide();
+        } else if (mode == CursorHandleShowNormal || mode == CursorHandleShowPopup) {
+            if (m_cursorHandle == null) {
+                m_cursorHandle = new CursorHandle(m_activity, m_layout, QtNative.IdCursorHandle,
+                                                  android.R.attr.textSelectHandle, false);
+            }
+            m_cursorHandle.setPosition(x1, y1);
+            if (m_rightSelectionHandle != null) {
+                m_rightSelectionHandle.hide();
+                m_leftSelectionHandle.hide();
+                m_rightSelectionHandle = null;
+                m_leftSelectionHandle = null;
+            }
+        } else if (mode == CursorHandleShowSelection) {
+            if (m_rightSelectionHandle == null) {
+                m_leftSelectionHandle = new CursorHandle(m_activity, m_layout, QtNative.IdLeftHandle,
+                                                         !rtl ? android.R.attr.textSelectHandleLeft :
+                                                                android.R.attr.textSelectHandleRight,
+                                                         rtl);
+                m_rightSelectionHandle = new CursorHandle(m_activity, m_layout, QtNative.IdRightHandle,
+                                                          !rtl ? android.R.attr.textSelectHandleRight :
+                                                                 android.R.attr.textSelectHandleLeft,
+                                                          rtl);
+            }
+            m_leftSelectionHandle.setPosition(x1,y1);
+            m_rightSelectionHandle.setPosition(x2,y2);
+            if (m_cursorHandle != null)
+                m_cursorHandle.hide();
+
+            if (m_editMenu == null)
+                m_editMenu = new EditMenu(m_activity);
+            m_editMenu.show();
+        }
+
+        // show the edit popup menu
+        if (mode == CursorHandleShowPopup && (m_editMenu == null || !m_editMenu.isShown())
+                && QtNative.hasClipboardText()) {
+            if (m_editPopupMenu == null)
+                m_editPopupMenu = new EditPopupMenu(m_activity, m_layout);
+            if (y2 < m_editPopupMenu.getHeight())  {
+                // If the popup cannot be shown over the text, it must be shown under the anchors
+                y2 = y1 + 2 * m_editPopupMenu.getHeight();
+            }
+            m_editPopupMenu.setPosition(x2, y2);
+        } else if (m_editPopupMenu != null) {
+            m_editPopupMenu.hide();
+        }
+
+    }
+
     public boolean loadApplication(Activity activity, ClassLoader classLoader, Bundle loaderParams)
     {
         /// check parameters integrity
@@ -633,58 +717,26 @@ public class QtActivityDelegate
     {
         // start application
         try {
-            // FIXME turn on debuggable check
-            // if the applications is debuggable and it has a native debug request
+
             Bundle extras = m_activity.getIntent().getExtras();
             if (extras != null) {
-
-                if ( /*(ai.flags&ApplicationInfo.FLAG_DEBUGGABLE) != 0
-                        &&*/ extras.containsKey("native_debug")
-                        && extras.getString("native_debug").equals("true")) {
-                    try {
-                        String packagePath =
-                            m_activity.getPackageManager().getApplicationInfo(m_activity.getPackageName(),
-                                                                              PackageManager.GET_CONFIGURATIONS).dataDir + "/";
-                        String gdbserverPath =
-                            extras.containsKey("gdbserver_path")
-                            ? extras.getString("gdbserver_path")
-                            : packagePath+"lib/gdbserver ";
-
-                        String socket =
-                            extras.containsKey("gdbserver_socket")
-                            ? extras.getString("gdbserver_socket")
-                            : "+debug-socket";
-
-                        if (!(new File(gdbserverPath)).exists())
-                            gdbserverPath += ".so";
-
-                        // start debugger
-                        m_debuggerProcess = Runtime.getRuntime().exec(gdbserverPath
-                                                                        + socket
-                                                                        + " --attach "
-                                                                        + android.os.Process.myPid(),
-                                                                      null,
-                                                                      new File(packagePath));
-                    } catch (IOException ioe) {
-                        Log.e(QtNative.QtTAG,"Can't start debugger" + ioe.getMessage());
-                    } catch (SecurityException se) {
-                        Log.e(QtNative.QtTAG,"Can't start debugger" + se.getMessage());
-                    } catch (NameNotFoundException e) {
-                        Log.e(QtNative.QtTAG,"Can't start debugger" + e.getMessage());
-                    }
-                }
-
-
                 if ( /*(ai.flags&ApplicationInfo.FLAG_DEBUGGABLE) != 0
                         &&*/ extras.containsKey("debug_ping")
                         && extras.getString("debug_ping").equals("true")) {
                     try {
+                        final String dc = "--Added-by-androiddeployqt--/debugger.command";
+                        String debuggerCommand =
+                            new BufferedReader(new InputStreamReader(m_activity.getAssets().open(dc))).readLine();
+                        String packagePath =
+                            m_activity.getPackageManager().getApplicationInfo(m_activity.getPackageName(),
+                                                                              PackageManager.GET_CONFIGURATIONS).dataDir + "/";
+
                         debugLog("extra parameters: " + extras);
                         String packageName = m_activity.getPackageName();
                         String pingFile = extras.getString("ping_file");
                         String pongFile = extras.getString("pong_file");
                         String gdbserverSocket = extras.getString("gdbserver_socket");
-                        String gdbserverCommand = extras.getString("gdbserver_command");
+                        String gdbserverCommand = packagePath + debuggerCommand + gdbserverSocket;
                         String pingSocket = extras.getString("ping_socket");
                         boolean usePing = pingFile != null;
                         boolean usePong = pongFile != null;
@@ -813,9 +865,9 @@ public class QtActivityDelegate
                         }
 
                     } catch (IOException ioe) {
-                        Log.e(QtNative.QtTAG,"Can't start debugger" + ioe.getMessage());
+                        ioe.printStackTrace();
                     } catch (SecurityException se) {
-                        Log.e(QtNative.QtTAG,"Can't start debugger" + se.getMessage());
+                        se.printStackTrace();
                     }
                 }
 
@@ -1382,5 +1434,10 @@ public class QtActivityDelegate
             e.printStackTrace();
         }
         return false;
+    }
+
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
+    {
+        QtNative.sendRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 }

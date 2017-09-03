@@ -200,7 +200,7 @@ public:
 #endif
                            compatMode(false), autoAddOkButton(true),
                            detectedEscapeButton(0), informativeLabel(0),
-                           options(new QMessageDialogOptions) { }
+                           options(QMessageDialogOptions::create()) { }
 
     void init(const QString &title = QString(), const QString &text = QString());
     void setupLayout();
@@ -218,9 +218,6 @@ public:
     int layoutMinimumWidth();
     void retranslateStrings();
 
-#ifdef Q_OS_WINCE
-    void hideSpecial();
-#endif
     static int showOldMessageBox(QWidget *parent, QMessageBox::Icon icon,
                                  const QString &title, const QString &text,
                                  int button0, int button1, int button2);
@@ -339,8 +336,10 @@ void QMessageBoxPrivate::setupLayout()
 #else
     grid->addWidget(buttonBox, grid->rowCount(), 0, 1, grid->columnCount());
 #endif
+#if QT_CONFIG(textedit)
     if (detailsText)
         grid->addWidget(detailsText, grid->rowCount(), 0, 1, grid->columnCount());
+#endif
     grid->setSizeConstraint(QLayout::SetNoConstraint);
     q->setLayout(grid);
 
@@ -362,24 +361,15 @@ void QMessageBoxPrivate::updateSize()
         return;
 
     QSize screenSize = QApplication::desktop()->availableGeometry(QCursor::pos()).size();
-#if defined(Q_OS_WINCE)
-    // the width of the screen, less the window border.
-    int hardLimit = screenSize.width() - (q->frameGeometry().width() - q->geometry().width());
-#else
     int hardLimit = qMin(screenSize.width() - 480, 1000); // can never get bigger than this
     // on small screens allows the messagebox be the same size as the screen
     if (screenSize.width() <= 1024)
         hardLimit = screenSize.width();
-#endif
 #ifdef Q_OS_MAC
     int softLimit = qMin(screenSize.width()/2, 420);
 #else
     // note: ideally on windows, hard and soft limits but it breaks compat
-#ifndef Q_OS_WINCE
     int softLimit = qMin(screenSize.width()/2, 500);
-#else
-    int softLimit = qMin(screenSize.width() * 3 / 4, 500);
-#endif //Q_OS_WINCE
 #endif
 
     if (informativeLabel)
@@ -435,28 +425,6 @@ void QMessageBoxPrivate::updateSize()
     q->setFixedSize(width, height);
     QCoreApplication::removePostedEvents(q, QEvent::LayoutRequest);
 }
-
-
-#ifdef Q_OS_WINCE
-/*!
-  \internal
-  Hides special buttons which are rather shown in the title bar
-  on WinCE, to conserve screen space.
-*/
-
-void QMessageBoxPrivate::hideSpecial()
-{
-    Q_Q(QMessageBox);
-    QList<QPushButton*> list = q->findChildren<QPushButton*>();
-        for (int i=0; i<list.size(); ++i) {
-            QPushButton *pb = list.at(i);
-            QString text = pb->text();
-            text.remove(QChar::fromLatin1('&'));
-            if (text == QApplication::translate("QMessageBox", "OK" ))
-                pb->setFixedSize(0,0);
-        }
-}
-#endif
 
 static int oldButton(int button)
 {
@@ -1368,24 +1336,6 @@ bool QMessageBox::event(QEvent *e)
         case QEvent::LanguageChange:
             d_func()->retranslateStrings();
             break;
-#ifdef Q_OS_WINCE
-        case QEvent::OkRequest:
-        case QEvent::HelpRequest: {
-          QString bName =
-              (e->type() == QEvent::OkRequest)
-              ? QApplication::translate("QMessageBox", "OK")
-              : QApplication::translate("QMessageBox", "Help");
-          QList<QPushButton*> list = findChildren<QPushButton*>();
-          for (int i=0; i<list.size(); ++i) {
-              QPushButton *pb = list.at(i);
-              if (pb->text() == bName) {
-                  if (pb->isEnabled())
-                      pb->click();
-                  return pb->isEnabled();
-              }
-          }
-        }
-#endif
         default:
             break;
     }
@@ -1431,7 +1381,7 @@ void QMessageBox::changeEvent(QEvent *ev)
         d->buttonBox->setCenterButtons(style()->styleHint(QStyle::SH_MessageBox_CenterButtons, 0, this));
         if (d->informativeLabel)
             d->informativeLabel->setTextInteractionFlags(flags);
-        // intentional fall through
+        Q_FALLTHROUGH();
     }
     case QEvent::FontChange:
     case QEvent::ApplicationFontChange:
@@ -1442,6 +1392,7 @@ void QMessageBox::changeEvent(QEvent *ev)
         d->label->setFont(f);
     }
 #endif
+        Q_FALLTHROUGH();
     default:
         break;
     }
@@ -1453,8 +1404,8 @@ void QMessageBox::changeEvent(QEvent *ev)
 */
 void QMessageBox::keyPressEvent(QKeyEvent *e)
 {
-    Q_D(QMessageBox);
-
+#if QT_CONFIG(shortcut)
+        Q_D(QMessageBox);
         if (e->matches(QKeySequence::Cancel)) {
             if (d->detectedEscapeButton) {
 #ifdef Q_OS_MAC
@@ -1465,7 +1416,7 @@ void QMessageBox::keyPressEvent(QKeyEvent *e)
             }
             return;
         }
-
+#endif // QT_CONFIG(shortcut)
 
 #if !defined(QT_NO_CLIPBOARD) && !defined(QT_NO_SHORTCUT)
 
@@ -1525,20 +1476,6 @@ void QMessageBox::keyPressEvent(QKeyEvent *e)
     QDialog::keyPressEvent(e);
 }
 
-#ifdef Q_OS_WINCE
-/*!
-    \reimp
-*/
-void QMessageBox::setVisible(bool visible)
-{
-    Q_D(QMessageBox);
-    if (visible)
-        d->hideSpecial();
-    QDialog::setVisible(visible);
-}
-#endif
-
-
 /*!
     \overload
 
@@ -1596,9 +1533,6 @@ void QMessageBox::showEvent(QShowEvent *e)
     Q_D(QMessageBox);
     if (d->autoAddOkButton) {
         addButton(Ok);
-#if defined(Q_OS_WINCE)
-        d->hideSpecial();
-#endif
     }
     if (d->detailsButton)
         addButton(d->detailsButton, QMessageBox::ActionRole);
@@ -1900,7 +1834,7 @@ void QMessageBox::aboutQt(QWidget *parent, const QString &title)
         "<p>Qt and the Qt logo are trademarks of The Qt Company Ltd.</p>"
         "<p>Qt is The Qt Company Ltd product developed as an open source "
         "project. See <a href=\"http://%3/\">%3</a> for more information.</p>"
-        ).arg(QStringLiteral("2016"),
+        ).arg(QStringLiteral("2017"),
               QStringLiteral("qt.io/licensing"),
               QStringLiteral("qt.io"));
     QMessageBox *msgBox = new QMessageBox(parent);
@@ -1912,9 +1846,6 @@ void QMessageBox::aboutQt(QWidget *parent, const QString &title)
     QPixmap pm(QLatin1String(":/qt-project.org/qmessagebox/images/qtlogo-64.png"));
     if (!pm.isNull())
         msgBox->setIconPixmap(pm);
-#if defined(Q_OS_WINCE)
-    msgBox->setDefaultButton(msgBox->addButton(QMessageBox::Ok));
-#endif
 
     // should perhaps be a style hint
 #ifdef Q_OS_MAC
@@ -2725,7 +2656,9 @@ void QMessageBoxPrivate::helperPrepareShow(QPlatformDialogHelper *)
     options->setWindowTitle(q->windowTitle());
     options->setText(q->text());
     options->setInformativeText(q->informativeText());
+#if QT_CONFIG(textedit)
     options->setDetailedText(q->detailedText());
+#endif
     options->setIcon(helperIcon(q->icon()));
     options->setStandardButtons(helperStandardButtons(q));
 }

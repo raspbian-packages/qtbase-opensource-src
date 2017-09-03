@@ -99,8 +99,12 @@ QStringList QMakeProject::expand(const ProKey &func, const QList<ProStringList> 
 {
     m_current.clear();
 
-    if (int func_t = statics.expands.value(func))
-        return evaluateBuiltinExpand(func_t, func, prepareBuiltinArgs(args)).toQStringList();
+    if (int func_t = statics.expands.value(func)) {
+        ProStringList ret;
+        if (evaluateBuiltinExpand(func_t, func, prepareBuiltinArgs(args), ret) == ReturnError)
+            exit(3);
+        return ret.toQStringList();
+    }
 
     QHash<ProKey, ProFunctionDef>::ConstIterator it =
             m_functionDefs.replaceFunctions.constFind(func);
@@ -119,7 +123,8 @@ QStringList QMakeProject::expand(const ProKey &func, const QList<ProStringList> 
 ProString QMakeProject::expand(const QString &expr, const QString &where, int line)
 {
     ProString ret;
-    ProFile *pro = m_parser->parsedProBlock(expr, where, line, QMakeParser::ValueGrammar);
+    ProFile *pro = m_parser->parsedProBlock(QStringRef(&expr), where, line,
+                                            QMakeParser::ValueGrammar);
     if (pro->isOk()) {
         m_current.pro = pro;
         m_current.line = 0;

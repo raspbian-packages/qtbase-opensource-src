@@ -134,7 +134,9 @@ private slots:
     void clearResources();
 
     void setPlainText();
+    void toPlainText_data();
     void toPlainText();
+    void toRawText();
 
     void deleteTextObjectsOnClear();
 
@@ -2390,11 +2392,38 @@ void tst_QTextDocument::setPlainText()
     QCOMPARE(doc->toPlainText(), s);
 }
 
+void tst_QTextDocument::toPlainText_data()
+{
+    QTest::addColumn<QString>("html");
+    QTest::addColumn<QString>("expectedPlainText");
+
+    QTest::newRow("nbsp") << "Hello&nbsp;World" << "Hello World";
+    QTest::newRow("empty_div") << "<div></div>hello" << "hello";
+    QTest::newRow("br_and_p") << "<p>first<br></p><p>second<br></p>" << "first\n\nsecond\n";
+    QTest::newRow("div") << "first<div>second<br>third</div>fourth" << "first\nsecond\nthird\nfourth";                             // <div> and </div> become newlines...
+    QTest::newRow("br_text_end_of_div") << "<div><div>first<br>moretext</div>second<br></div>" << "first\nmoretext\nsecond\n";     // ... when there is text before <div>
+    QTest::newRow("br_end_of_div_like_gmail") << "<div><div><div>first<br></div>second<br></div>third<br></div>" << "first\nsecond\nthird\n"; // ... and when there is text before </div>
+    QTest::newRow("p_and_div") << "<div><div>first<p>second</p></div>third</div>" << "first\nsecond\nthird";
+}
+
 void tst_QTextDocument::toPlainText()
 {
-    doc->setHtml("Hello&nbsp;World");
-    QCOMPARE(doc->toPlainText(), QLatin1String("Hello World"));
+    QFETCH(QString, html);
+    QFETCH(QString, expectedPlainText);
+
+    doc->setHtml(html);
+    QCOMPARE(doc->toPlainText(), expectedPlainText);
 }
+
+void tst_QTextDocument::toRawText()
+{
+    doc->setHtml("&nbsp;");
+
+    QString rawText = doc->toRawText();
+    QCOMPARE(rawText.size(), 1);
+    QCOMPARE(rawText.at(0).unicode(), ushort(QChar::Nbsp));
+}
+
 
 void tst_QTextDocument::deleteTextObjectsOnClear()
 {
@@ -2921,14 +2950,27 @@ void tst_QTextDocument::testUndoBlocks()
     doc->undo();
     QCOMPARE(doc->toPlainText(), QString(""));
 
+    cursor.insertText("town");
+    cursor.beginEditBlock(); // Edit block 1 - Deletion/Insertion
+    cursor.setPosition(0, QTextCursor::KeepAnchor);
+    cursor.insertText("r");
+    cursor.endEditBlock();
+    cursor.insertText("est"); // Merged into edit block 1
+    QCOMPARE(doc->toPlainText(), QString("rest"));
+    doc->undo();
+    QCOMPARE(doc->toPlainText(), QString("town"));
+    doc->undo();
+    QCOMPARE(doc->toPlainText(), QString(""));
+
+    // This case would not happen in practice. If the user typed out this text, it would all be part of one
+    // edit block. This would cause the undo to clear all text. But for the purpose of testing the beginEditBlock
+    // and endEditBlock calls with respect to qtextdocument this is tested.
     cursor.insertText("quod");
-    cursor.beginEditBlock();
+    cursor.beginEditBlock(); // Edit block 1 - Insertion
     cursor.insertText(" erat");
     cursor.endEditBlock();
-    cursor.insertText(" demonstrandum");
+    cursor.insertText(" demonstrandum"); // Merged into edit block 1
     QCOMPARE(doc->toPlainText(), QString("quod erat demonstrandum"));
-    doc->undo();
-    QCOMPARE(doc->toPlainText(), QString("quod erat"));
     doc->undo();
     QCOMPARE(doc->toPlainText(), QString("quod"));
     doc->undo();

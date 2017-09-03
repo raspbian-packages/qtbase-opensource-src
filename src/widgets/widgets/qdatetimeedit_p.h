@@ -51,12 +51,12 @@
 // We mean it.
 //
 
+#include <QtWidgets/private/qtwidgetsglobal_p.h>
 #include "QtWidgets/qcombobox.h"
 #include "QtWidgets/qcalendarwidget.h"
 #include "QtWidgets/qspinbox.h"
 #include "QtWidgets/qtoolbutton.h"
 #include "QtWidgets/qmenu.h"
-#include "QtWidgets/qlabel.h"
 #include "QtWidgets/qdatetimeedit.h"
 #include "private/qabstractspinbox_p.h"
 #include "private/qdatetimeparser_p.h"
@@ -166,10 +166,10 @@ private Q_SLOTS:
     void dateSelectionChanged();
 
 protected:
-    void hideEvent(QHideEvent *);
-    void mousePressEvent(QMouseEvent *e);
-    void mouseReleaseEvent(QMouseEvent *);
-    bool event(QEvent *e);
+    void hideEvent(QHideEvent *) override;
+    void mousePressEvent(QMouseEvent *e) override;
+    void mouseReleaseEvent(QMouseEvent *) override;
+    bool event(QEvent *e) override;
 
 private:
     QCalendarWidget *verifyCalendarInstance();

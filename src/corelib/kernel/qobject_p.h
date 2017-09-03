@@ -52,6 +52,7 @@
 // We mean it.
 //
 
+#include <QtCore/private/qglobal_p.h>
 #include "QtCore/qobject.h"
 #include "QtCore/qpointer.h"
 #include "QtCore/qsharedpointer.h"
@@ -197,6 +198,7 @@ public:
     static QObjectPrivate *get(QObject *o) {
         return o->d_func();
     }
+    static const QObjectPrivate *get(const QObject *o) { return o->d_func(); }
 
     int signalIndex(const char *signalName, const QMetaObject **meta = 0) const;
     inline bool isSignalConnected(uint signalIdx, bool checkDeclarative = true) const;

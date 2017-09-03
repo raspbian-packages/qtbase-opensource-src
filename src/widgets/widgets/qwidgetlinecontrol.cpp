@@ -72,7 +72,7 @@ int QWidgetLineControl::redoTextLayout() const
     QTextLine l = m_textLayout.createLine();
     m_textLayout.endLayout();
 
-#if defined(Q_DEAD_CODE_FROM_QT4_MAC)
+#if 0 // Used to be included in Qt4 for Q_WS_MAC
     if (m_threadChecks)
         m_textLayoutThread = QThread::currentThread();
 #endif
@@ -441,7 +441,7 @@ QRect QWidgetLineControl::anchorRect() const
 {
     if (!hasSelectedText())
         return cursorRect();
-    return rectForPos(m_selstart < m_selend ? m_selstart : m_selend);
+    return rectForPos(m_cursor == m_selstart ? m_selend : m_selstart);
 }
 
 /*!
@@ -1030,6 +1030,7 @@ void QWidgetLineControl::parseInputMask(const QString &maskFields)
                 break;
             case '\\':
                 escape = true;
+                Q_FALLTHROUGH();
             default:
                 s = true;
                 break;
@@ -1703,7 +1704,9 @@ void QWidgetLineControl::processKeyEvent(QKeyEvent* event)
     }
 
     bool unknown = false;
+#if QT_CONFIG(shortcut)
     bool visual = cursorMoveStyle() == Qt::VisualMoveStyle;
+#endif
 
     if (false) {
     }
@@ -1924,19 +1927,15 @@ void QWidgetLineControl::processKeyEvent(QKeyEvent* event)
         unknown = false;
     }
 
-    // QTBUG-35734: ignore Ctrl/Ctrl+Shift; accept only AltGr (Alt+Ctrl) on German keyboards
-    if (unknown && !isReadOnly()
-        && event->modifiers() != Qt::ControlModifier
-        && event->modifiers() != (Qt::ControlModifier | Qt::ShiftModifier)) {
-        QString t = event->text();
-        if (!t.isEmpty() && t.at(0).isPrint()) {
-            insert(t);
+    if (unknown
+        && !isReadOnly()
+        && isAcceptableInput(event)) {
+        insert(event->text());
 #ifndef QT_NO_COMPLETER
-            complete(event->key());
+        complete(event->key());
 #endif
-            event->accept();
-            return;
-        }
+        event->accept();
+        return;
     }
 
     if (unknown)
