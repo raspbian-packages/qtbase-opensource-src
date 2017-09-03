@@ -9,3 +9,4 @@ link_fbclient.diff
 gnukfreebsd_cloexec.diff
 armv4.diff
 nonlinux_utime.diff
+modify-configure.json-to-disable-neon.patch
