@@ -1251,7 +1251,7 @@
         },
         "neon": {
             "label": "NEON",
-            "condition": "(arch.arm || arch.arm64) && subarch.neon",
+            "condition": "(arch.arm64) && subarch.neon",
             "output": [
                 "privateConfig",
                 { "type": "define", "name": "QT_COMPILER_SUPPORTS_NEON", "value": 1 }
