@@ -621,8 +621,8 @@ QList<QWindowSystemInterface::TouchPoint>
         p.area = QHighDpi::toNativePixels(pt.screenRect(), window);
         p.pressure = pt.pressure();
         p.state = pt.state();
-        p.velocity = pt.velocity();
-        p.rawPositions = pt.rawScreenPositions();
+        p.velocity = QHighDpi::toNativePixels(pt.velocity(), window);
+        p.rawPositions = QHighDpi::toNativePixels(pt.rawScreenPositions(), window);
         newList.append(p);
     }
     return newList;
@@ -860,7 +860,7 @@ void QWindowSystemInterface::handleContextMenuEvent(QWindow *window, bool mouseT
 }
 #endif
 
-#ifndef QT_NO_WHATSTHIS
+#if QT_CONFIG(whatsthis)
 void QWindowSystemInterface::handleEnterWhatsThisEvent()
 {
     QWindowSystemInterfacePrivate::WindowSystemEvent *e =

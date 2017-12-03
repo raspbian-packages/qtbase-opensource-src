@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.9.1+dfsg-9+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.9.2+dfsg-4+rpi1) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,81 @@ qtbase-opensource-src (5.9.1+dfsg-9+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Peter Michael Green <plugwash@raspbian.org>  Fri, 01 Sep 2017 05:13:25 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 03 Dec 2017 14:15:45 +0000
+
+qtbase-opensource-src (5.9.2+dfsg-4) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 26 Oct 2017 14:16:31 +0300
+
+qtbase-opensource-src (5.9.2+dfsg-3) experimental; urgency=medium
+
+  * Merge 5.9.1+dfsg-12 upload from unstable.
+  * Move ${shlibs:Depends} from qt5-qmake to qt5-qmake-bin.
+  * Move all Qt binaries to a non-multiarch location, /usr/lib/qt5/bin/, for
+    improved cross-build support. Provide compatibility symlinks for the old
+    location.
+  * Bump qttools5-dev-tools build-dependency to 5.9.2-2, as the build system
+    now looks for qdoc and qtattributionsscanner in the new location.
+  * Use debhelper compat level 10 and dh_missing.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 19 Oct 2017 22:47:48 +0300
+
+qtbase-opensource-src (5.9.2+dfsg-2) experimental; urgency=medium
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Bump qtbase-abi to 5-9-2. We can't warrant that we catch all ABI changes
+    (specially with private stuff) and there is still the internal version
+    check, so we need to bump it even if we do not find API/ABI changes.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 14 Oct 2017 10:23:26 +0300
+
+qtbase-opensource-src (5.9.2+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop fix_atspi_condition.diff, it was coming from upstream.
+  * Port gnukfreebsd_cloexec.diff to new upstream code.
+  * Stop excluding src/3rdparty/zlib/doc/rfc*.txt from the tarball,
+    these files are no longer shipped by upstream.
+  * Update symbols files from the current build log.
+  * Update debian/copyright.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 06 Oct 2017 23:10:25 +0700
+
+qtbase-opensource-src (5.9.1+dfsg-12) unstable; urgency=medium
+
+  * Use the linux-g++ mkspec on all Linux architectures. We do not need
+    the -m64 compiler flag which linux-g++-64 adds.
+  * Split qmake binary into a new binary package, qt5-qmake-bin.
+    Make the new package Multi-Arch: foreign, to make sure that a proper
+    version of qmake gets installed for cross builds (closes: #876861).
+  * Bump Standards-Version to 4.1.1, no changes needed.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Wed, 04 Oct 2017 11:41:29 +0700
+
+qtbase-opensource-src (5.9.1+dfsg-11) unstable; urgency=medium
+
+  * Backport upstream patch to fix crash in qglx_findConfig() function
+    (qglxconvenience_nullptr.diff, closes: #841951).
+  * Backport upstream patch to call mysql_library_end() only once when
+    using MariaDB (mariadb_library_end.diff).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 28 Sep 2017 00:03:45 +0300
+
+qtbase-opensource-src (5.9.1+dfsg-10) unstable; urgency=medium
+
+  [ Dmitry Shachnev ]
+  * Add a maintscript to ensure that the obsolete 90qt5-opengl conffile
+    is removed on upgrade (closes: #873788).
+  * Bump Standards-Version to 4.1.0, stop using deprecated Priority: extra.
+  * Update symbols files from kfreebsd-i386 log.
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * debian/rules: include /usr/share/dpkg/architecture.mk instead of defining
+    DEB_HOST_* variables. Thanks Helmut Grohne!
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 23 Sep 2017 17:57:53 +0300
 
 qtbase-opensource-src (5.9.1+dfsg-9) unstable; urgency=medium
 

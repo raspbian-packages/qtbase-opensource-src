@@ -7,7 +7,7 @@ Uploaders: Sune Vuorela <sune@debian.org>,
            Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>,
            Timo Jyrinki <timo@debian.org>,
            Dmitry Shachnev <mitya57@debian.org>
-Build-Depends: debhelper (>= 9.20160114~),
+Build-Depends: debhelper (>= 10.3),
                default-libmysqlclient-dev,
                dh-exec,
                dpkg-dev (>= 1.17.14),
@@ -65,8 +65,8 @@ Build-Depends: debhelper (>= 9.20160114~),
                unixodbc-dev,
                zlib1g-dev
 Build-Depends-Indep: libqt5sql5-sqlite (>= 5.8.0+dfsg~) <!nodoc>,
-                     qttools5-dev-tools (>= 5.8.0~) <!nodoc>
-Standards-Version: 4.0.0
+                     qttools5-dev-tools (>= 5.9.2-2~) <!nodoc>
+Standards-Version: 4.1.1
 Homepage: http://qt-project.org/
 Vcs-Git: https://anonscm.debian.org/git/pkg-kde/qt/qtbase.git
 Vcs-Browser: https://anonscm.debian.org/cgit/pkg-kde/qt/qtbase.git
@@ -75,7 +75,7 @@ Package: libqt5core5a
 Architecture: any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Provides: qtbase-abi-5-9-0
+Provides: qtbase-abi-5-9-2
 Depends: ${misc:Depends}, ${shlibs:Depends}
 Recommends: qttranslations5-l10n
 Suggests: libthai0
@@ -388,11 +388,27 @@ Description: Qt 5 base development programs
  applications, such as moc, qdbuscpp2xml, qdbusxml2cpp, rcc,
  syncqt and uic.
 
+Package: qt5-qmake-bin
+Architecture: any
+Multi-Arch: foreign
+Section: devel
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Breaks: qt5-qmake (<< 5.9.1+dfsg-12~)
+Replaces: qt5-qmake (<< 5.9.1+dfsg-12~)
+Description: Qt 5 qmake Makefile generator tool — binary file
+ Qt is a cross-platform C++ application framework. Qt's primary feature
+ is its rich set of widgets that provide standard GUI functionality.
+ .
+ This package contains the binary file for qmake buildsystem. Do not
+ install this package directly, use qt5-qmake instead.
+
 Package: qt5-qmake
 Architecture: any
 Multi-Arch: same
 Section: devel
-Depends: qtchooser (>= 55-gc9562a1-1~), ${misc:Depends}, ${shlibs:Depends}
+Depends: qt5-qmake-bin (= ${binary:Version}),
+         qtchooser (>= 55-gc9562a1-1~),
+         ${misc:Depends}
 Description: Qt 5 qmake Makefile generator tool
  Qt is a cross-platform C++ application framework. Qt's primary feature
  is its rich set of widgets that provide standard GUI functionality.
@@ -440,7 +456,6 @@ Description: Qt 5 development defaults package
 
 Package: qtbase5-doc
 Build-Profiles: <!nodoc>
-Priority: extra
 Architecture: all
 Section: doc
 Depends: ${misc:Depends}
@@ -452,7 +467,6 @@ Description: Qt 5 base documentation
 
 Package: qtbase5-doc-html
 Build-Profiles: <!nodoc>
-Priority: extra
 Architecture: all
 Section: doc
 Depends: ${misc:Depends}

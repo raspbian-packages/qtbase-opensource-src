@@ -37,7 +37,7 @@
 **
 ****************************************************************************/
 
-#include <QtCore/qglobal.h>
+#include <QtGui/qtguiglobal.h>
 
 #include "qnsview.h"
 #include "qcocoawindow.h"
@@ -381,6 +381,14 @@ static bool _q_dontOverrideCtrlLMB = false;
 
     m_backingStore = backingStore;
     m_backingStoreOffset = offset * m_backingStore->paintDevice()->devicePixelRatio();
+
+    // Prevent buildup of NSDisplayCycle objects during setNeedsDisplayInRect, which
+    // would normally be released as part of the root runloop's autorelease pool, but
+    // can be kept alive during repeated painting which starve the root runloop.
+    // FIXME: Move this to the event dispatcher, to cover more cases of starvation.
+    // FIXME: Figure out if there's a way to detect and/or prevent runloop starvation.
+    QMacAutoReleasePool pool;
+
     for (const QRect &rect : region)
         [self setNeedsDisplayInRect:NSMakeRect(rect.x(), rect.y(), rect.width(), rect.height())];
 }
@@ -508,7 +516,13 @@ static bool _q_dontOverrideCtrlLMB = false;
         dirtyBackingRect.size.height
     );
     CGImageRef bsCGImage = qt_mac_toCGImage(m_backingStore->toImage());
-    CGImageRef cleanImg = CGImageCreateWithImageInRect(bsCGImage, backingStoreRect);
+
+    // Prevent potentially costly color conversion by assiging the display
+    // color space to the backingstore image.
+    CGImageRef displayColorSpaceImage = CGImageCreateCopyWithColorSpace(bsCGImage,
+        self.window.screen.colorSpace.CGColorSpace);
+
+    CGImageRef cleanImg = CGImageCreateWithImageInRect(displayColorSpaceImage, backingStoreRect);
 
     // Optimization: Copy frame buffer content instead of blending for
     // top-level windows where Qt fills the entire window content area.
@@ -523,6 +537,7 @@ static bool _q_dontOverrideCtrlLMB = false;
     CGImageRelease(cleanImg);
     CGImageRelease(subMask);
     CGImageRelease(bsCGImage);
+    CGImageRelease(displayColorSpaceImage);
 }
 
 - (BOOL) isFlipped
@@ -636,10 +651,12 @@ static bool _q_dontOverrideCtrlLMB = false;
     if (!m_platformWindow)
         return;
 
+#ifndef QT_NO_TABLETEVENT
     // Tablet events may come in via the mouse event handlers,
     // check if this is a valid tablet event first.
     if ([self handleTabletEvent: theEvent])
         return;
+#endif
 
     QPointF qtWindowPoint;
     QPointF qtScreenPoint;
@@ -1033,6 +1050,7 @@ static bool _q_dontOverrideCtrlLMB = false;
     m_platformWindow->m_enterLeaveTargetWindow = 0;
 }
 
+#ifndef QT_NO_TABLETEVENT
 struct QCocoaTabletDeviceData
 {
     QTabletEvent::TabletDevice device;
@@ -1203,6 +1221,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
         QWindowSystemInterface::handleTabletLeaveProximityEvent(timestamp, deviceData.device, deviceData.pointerType, deviceData.uid);
     }
 }
+#endif
 
 - (bool)shouldSendSingleTouch
 {
@@ -1380,7 +1399,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
 }
 #endif // QT_NO_GESTURES
 
-#ifndef QT_NO_WHEELEVENT
+#if QT_CONFIG(wheelevent)
 - (void)scrollWheel:(NSEvent *)theEvent
 {
     if (!m_platformWindow)
@@ -1461,7 +1480,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
 
     QWindowSystemInterface::handleWheelEvent(m_platformWindow->window(), qt_timestamp, qt_windowPoint, qt_screenPoint, pixelDelta, angleDelta, currentWheelModifiers, ph, source, isInverted);
 }
-#endif //QT_NO_WHEELEVENT
+#endif // QT_CONFIG(wheelevent)
 
 - (int) convertKeyCode : (QChar)keyChar
 {
@@ -1504,10 +1523,16 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
 
     QChar ch = QChar::ReplacementCharacter;
     int keyCode = Qt::Key_unknown;
-    if ([characters length] != 0) {
+
+    // If a dead key occurs as a result of pressing a key combination then
+    // characters will have 0 length, but charactersIgnoringModifiers will
+    // have a valid character in it. This enables key combinations such as
+    // ALT+E to be used as a shortcut with an English keyboard even though
+    // pressing ALT+E will give a dead key while doing normal text input.
+    if ([characters length] != 0 || [charactersIgnoringModifiers length] != 0) {
         if (((modifiers & Qt::MetaModifier) || (modifiers & Qt::AltModifier)) && ([charactersIgnoringModifiers length] != 0))
             ch = QChar([charactersIgnoringModifiers characterAtIndex:0]);
-        else
+        else if ([characters length] != 0)
             ch = QChar([characters characterAtIndex:0]);
         keyCode = [self convertKeyCode:ch];
     }
@@ -1536,7 +1561,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
                 modifiers, nativeScanCode, nativeVirtualKey, nativeModifiers, text, [nsevent isARepeat], 1);
         }
 
-        QObject *fo = QGuiApplication::focusObject();
+        QObject *fo = m_platformWindow->window()->focusObject();
         if (m_sendKeyEvent && fo) {
             QInputMethodQueryEvent queryEvent(Qt::ImEnabled | Qt::ImHints);
             if (QCoreApplication::sendEvent(fo, &queryEvent)) {
@@ -1686,8 +1711,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
             commitString = QString::fromCFString(reinterpret_cast<CFStringRef>(aString));
         };
     }
-    QObject *fo = QGuiApplication::focusObject();
-    if (fo) {
+    if (QObject *fo = m_platformWindow->window()->focusObject()) {
         QInputMethodQueryEvent queryEvent(Qt::ImEnabled);
         if (QCoreApplication::sendEvent(fo, &queryEvent)) {
             if (queryEvent.value(Qt::ImEnabled).toBool()) {
@@ -1701,6 +1725,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
     }
 
     m_composingText.clear();
+    m_composingFocusObject = nullptr;
 }
 
 - (void) setMarkedText:(id)aString selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange
@@ -1754,8 +1779,8 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
 
     m_composingText = preeditString;
 
-    QObject *fo = QGuiApplication::focusObject();
-    if (fo) {
+    if (QObject *fo = m_platformWindow->window()->focusObject()) {
+        m_composingFocusObject = fo;
         QInputMethodQueryEvent queryEvent(Qt::ImEnabled);
         if (QCoreApplication::sendEvent(fo, &queryEvent)) {
             if (queryEvent.value(Qt::ImEnabled).toBool()) {
@@ -1768,11 +1793,29 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
     }
 }
 
+- (void)cancelComposingText
+{
+    if (m_composingText.isEmpty())
+        return;
+
+    if (m_composingFocusObject) {
+        QInputMethodQueryEvent queryEvent(Qt::ImEnabled);
+        if (QCoreApplication::sendEvent(m_composingFocusObject, &queryEvent)) {
+            if (queryEvent.value(Qt::ImEnabled).toBool()) {
+                QInputMethodEvent e;
+                QCoreApplication::sendEvent(m_composingFocusObject, &e);
+            }
+        }
+    }
+
+    m_composingText.clear();
+    m_composingFocusObject = nullptr;
+}
+
 - (void) unmarkText
 {
     if (!m_composingText.isEmpty()) {
-        QObject *fo = QGuiApplication::focusObject();
-        if (fo) {
+        if (QObject *fo = m_platformWindow->window()->focusObject()) {
             QInputMethodQueryEvent queryEvent(Qt::ImEnabled);
             if (QCoreApplication::sendEvent(fo, &queryEvent)) {
                 if (queryEvent.value(Qt::ImEnabled).toBool()) {
@@ -1784,6 +1827,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
         }
     }
     m_composingText.clear();
+    m_composingFocusObject = nullptr;
 }
 
 - (BOOL) hasMarkedText
@@ -1794,7 +1838,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
 - (NSAttributedString *) attributedSubstringForProposedRange:(NSRange)aRange actualRange:(NSRangePointer)actualRange
 {
     Q_UNUSED(actualRange)
-    QObject *fo = QGuiApplication::focusObject();
+    QObject *fo = m_platformWindow->window()->focusObject();
     if (!fo)
         return nil;
     QInputMethodQueryEvent queryEvent(Qt::ImEnabled | Qt::ImCurrentSelection);
@@ -1829,7 +1873,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
 {
     NSRange selectedRange = {0, 0};
 
-    QObject *fo = QGuiApplication::focusObject();
+    QObject *fo = m_platformWindow->window()->focusObject();
     if (!fo)
         return selectedRange;
     QInputMethodQueryEvent queryEvent(Qt::ImEnabled | Qt::ImCurrentSelection);
@@ -1851,7 +1895,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
 {
     Q_UNUSED(aRange)
     Q_UNUSED(actualRange)
-    QObject *fo = QGuiApplication::focusObject();
+    QObject *fo = m_platformWindow->window()->focusObject();
     if (!fo)
         return NSZeroRect;
 
@@ -1891,7 +1935,7 @@ static QTabletEvent::TabletDevice wacomTabletDevice(NSEvent *theEvent)
     if (m_platformWindow->window() != QGuiApplication::focusWindow())
         return nil;
 
-    QObject *fo = QGuiApplication::focusObject();
+    QObject *fo = m_platformWindow->window()->focusObject();
     if (!fo)
         return nil;
 

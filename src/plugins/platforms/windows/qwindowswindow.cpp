@@ -39,7 +39,9 @@
 
 #include "qwindowswindow.h"
 #include "qwindowscontext.h"
-#include "qwindowsdrag.h"
+#if QT_CONFIG(draganddrop)
+#  include "qwindowsdrag.h"
+#endif
 #include "qwindowsscreen.h"
 #include "qwindowsintegration.h"
 #include "qwindowsnativeinterface.h"
@@ -487,7 +489,7 @@ void WindowCreationData::fromWindow(const QWindow *w, const Qt::WindowFlags flag
     // Sometimes QWindow doesn't have a QWindow parent but does have a native parent window,
     // e.g. in case of embedded ActiveQt servers. They should not be considered a top-level
     // windows in such cases.
-    QVariant prop = w->property("_q_embedded_native_parent_handle");
+    QVariant prop = w->property(QWindowsWindow::embeddedNativeParentHandleProperty);
     if (prop.isValid()) {
         embedded = true;
         parentHandle = reinterpret_cast<HWND>(prop.value<WId>());
@@ -870,8 +872,10 @@ void QWindowsBaseWindow::hide_sys() // Normal hide, do not activate other window
 void QWindowsBaseWindow::raise_sys()
 {
     qCDebug(lcQpaWindows) << __FUNCTION__ << this << window();
-    if ((window()->flags() & (Qt::WindowStaysOnTopHint | Qt::WindowStaysOnBottomHint)) == 0)
+    if (window()->type() == Qt::Popup
+        || (window()->flags() & (Qt::WindowStaysOnTopHint | Qt::WindowStaysOnBottomHint)) == 0) {
         SetWindowPos(handle(), HWND_TOP, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+    }
 }
 
 void QWindowsBaseWindow::lower_sys()
@@ -1032,6 +1036,8 @@ QWindowCreationContext::QWindowCreationContext(const QWindow *w,
     \internal
     \ingroup qt-lighthouse-win
 */
+
+const char *QWindowsWindow::embeddedNativeParentHandleProperty = "_q_embedded_native_parent_handle";
 
 QWindowsWindow::QWindowsWindow(QWindow *aWindow, const QWindowsWindowData &data) :
     QWindowsBaseWindow(aWindow),
@@ -1536,15 +1542,15 @@ void QWindowsWindow::handleGeometryChange()
         fireExpose(QRect(QPoint(0, 0), m_data.geometry.size()), true);
     }
     if (!parent() && previousGeometry.topLeft() != m_data.geometry.topLeft()) {
-        HMONITOR hMonitor = MonitorFromWindow(m_data.hwnd, MONITOR_DEFAULTTONULL);
         QPlatformScreen *currentScreen = screen();
-        const auto screens = QWindowsContext::instance()->screenManager().screens();
-        auto newScreenIt = std::find_if(screens.begin(), screens.end(), [&](QWindowsScreen *s) {
-            return s->data().hMonitor == hMonitor
-                && s->data().flags & QWindowsScreenData::VirtualDesktop;
-        });
-        if (newScreenIt != screens.end() && *newScreenIt != currentScreen)
-            QWindowSystemInterface::handleWindowScreenChanged(window(), (*newScreenIt)->screen());
+        const QWindowsScreen *newScreen =
+            QWindowsContext::instance()->screenManager().screenForHwnd(m_data.hwnd);
+        if (newScreen != nullptr && newScreen != currentScreen) {
+            qCDebug(lcQpaWindows).noquote().nospace() << __FUNCTION__
+                << ' ' << window() << " \"" << currentScreen->name()
+                << "\"->\"" << newScreen->name() << '"';
+            QWindowSystemInterface::handleWindowScreenChanged(window(), newScreen->screen());
+        }
     }
     if (testFlag(SynchronousGeometryChangeEvent))
         QWindowSystemInterface::flushWindowSystemEvents(QEventLoop::ExcludeUserInputEvents);
@@ -1758,8 +1764,10 @@ bool QWindowsWindow::isFullScreen_sys() const
     if (!w->isTopLevel())
         return false;
     QRect geometry = geometry_sys();
+    if (testFlag(HasBorderInFullScreen))
+        geometry += QMargins(1, 1, 1, 1);
     QPlatformScreen *screen = screenForGeometry(geometry);
-    return screen && geometry == QHighDpi::toNativePixels(screen->geometry(), screen);
+    return screen && geometry == screen->geometry();
 }
 
 /*!

@@ -285,13 +285,16 @@ void MingwMakefileGenerator::writeLibsPart(QTextStream &t)
 
 void MingwMakefileGenerator::writeObjectsPart(QTextStream &t)
 {
-    if (project->values("OBJECTS").count() < var("QMAKE_LINK_OBJECT_MAX").toInt()) {
+    const ProString &objmax = project->first("QMAKE_LINK_OBJECT_MAX");
+    if (objmax.isEmpty() || project->values("OBJECTS").count() < objmax.toInt()) {
         objectsLinkLine = "$(OBJECTS)";
     } else if (project->isActiveConfig("staticlib") && project->first("TEMPLATE") == "lib") {
         QString ar_script_file = var("QMAKE_LINK_OBJECT_SCRIPT") + "." + var("TARGET");
         if (!var("BUILD_NAME").isEmpty()) {
             ar_script_file += "." + var("BUILD_NAME");
         }
+        if (!var("MAKEFILE").isEmpty())
+            ar_script_file += "." + var("MAKEFILE");
         // QMAKE_LIB is used for win32, including mingw, whereas QMAKE_AR is used on Unix.
         // Strip off any options since the ar commands will be read from file.
         QString ar_cmd = var("QMAKE_LIB").section(" ", 0, 0);
@@ -304,6 +307,8 @@ void MingwMakefileGenerator::writeObjectsPart(QTextStream &t)
         if (!var("BUILD_NAME").isEmpty()) {
             ld_script_file += "." + var("BUILD_NAME");
         }
+        if (!var("MAKEFILE").isEmpty())
+            ld_script_file += "." + var("MAKEFILE");
         createLdObjectScriptFile(ld_script_file, project->values("OBJECTS"));
         objectsLinkLine = escapeFilePath(ld_script_file);
     }
