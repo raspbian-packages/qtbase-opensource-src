@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.9.2+dfsg-4+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.9.2+dfsg-6+rpi1) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,39 @@ qtbase-opensource-src (5.9.2+dfsg-4+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sun, 03 Dec 2017 14:15:45 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 13 Dec 2017 23:27:07 +0000
+
+qtbase-opensource-src (5.9.2+dfsg-6) unstable; urgency=medium
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Make libqt5opengl5-dev provide libqt5opengl5-desktop-dev and not
+    libqt5opengl5. Thanks Adrian Bunk for noticing.
+
+  [ Dmitry Shachnev ]
+  * Fix the name of installed qt.conf file (it should not be qmake.conf).
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Mon, 04 Dec 2017 09:31:27 -0300
+
+qtbase-opensource-src (5.9.2+dfsg-5) unstable; urgency=medium
+
+  [ Dmitry Shachnev ]
+  * Ship /usr/lib/${DEB_HOST_MULTIARCH}/qt.conf in qt5-qmake, which can be
+    passed to qmake as -qtconf option for cross-building.
+  * Ship /usr/bin/${DEB_HOST_GNU_TYPE}-qmake wrapper script in qt5-qmake, for
+    using qmake with autoconf and AC_CHECK_TOOL.
+  * Backport upstream patches for PostgreSQL 10 support (closes: #879960).
+  * Change PCRE build-dependency to PCRE2. Qt switched to PCRE2 in 5.9.
+    Pass a configure option to make sure that the system version is used
+    (closes: #883304).
+  * Backport upstream patch to fix crash in QDnsLookup when DNS response is
+    over 512 bytes (closes: #883099).
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Make libqt5opengl5-dev provide libqt5opengl5-desktop-dev on !armel and !armhf.
+    In this way packages depending on Desktop OpenGL can use this package as
+    a dependency without the need to keep an arch list (Closes: #881943).
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Sun, 03 Dec 2017 10:24:03 -0300
 
 qtbase-opensource-src (5.9.2+dfsg-4) unstable; urgency=medium
 
