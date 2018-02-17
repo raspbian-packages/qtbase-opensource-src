@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.9.2+dfsg-9+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.9.2+dfsg-10+rpi1) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,16 @@ qtbase-opensource-src (5.9.2+dfsg-9+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sat, 10 Feb 2018 09:15:19 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sat, 17 Feb 2018 05:42:46 +0000
+
+qtbase-opensource-src (5.9.2+dfsg-10) unstable; urgency=medium
+
+  [ Dmitry Shachnev ]
+  * Fix processing multiple headers with the same name in HTTP/2 (closes:
+    #886395).
+  * Update symbols files from hurd-i386 build logs.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 09 Feb 2018 16:40:07 +0300
 
 qtbase-opensource-src (5.9.2+dfsg-9) unstable; urgency=medium
 
