@@ -267,6 +267,7 @@ int runMoc(int argc, char **argv)
     QCommandLineOption prependIncludeOption(QStringLiteral("b"));
     prependIncludeOption.setDescription(QStringLiteral("Prepend #include <file> (preserve default include)."));
     prependIncludeOption.setValueName(QStringLiteral("file"));
+    prependIncludeOption.setFlags(QCommandLineOption::ShortOptionStyle);
     parser.addOption(prependIncludeOption);
 
     QCommandLineOption includeOption(QStringLiteral("include"));
@@ -395,9 +396,9 @@ int runMoc(int argc, char **argv)
         pp.macros.remove(macro);
     }
     const QStringList noNotesCompatValues = parser.values(noNotesWarningsCompatOption);
-    if (parser.isSet(noNotesOption) || noNotesCompatValues.contains(QStringLiteral("n")))
+    if (parser.isSet(noNotesOption) || noNotesCompatValues.contains(QLatin1String("n")))
         moc.displayNotes = false;
-    if (parser.isSet(noWarningsOption) || noNotesCompatValues.contains(QStringLiteral("w")))
+    if (parser.isSet(noWarningsOption) || noNotesCompatValues.contains(QLatin1String("w")))
         moc.displayWarnings = moc.displayNotes = false;
 
     if (autoInclude) {
@@ -485,8 +486,8 @@ int runMoc(int argc, char **argv)
     // 3. and output meta object code
 
     if (output.size()) { // output file specified
-#if defined(_MSC_VER) && _MSC_VER >= 1400
-        if (fopen_s(&out, QFile::encodeName(output).constData(), "w"))
+#if defined(_MSC_VER)
+        if (_wfopen_s(&out, reinterpret_cast<const wchar_t *>(output.utf16()), L"w") != 0)
 #else
         out = fopen(QFile::encodeName(output).constData(), "w"); // create output file
         if (!out)

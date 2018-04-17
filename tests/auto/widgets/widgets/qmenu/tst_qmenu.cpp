@@ -27,6 +27,7 @@
 ****************************************************************************/
 
 #include <QtTest/QtTest>
+#include <QtTest/private/qtesthelpers_p.h>
 #include <qapplication.h>
 #include <QPushButton>
 #include <QMainWindow>
@@ -48,14 +49,10 @@
 
 #include <qpa/qplatformtheme.h>
 
+using namespace QTestPrivate;
+
 Q_DECLARE_METATYPE(Qt::Key);
 Q_DECLARE_METATYPE(Qt::KeyboardModifiers);
-
-static inline void centerOnScreen(QWidget *w, const QSize &size)
-{
-    const QPoint offset = QPoint(size.width() / 2, size.height() / 2);
-    w->move(QGuiApplication::primaryScreen()->availableGeometry().center() - offset);
-}
 
 struct MenuMetrics {
     int fw;
@@ -70,11 +67,6 @@ struct MenuMetrics {
         tearOffHeight = menu->style()->pixelMetric(QStyle::PM_MenuTearoffHeight, nullptr, menu);
     }
 };
-
-static inline void centerOnScreen(QWidget *w)
-{
-    centerOnScreen(w, w->geometry().size());
-}
 
 class tst_QMenu : public QObject
 {
@@ -126,6 +118,8 @@ private slots:
 #ifdef Q_OS_MAC
     void QTBUG_37933_ampersands_data();
     void QTBUG_37933_ampersands();
+#else
+    void click_while_dismissing_submenu();
 #endif
     void QTBUG_56917_wideMenuSize();
     void QTBUG_56917_wideMenuScreenNumber();
@@ -133,6 +127,7 @@ private slots:
     void menuSize_Scrolling_data();
     void menuSize_Scrolling();
     void tearOffMenuNotDisplayed();
+    void QTBUG_61039_menu_shortcuts();
 
 protected slots:
     void onActivated(QAction*);
@@ -1171,6 +1166,39 @@ void tst_QMenu::QTBUG20403_nested_popup_on_shortcut_trigger()
     QVERIFY(!subsub1.isVisible());
 }
 
+#ifndef Q_OS_MACOS
+void tst_QMenu::click_while_dismissing_submenu()
+{
+    QMenu menu("Test Menu");
+    QAction *action = menu.addAction("action");
+    QMenu sub("&sub");
+    sub.addAction("subaction");
+    menu.addMenu(&sub);
+    centerOnScreen(&menu, QSize(120, 100));
+    menu.show();
+    QSignalSpy spy(action, SIGNAL(triggered()));
+    QSignalSpy menuShownSpy(&sub, SIGNAL(aboutToShow()));
+    QSignalSpy menuHiddenSpy(&sub, SIGNAL(aboutToHide()));
+    QVERIFY(QTest::qWaitForWindowExposed(&menu));
+    //go over the submenu, press, move and release over the top level action
+    //this opens the submenu, move two times to emulate user interaction (d->motions > 0 in QMenu)
+    QTest::mouseMove(&menu, menu.rect().center() + QPoint(0,2));
+    QTest::mouseMove(&menu, menu.rect().center() + QPoint(1,3), 60);
+    QVERIFY(menuShownSpy.wait());
+    QVERIFY(sub.isVisible());
+    QVERIFY(QTest::qWaitForWindowExposed(&sub));
+    //press over the submenu entry
+    QTest::mousePress(&menu, Qt::LeftButton, 0, menu.rect().center() + QPoint(0,2), 300);
+    //move over the main action
+    QTest::mouseMove(&menu, menu.rect().center() - QPoint(0,2));
+    QVERIFY(menuHiddenSpy.wait());
+    //the submenu must have been hidden for the bug to be triggered
+    QVERIFY(!sub.isVisible());
+    QTest::mouseRelease(&menu, Qt::LeftButton, 0, menu.rect().center() - QPoint(0,2), 300);
+    QCOMPARE(spy.count(), 1);
+}
+#endif
+
 class MyWidget : public QWidget
 {
 public:
@@ -1607,6 +1635,33 @@ void tst_QMenu::tearOffMenuNotDisplayed()
     menu->hideTearOffMenu();
     QVERIFY(!menu->isTearOffMenuVisible());
     QVERIFY(!torn->isVisible());
+}
+
+void tst_QMenu::QTBUG_61039_menu_shortcuts()
+{
+    QAction *actionKamen = new QAction("Action Kamen");
+    actionKamen->setShortcut(QKeySequence(QLatin1String("K")));
+
+    QAction *actionJoe = new QAction("Action Joe");
+    actionJoe->setShortcut(QKeySequence(QLatin1String("Ctrl+J")));
+
+    QMenu menu;
+    menu.addAction(actionKamen);
+    menu.addAction(actionJoe);
+    QVERIFY(!menu.platformMenu());
+
+    QWidget widget;
+    widget.addAction(menu.menuAction());
+    widget.show();
+    QVERIFY(QTest::qWaitForWindowActive(&widget));
+
+    QSignalSpy actionKamenSpy(actionKamen, &QAction::triggered);
+    QTest::keyClick(&widget, Qt::Key_K);
+    QTRY_COMPARE(actionKamenSpy.count(), 1);
+
+    QSignalSpy actionJoeSpy(actionJoe, &QAction::triggered);
+    QTest::keyClick(&widget, Qt::Key_J, Qt::ControlModifier);
+    QTRY_COMPARE(actionJoeSpy.count(), 1);
 }
 
 QTEST_MAIN(tst_QMenu)

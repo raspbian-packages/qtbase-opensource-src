@@ -253,13 +253,24 @@ QT_NAMESPACE_ALIAS_OBJC_CLASS(QCocoaMenuDelegate);
     return nil;
 }
 
+// Cocoa will query the menu item's target for the worksWhenModal selector.
+// So we need to implement this to allow the items to be handled correctly
+// when a modal dialog is visible.
+- (BOOL)worksWhenModal
+{
+    if (!QGuiApplication::modalWindow())
+        return YES;
+    if (auto *mb = qobject_cast<QCocoaMenuBar *>(m_menu->menuParent()))
+        return QGuiApplication::modalWindow()->handle() == mb->cocoaWindow() ? YES : NO;
+    return YES;
+}
+
 @end
 
 QT_BEGIN_NAMESPACE
 
 QCocoaMenu::QCocoaMenu() :
     m_attachedItem(0),
-    m_tag(0),
     m_updateTimer(0),
     m_enabled(true),
     m_parentEnabled(true),
@@ -435,6 +446,11 @@ void QCocoaMenu::timerEvent(QTimerEvent *e)
 
 void QCocoaMenu::syncMenuItem(QPlatformMenuItem *menuItem)
 {
+    syncMenuItem_helper(menuItem, false /*menubarUpdate*/);
+}
+
+void QCocoaMenu::syncMenuItem_helper(QPlatformMenuItem *menuItem, bool menubarUpdate)
+{
     QMacAutoReleasePool pool;
     QCocoaMenuItem *cocoaItem = static_cast<QCocoaMenuItem *>(menuItem);
     if (!m_menuItems.contains(cocoaItem)) {
@@ -444,8 +460,9 @@ void QCocoaMenu::syncMenuItem(QPlatformMenuItem *menuItem)
 
     const bool wasMerged = cocoaItem->isMerged();
     NSMenuItem *oldItem = cocoaItem->nsItem();
+    NSMenuItem *syncedItem = cocoaItem->sync();
 
-    if (cocoaItem->sync() != oldItem) {
+    if (syncedItem != oldItem) {
         // native item was changed for some reason
         if (oldItem) {
             if (wasMerged) {
@@ -463,6 +480,14 @@ void QCocoaMenu::syncMenuItem(QPlatformMenuItem *menuItem)
         // when an item's enabled state changes after menuWillOpen:
         scheduleUpdate();
     }
+
+    // This may be a good moment to attach this item's eventual submenu to the
+    // synced item, but only on the condition we're all currently hooked to the
+    // menunbar. A good indicator of this being the right moment is knowing that
+    // we got called from QCocoaMenuBar::updateMenuBarImmediately().
+    if (menubarUpdate)
+        if (QCocoaMenu *submenu = cocoaItem->menu())
+            submenu->setAttachedItem(syncedItem);
 }
 
 void QCocoaMenu::syncSeparatorsCollapsible(bool enable)

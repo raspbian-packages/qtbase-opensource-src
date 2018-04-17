@@ -284,7 +284,7 @@ QT_END_NAMESPACE
     inLaunch = false;
 
     if (qEnvironmentVariableIsEmpty("QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM")) {
-        if (QSysInfo::macVersion() >= QSysInfo::MV_10_12) {
+        if (__builtin_available(macOS 10.12, *)) {
             // Move the application window to front to avoid launching behind the terminal.
             // Ignoring other apps is necessary (we must ignore the terminal), but makes
             // Qt apps play slightly less nice with other apps when lanching from Finder
@@ -328,6 +328,24 @@ QT_END_NAMESPACE
     return NO; // Someday qApp->quitOnLastWindowClosed(); when QApp and NSApp work closer together.
 }
 
+- (void)applicationWillHide:(NSNotification *)notification
+{
+    if (reflectionDelegate
+        && [reflectionDelegate respondsToSelector:@selector(applicationWillHide:)]) {
+        [reflectionDelegate applicationWillHide:notification];
+    }
+
+    // When the application is hidden Qt will hide the popup windows associated with
+    // it when it has lost the activation for the application. However, when it gets
+    // to this point it believes the popup windows to be hidden already due to the
+    // fact that the application itself is hidden, which will cause a problem when
+    // the application is made visible again.
+    const QWindowList topLevelWindows = QGuiApplication::topLevelWindows();
+    for (QWindow *topLevelWindow : qAsConst(topLevelWindows)) {
+        if ((topLevelWindow->type() & Qt::Popup) == Qt::Popup && topLevelWindow->isVisible())
+            topLevelWindow->hide();
+    }
+}
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification
 {

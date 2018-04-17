@@ -57,12 +57,8 @@
 #include <qpa/qplatformtheme.h>
 #include <private/qcore_mac_p.h>
 
-#ifdef Q_OS_OSX
-#include <ApplicationServices/ApplicationServices.h>
-#else
-#include <CoreText/CoreText.h>
-#include <CoreGraphics/CoreGraphics.h>
-#endif
+Q_FORWARD_DECLARE_CF_TYPE(CTFontDescriptor);
+Q_FORWARD_DECLARE_CF_TYPE(CTFont);
 
 Q_DECLARE_METATYPE(QCFType<CGFontRef>);
 Q_DECLARE_METATYPE(QCFType<CFURLRef>);
@@ -91,12 +87,14 @@ public:
     QFont *themeFont(QPlatformTheme::Font) const;
     const QHash<QPlatformTheme::Font, QFont *> &themeFonts() const;
 
+protected:
+    mutable QSet<CTFontDescriptorRef> m_systemFontDescriptors;
+
 private:
     void populateFromDescriptor(CTFontDescriptorRef font, const QString &familyName = QString());
 
     mutable QString defaultFontName;
 
-    mutable QSet<CTFontDescriptorRef> m_systemFontDescriptors;
     mutable QHash<QPlatformTheme::Font, QFont *> m_themeFonts;
     bool m_hasPopulatedAliases;
 };

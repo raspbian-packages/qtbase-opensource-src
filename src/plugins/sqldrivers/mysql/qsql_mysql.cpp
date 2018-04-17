@@ -331,7 +331,8 @@ static QVariant::Type qDecodeMYSQLType(int mysqltype, uint flags)
 static QSqlField qToField(MYSQL_FIELD *field, QTextCodec *tc)
 {
     QSqlField f(toUnicode(tc, field->name),
-                qDecodeMYSQLType(int(field->type), field->flags));
+                qDecodeMYSQLType(int(field->type), field->flags),
+                toUnicode(tc, field->table));
     f.setRequired(IS_NOT_NULL(field->flags));
     f.setLength(field->length);
     f.setPrecision(field->decimals);
@@ -1160,7 +1161,7 @@ static void qLibraryInit()
 #endif // Q_NO_MYSQL_EMBEDDED
 
 #if defined(MARIADB_BASE_VERSION) || defined(MARIADB_VERSION_ID)
-    qAddPostRoutine(mysql_server_end);
+    qAddPostRoutine([]() { mysql_server_end(); });
 #endif
 }
 

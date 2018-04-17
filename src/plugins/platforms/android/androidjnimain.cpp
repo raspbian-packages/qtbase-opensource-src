@@ -450,6 +450,17 @@ static jboolean startQtAndroidPlugin(JNIEnv* /*env*/, jobject /*object*//*, jobj
 
 static void *startMainMethod(void */*data*/)
 {
+    {
+        JNIEnv* env = nullptr;
+        JavaVMAttachArgs args;
+        args.version = JNI_VERSION_1_6;
+        args.name = "QtMainThread";
+        args.group = NULL;
+        JavaVM *vm = QtAndroidPrivate::javaVM();
+        if (vm != 0)
+            vm->AttachCurrentThread(&env, &args);
+    }
+
     QVarLengthArray<const char *> params(m_applicationParams.size());
     for (int i = 0; i < m_applicationParams.size(); i++)
         params[i] = static_cast<const char *>(m_applicationParams[i].constData());
@@ -529,7 +540,14 @@ static jboolean startQtApplication(JNIEnv *env, jobject /*object*/, jstring para
     if (sem_init(&m_terminateSemaphore, 0, 0) == -1)
         return false;
 
-    return pthread_create(&m_qtAppThread, nullptr, startMainMethod, nullptr) == 0;
+    jboolean res = pthread_create(&m_qtAppThread, nullptr, startMainMethod, nullptr) == 0;
+
+    // The service must wait until the QCoreApplication starts otherwise onBind will be
+    // called too early
+    if (m_serviceObject)
+        QtAndroidPrivate::waitForServiceSetup();
+
+    return res;
 }
 
 static void quitQtCoreApplication(JNIEnv *env, jclass /*clazz*/)
@@ -734,6 +752,11 @@ static void onNewIntent(JNIEnv *env, jclass /*cls*/, jobject data)
     QtAndroidPrivate::handleNewIntent(env, data);
 }
 
+static jobject onBind(JNIEnv */*env*/, jclass /*cls*/, jobject intent)
+{
+    return QtAndroidPrivate::callOnBindListener(intent);
+}
+
 static JNINativeMethod methods[] = {
     {"startQtAndroidPlugin", "()Z", (void *)startQtAndroidPlugin},
     {"startQtApplication", "(Ljava/lang/String;Ljava/lang/String;)V", (void *)startQtApplication},
@@ -746,7 +769,8 @@ static JNINativeMethod methods[] = {
     {"updateApplicationState", "(I)V", (void *)updateApplicationState},
     {"handleOrientationChanged", "(II)V", (void *)handleOrientationChanged},
     {"onActivityResult", "(IILandroid/content/Intent;)V", (void *)onActivityResult},
-    {"onNewIntent", "(Landroid/content/Intent;)V", (void *)onNewIntent}
+    {"onNewIntent", "(Landroid/content/Intent;)V", (void *)onNewIntent},
+    {"onBind", "(Landroid/content/Intent;)Landroid/os/IBinder;", (void *)onBind}
 };
 
 #define FIND_AND_CHECK_CLASS(CLASS_NAME) \

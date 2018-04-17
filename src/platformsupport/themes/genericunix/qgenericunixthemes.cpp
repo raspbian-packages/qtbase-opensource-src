@@ -87,14 +87,6 @@ void ResourceHelper::clear()
     std::fill(fonts, fonts + QPlatformTheme::NFonts, static_cast<QFont *>(0));
 }
 
-/*!
-    \class QGenericX11ThemeQKdeTheme
-    \brief QGenericX11Theme is a generic theme implementation for X11.
-    \since 5.0
-    \internal
-    \ingroup qpa
-*/
-
 const char *QGenericUnixTheme::name = "generic";
 
 // Default system font, corresponding to the value returned by 4.8 for
@@ -120,9 +112,11 @@ static bool isDBusTrayAvailable() {
 #ifndef QT_NO_DBUS
 static bool checkDBusGlobalMenuAvailable()
 {
-    QDBusConnection connection = QDBusConnection::sessionBus();
-    QString registrarService = QStringLiteral("com.canonical.AppMenu.Registrar");
-    return connection.interface()->isServiceRegistered(registrarService);
+    const QDBusConnection connection = QDBusConnection::sessionBus();
+    static const QString registrarService = QStringLiteral("com.canonical.AppMenu.Registrar");
+    if (const auto iface = connection.interface())
+        return iface->isServiceRegistered(registrarService);
+    return false;
 }
 
 static bool isDBusGlobalMenuAvailable()

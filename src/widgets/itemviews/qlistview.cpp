@@ -657,8 +657,7 @@ QItemViewPaintPairs QListViewPrivate::draggablePaintPairs(const QModelIndexList 
     for (const auto &index : indexes) {
         if (std::binary_search(visibleIndexes.cbegin(), visibleIndexes.cend(), index)) {
             const QRect current = q->visualRect(index);
-            QItemViewPaintPair p = { current, index };
-            ret += p;
+            ret.append({current, index});
             rect |= current;
         }
     }
@@ -2874,10 +2873,19 @@ void QIconModeViewBase::scrollContentsBy(int dx, int dy, bool scrollElasticBand)
 void QIconModeViewBase::dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight)
 {
     if (column() >= topLeft.column() && column() <= bottomRight.column())  {
-        QStyleOptionViewItem option = viewOptions();
-        int bottom = qMin(items.count(), bottomRight.row() + 1);
+        const QStyleOptionViewItem option = viewOptions();
+        const int bottom = qMin(items.count(), bottomRight.row() + 1);
+        const bool useItemSize = !dd->grid.isValid();
         for (int row = topLeft.row(); row < bottom; ++row)
-            items[row].resize(itemSize(option, modelIndex(row)));
+        {
+            QSize s = itemSize(option, modelIndex(row));
+            if (!useItemSize)
+            {
+                s.setWidth(qMin(dd->grid.width(), s.width()));
+                s.setHeight(qMin(dd->grid.height(), s.height()));
+            }
+            items[row].resize(s);
+        }
     }
 }
 

@@ -55,7 +55,6 @@
 #    include <private/qsslsocket_p.h>
 #    include <QtNetwork/qsslkey.h>
 #    include <QtNetwork/qsslcipher.h>
-#    include <QtNetwork/qsslconfiguration.h>
 #endif
 
 #ifndef QT_NO_BEARERMANAGEMENT
@@ -63,6 +62,20 @@
 #endif
 
 QT_BEGIN_NAMESPACE
+
+namespace
+{
+
+class ProtocolHandlerDeleter : public QObject
+{
+public:
+    explicit ProtocolHandlerDeleter(QAbstractProtocolHandler *h) : handler(h) {}
+    ~ProtocolHandlerDeleter() { delete handler; }
+private:
+    QAbstractProtocolHandler *handler = nullptr;
+};
+
+}
 
 // TODO: Put channel specific stuff here so it does not polute qhttpnetworkconnection.cpp
 
@@ -176,8 +189,8 @@ void QHttpNetworkConnectionChannel::init()
         if (!ignoreSslErrorsList.isEmpty())
             sslSocket->ignoreSslErrors(ignoreSslErrorsList);
 
-        if (!sslConfiguration.isNull())
-           sslSocket->setSslConfiguration(sslConfiguration);
+        if (sslConfiguration.data() && !sslConfiguration->isNull())
+           sslSocket->setSslConfiguration(*sslConfiguration);
     } else {
 #endif // !QT_NO_SSL
         if (connection->connectionType() != QHttpNetworkConnection::ConnectionTypeHTTP2)
@@ -425,6 +438,40 @@ void QHttpNetworkConnectionChannel::allDone()
         return;
     }
 
+    if (connection->connectionType() == QHttpNetworkConnection::ConnectionTypeHTTP2
+        && !ssl && !switchedToHttp2) {
+        if (Http2::is_protocol_upgraded(*reply)) {
+            switchedToHttp2 = true;
+            protocolHandler->setReply(nullptr);
+
+            // As allDone() gets called from the protocol handler, it's not yet
+            // safe to delete it. There is no 'deleteLater', since
+            // QAbstractProtocolHandler is not a QObject. Instead we do this
+            // trick with ProtocolHandlerDeleter, a QObject-derived class.
+            // These dances below just make it somewhat exception-safe.
+            // 1. Create a new owner:
+            QAbstractProtocolHandler *oldHandler = protocolHandler.data();
+            QScopedPointer<ProtocolHandlerDeleter> deleter(new ProtocolHandlerDeleter(oldHandler));
+            // 2. Retire the old one:
+            protocolHandler.take();
+            // 3. Call 'deleteLater':
+            deleter->deleteLater();
+            // 3. Give up the ownerthip:
+            deleter.take();
+
+            connection->fillHttp2Queue();
+            protocolHandler.reset(new QHttp2ProtocolHandler(this));
+            QHttp2ProtocolHandler *h2c = static_cast<QHttp2ProtocolHandler *>(protocolHandler.data());
+            QMetaObject::invokeMethod(h2c, "_q_receiveReply", Qt::QueuedConnection);
+            QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
+            return;
+        } else {
+            // Ok, whatever happened, we do not try HTTP/2 anymore ...
+            connection->setConnectionType(QHttpNetworkConnection::ConnectionTypeHTTP);
+            connection->d_func()->activeChannelCount = connection->d_func()->channelCount;
+        }
+    }
+
     // while handling 401 & 407, we might reset the status code, so save this.
     bool emitFinished = reply->d_func()->shouldEmitSignals();
     bool connectionCloseEnabled = reply->d_func()->isConnectionCloseEnabled();
@@ -553,14 +600,21 @@ void QHttpNetworkConnectionChannel::handleStatus()
     case 302:
     case 303:
     case 305:
-    case 307: {
+    case 307:
+    case 308: {
         // Parse the response headers and get the "location" url
         QUrl redirectUrl = connection->d_func()->parseRedirectResponse(socket, reply);
         if (redirectUrl.isValid())
             reply->setRedirectUrl(redirectUrl);
 
-        if (qobject_cast<QHttpNetworkConnection *>(connection))
+        if ((statusCode == 307 || statusCode == 308) && !resetUploadData()) {
+            // Couldn't reset the upload data, which means it will be unable to POST the data -
+            // this would lead to a long wait until it eventually failed and then retried.
+            // Instead of doing that we fail here instead, resetUploadData will already have emitted
+            // a ContentReSendError, so we're done.
+        } else if (qobject_cast<QHttpNetworkConnection *>(connection)) {
             QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
+        }
         break;
     }
     case 401: // auth required
@@ -656,7 +710,10 @@ void QHttpNetworkConnectionChannel::setSslConfiguration(const QSslConfiguration 
     if (socket)
         static_cast<QSslSocket *>(socket)->setSslConfiguration(config);
 
-    sslConfiguration = config;
+    if (sslConfiguration.data())
+        *sslConfiguration = config;
+    else
+        sslConfiguration.reset(new QSslConfiguration(config));
 }
 
 #endif
@@ -836,19 +893,25 @@ void QHttpNetworkConnectionChannel::_q_connected()
 #endif
     } else {
         state = QHttpNetworkConnectionChannel::IdleState;
-        if (connection->connectionType() == QHttpNetworkConnection::ConnectionTypeHTTP2) {
-            // We have to reset QHttp2ProtocolHandler's state machine, it's a new
-            // connection and the handler's state is unique per connection.
-            protocolHandler.reset(new QHttp2ProtocolHandler(this));
-            if (spdyRequestsToSend.count() > 0) {
-                // wait for data from the server first (e.g. initial window, max concurrent requests)
-                QMetaObject::invokeMethod(connection, "_q_startNextRequest", Qt::QueuedConnection);
+        const bool tryProtocolUpgrade = connection->connectionType() == QHttpNetworkConnection::ConnectionTypeHTTP2;
+        if (tryProtocolUpgrade) {
+            // For HTTP/1.1 it's already created and never reset.
+            protocolHandler.reset(new QHttpProtocolHandler(this));
+        }
+        switchedToHttp2 = false;
+
+        if (!reply)
+            connection->d_func()->dequeueRequest(socket);
+
+        if (reply) {
+            if (tryProtocolUpgrade) {
+                // Let's augment our request with some magic headers and try to
+                // switch to HTTP/2.
+                const Http2::ProtocolParameters params(connection->http2Parameters());
+                Q_ASSERT(params.validate());
+                params.addProtocolUpgradeHeaders(&request);
             }
-        } else {
-            if (!reply)
-                connection->d_func()->dequeueRequest(socket);
-            if (reply)
-                sendRequest();
+            sendRequest();
         }
     }
 }
@@ -1076,6 +1139,7 @@ void QHttpNetworkConnectionChannel::_q_encrypted()
                 // has gone to the SPDY queue already
                 break;
             } else if (nextProtocol == QSslConfiguration::ALPNProtocolHTTP2) {
+                switchedToHttp2 = true;
                 protocolHandler.reset(new QHttp2ProtocolHandler(this));
                 connection->setConnectionType(QHttpNetworkConnection::ConnectionTypeHTTP2);
                 break;
@@ -1088,8 +1152,15 @@ void QHttpNetworkConnectionChannel::_q_encrypted()
             Q_FALLTHROUGH();
         case QSslConfiguration::NextProtocolNegotiationNone: {
             protocolHandler.reset(new QHttpProtocolHandler(this));
+            if (!sslConfiguration.data()) {
+                // Our own auto-tests bypass the normal initialization (done by
+                // QHttpThreadDelegate), this means in the past we'd have here
+                // the default constructed QSslConfiguration without any protocols
+                // to negotiate. Let's create it now:
+                sslConfiguration.reset(new QSslConfiguration);
+            }
 
-            QList<QByteArray> protocols = sslConfiguration.allowedNextProtocols();
+            QList<QByteArray> protocols = sslConfiguration->allowedNextProtocols();
             const int nProtocols = protocols.size();
             // Clear the protocol that we failed to negotiate, so we do not try
             // it again on other channels that our connection can create/open.
@@ -1099,10 +1170,10 @@ void QHttpNetworkConnectionChannel::_q_encrypted()
                 protocols.removeAll(QSslConfiguration::NextProtocolSpdy3_0);
 
             if (nProtocols > protocols.size()) {
-                sslConfiguration.setAllowedNextProtocols(protocols);
+                sslConfiguration->setAllowedNextProtocols(protocols);
                 const int channelCount = connection->d_func()->channelCount;
                 for (int i = 0; i < channelCount; ++i)
-                    connection->d_func()->channels[i].setSslConfiguration(sslConfiguration);
+                    connection->d_func()->channels[i].setSslConfiguration(*sslConfiguration);
             }
 
             connection->setConnectionType(QHttpNetworkConnection::ConnectionTypeHTTP);

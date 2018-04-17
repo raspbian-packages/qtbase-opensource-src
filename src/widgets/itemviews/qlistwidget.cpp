@@ -690,6 +690,9 @@ QListWidgetItem *QListWidgetItem::clone() const
     Sets the data for a given \a role to the given \a value. Reimplement this
     function if you need extra roles or special behavior for certain roles.
 
+    \note The default implementation treats Qt::EditRole and Qt::DisplayRole as
+    referring to the same data.
+
     \sa Qt::ItemDataRole, data()
 */
 void QListWidgetItem::setData(int role, const QVariant &value)
@@ -1616,7 +1619,7 @@ void QListWidget::editItem(QListWidgetItem *item)
     Opens an editor for the given \a item. The editor remains open after
     editing.
 
-    \sa closePersistentEditor()
+    \sa closePersistentEditor(), isPersistentEditorOpen()
 */
 void QListWidget::openPersistentEditor(QListWidgetItem *item)
 {
@@ -1628,13 +1631,27 @@ void QListWidget::openPersistentEditor(QListWidgetItem *item)
 /*!
     Closes the persistent editor for the given \a item.
 
-    \sa openPersistentEditor()
+    \sa openPersistentEditor(), isPersistentEditorOpen()
 */
 void QListWidget::closePersistentEditor(QListWidgetItem *item)
 {
     Q_D(QListWidget);
     QModelIndex index = d->listModel()->index(item);
     QAbstractItemView::closePersistentEditor(index);
+}
+
+/*!
+    \since 5.10
+
+    Returns whether a persistent editor is open for item \a item.
+
+    \sa openPersistentEditor(), closePersistentEditor()
+*/
+bool QListWidget::isPersistentEditorOpen(QListWidgetItem *item) const
+{
+    Q_D(const QListWidget);
+    const QModelIndex index = d->listModel()->index(item);
+    return QAbstractItemView::isPersistentEditorOpen(index);
 }
 
 /*!

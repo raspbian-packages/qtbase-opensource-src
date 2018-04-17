@@ -43,8 +43,9 @@
 #endif
 
 #include <qversionnumber.h>
+#include <qdebug.h>
 
-#if defined(Q_OS_ANDROID)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
 #include <private/qjni_p.h>
 #endif
 
@@ -154,13 +155,15 @@ QT_BEGIN_NAMESPACE
     \fn QOperatingSystemVersion QOperatingSystemVersion::current()
 
     Returns a QOperatingSystemVersion indicating the current OS and its version number.
+
+    \sa currentType()
 */
 #if !defined(Q_OS_DARWIN) && !defined(Q_OS_WIN)
 QOperatingSystemVersion QOperatingSystemVersion::current()
 {
     QOperatingSystemVersion version;
     version.m_os = currentType();
-#if defined(Q_OS_ANDROID)
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
 #ifndef QT_BOOTSTRAPPED
     const QVersionNumber v = QVersionNumber::fromString(QJNIObjectPrivate::getStaticObjectField(
         "android/os/Build$VERSION", "RELEASE", "Ljava/lang/String;").toString());
@@ -297,6 +300,14 @@ int QOperatingSystemVersion::compare(const QOperatingSystemVersion &v1,
     Returns the OS type identified by the QOperatingSystemVersion.
 
     \sa name()
+*/
+
+/*!
+    \fn QOperatingSystemVersion::OSType QOperatingSystemVersion::currentType()
+
+    Returns the current OS type without constructing a QOperatingSystemVersion instance.
+
+    \sa current()
 */
 
 /*!
@@ -509,5 +520,17 @@ const QOperatingSystemVersion QOperatingSystemVersion::AndroidNougat_MR1 =
  */
 const QOperatingSystemVersion QOperatingSystemVersion::AndroidOreo =
     QOperatingSystemVersion(QOperatingSystemVersion::Android, 8, 0);
+
+#ifndef QT_NO_DEBUG_STREAM
+QDebug operator<<(QDebug debug, const QOperatingSystemVersion &ov)
+{
+    QDebugStateSaver saver(debug);
+    debug.nospace();
+    debug << "QOperatingSystemVersion(" << ov.name()
+        << ", " << ov.majorVersion() << '.' << ov.minorVersion()
+        << '.' << ov.microVersion() << ')';
+    return debug;
+}
+#endif // !QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE

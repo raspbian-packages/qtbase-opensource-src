@@ -39,7 +39,9 @@
             "qpa-platform-guard": "boolean",
             "sm": { "type": "boolean", "name": "sessionmanager" },
             "tslib": "boolean",
+            "vulkan": "boolean",
             "xcb": { "type": "enum", "values": [ "no", "yes", "qt", "system" ] },
+            "xcb-native-painting": "boolean",
             "xcb-xlib": "boolean",
             "xinput2": "boolean",
             "xkb": "boolean",
@@ -164,25 +166,20 @@
             "label": "Fontconfig",
             "test": {
                 "head": [
-                    "#include <ft2build.h>",
-                    "#include FT_FREETYPE_H",
                     "#include <fontconfig/fontconfig.h>",
                     "#ifndef FC_RGBA_UNKNOWN",
                     "#  error This version of fontconfig is tool old, it is missing the FC_RGBA_UNKNOWN define",
-                    "#endif",
-                    "#if ((FREETYPE_MAJOR*10000 + FREETYPE_MINOR*100 + FREETYPE_PATCH) < 20110)",
-                    "#  error This version of freetype is too old.",
                     "#endif"
                 ],
                 "main": [
-                    "FT_Face face = 0;",
                     "FcPattern *pattern = 0;"
                 ]
             },
             "sources": [
-                { "type": "pkgConfig", "args": "fontconfig freetype2" },
-                { "type": "freetype", "libs": "-lfontconfig -lfreetype" }
-            ]
+                { "type": "pkgConfig", "args": "fontconfig" },
+                { "type": "freetype", "libs": "-lfontconfig" }
+            ],
+            "use": "freetype"
         },
         "gbm": {
             "label": "GBM",
@@ -393,6 +390,14 @@
                 "-lts"
             ]
         },
+        "vulkan": {
+            "label": "Vulkan",
+            "test": "qpa/vulkan",
+            "sources": [
+                { "type": "pkgConfig", "args": "vulkan" },
+                { "type": "makeSpec", "spec": "VULKAN" }
+            ]
+        },
         "wayland_server": {
             "label": "Wayland Server",
             "test": {
@@ -583,6 +588,13 @@
             "sources": [
                 { "type": "pkgConfig", "args": "xkbcommon xkbcommon-x11 >= 0.4.1" }
             ]
+        },
+        "xrender": {
+            "label": "XRender for native painting",
+            "test": "x11/xrender",
+            "sources": [
+                "-lXrender"
+            ]
         }
     },
 
@@ -595,7 +607,13 @@
         "angle_d3d11_qdtd": {
             "label": "D3D11_QUERY_DATA_TIMESTAMP_DISJOINT",
             "type": "compile",
-            "test": "win/angle_d3d11_qdtd"
+            "test": {
+                "include": "d3d11.h",
+                "main": [
+                    "D3D11_QUERY_DATA_TIMESTAMP_DISJOINT qdtd;",
+                    "(void) qdtd;"
+                ]
+            }
         },
         "directwrite2": {
             "label": "DirectWrite 2",
@@ -705,6 +723,33 @@
             },
             "use": "egl"
         },
+        "egl-openwfd": {
+            "label": "OpenWFD EGL",
+            "type": "compile",
+            "test": {
+                "include": [ "wfd.h" ],
+                "main": [
+                    "wfdEnumerateDevices(nullptr, 0, nullptr);"
+                ]
+            },
+            "use": "egl"
+        },
+        "egl-rcar": {
+            "label": "RCAR EGL",
+            "type": "compile",
+            "test": {
+                "include": [ "EGL/egl.h" ],
+                "tail": [
+                    "extern \"C\" {",
+                    "extern unsigned long PVRGrfxServerInit(void);",
+                    "}"
+                ],
+                "main": [
+                    "PVRGrfxServerInit();"
+                ]
+            },
+            "use": "egl opengl_es2"
+        },
         "evdev": {
             "label": "evdev",
             "type": "compile",
@@ -797,6 +842,12 @@
                     "glProgramUniform1i(0, 0, 0);"
                 ]
             },
+            "use": "opengl_es2"
+        },
+        "opengles32": {
+            "label": "OpenGL ES 3.2",
+            "type": "compile",
+            "test": "unix/opengles32",
             "use": "opengl_es2"
         },
         "qpa_default_platform": {
@@ -929,7 +980,7 @@
             "label": "IMF",
             "emitIf": "config.qnx",
             "condition": "libs.imf",
-            "output": [ "privateConfig" ]
+            "output": [ "privateFeature" ]
         },
         "integrityfb": {
             "label": "INTEGRITY framebuffer",
@@ -1015,6 +1066,14 @@
                 { "type": "define", "name": "QT_OPENGL_ES_3_1" }
             ]
         },
+        "opengles32": {
+            "label": "OpenGL ES 3.2",
+            "condition": "features.opengles31 && tests.opengles32",
+            "output": [
+                "publicFeature",
+                { "type": "define", "name": "QT_OPENGL_ES_3_2" }
+            ]
+        },
         "opengl-desktop": {
             "label": "Desktop OpenGL",
             "enable": "input.opengl == 'desktop'",
@@ -1036,6 +1095,11 @@
             "label": "OpenGL",
             "condition": "features.opengl-desktop || features.opengl-dynamic || features.opengles2",
             "output": [ "publicFeature", "feature" ]
+        },
+        "vulkan": {
+            "label": "Vulkan",
+            "condition": "libs.vulkan",
+            "output": [ "publicFeature" ]
         },
         "openvg": {
             "label": "OpenVG",
@@ -1083,9 +1147,19 @@
             "condition": "features.eglfs && tests.egl-viv",
             "output": [ "privateFeature" ]
         },
+        "eglfs_rcar": {
+            "label": "EGLFS RCAR",
+            "condition": "config.integrity && features.eglfs && tests.egl-rcar",
+            "output": [ "privateFeature" ]
+        },
         "eglfs_viv_wl": {
             "label": "EGLFS i.Mx6 Wayland",
             "condition": "features.eglfs_viv && libs.wayland_server",
+            "output": [ "privateFeature" ]
+        },
+        "eglfs_openwfd": {
+            "label": "EGLFS OpenWFD",
+            "condition": "config.integrity && features.eglfs && tests.egl-openwfd",
             "output": [ "privateFeature" ]
         },
         "gif": {
@@ -1157,6 +1231,7 @@
             "label": "XCB",
             "section": "Platform plugins",
             "autoDetect": "!config.darwin",
+            "enable": "input.xcb == 'system' || input.xcb == 'qt'",
             "condition": "libs.xcb",
             "output": [ "privateFeature" ]
         },
@@ -1177,6 +1252,18 @@
             "label": "XCB GLX",
             "emitIf": "features.xcb",
             "condition": "libs.xcb_glx",
+            "output": [ "privateFeature" ]
+        },
+        "xcb-native-painting": {
+            "label": "Native painting (experimental)",
+            "emitIf": "features.xcb",
+            "condition": "features.xcb-xlib && features.fontconfig && libs.xrender",
+            "output": [ "privateFeature" ]
+        },
+        "xrender": {
+            "label": "XRender for native painting",
+            "emitIf": "features.xcb && features.xcb-native-painting",
+            "condition": "features.xcb-native-painting",
             "output": [ "privateFeature" ]
         },
         "xcb-render": {
@@ -1534,9 +1621,11 @@ QMAKE_LIBDIR_OPENGL[_ES2] and QMAKE_LIBS_OPENGL[_ES2] in the mkspec for your pla
                         },
                         "opengles2",
                         "opengles3",
-                        "opengles31"
+                        "opengles31",
+                        "opengles32"
                     ]
                 },
+                "vulkan",
                 "sessionmanager"
             ]
         },
@@ -1559,7 +1648,7 @@ QMAKE_LIBDIR_OPENGL[_ES2] and QMAKE_LIBS_OPENGL[_ES2] in the mkspec for your pla
                     "section": "EGLFS details",
                     "condition": "features.eglfs",
                     "entries": [
-                        "eglfs_viv", "eglfs_viv_wl", "eglfs_egldevice", "eglfs_gbm", "eglfs_mali", "eglfs_brcm", "egl_x11"
+                        "eglfs_openwfd", "eglfs_viv", "eglfs_viv_wl", "eglfs_rcar", "eglfs_egldevice", "eglfs_gbm", "eglfs_mali", "eglfs_brcm", "egl_x11"
                     ]
                 },
                 "linuxfb", "vnc", "mirclient",
@@ -1579,7 +1668,7 @@ QMAKE_LIBDIR_OPENGL[_ES2] and QMAKE_LIBS_OPENGL[_ES2] in the mkspec for your pla
                     "section": "X11",
                     "condition": "features.xcb",
                     "entries": [
-                        "system-xcb", "egl_x11", "xinput2", "xkb", "xlib", "xcb-render", "xcb-glx", "xcb-xlib", "xkbcommon-system"
+                        "system-xcb", "egl_x11", "xinput2", "xkb", "xlib", "xcb-render", "xcb-glx", "xcb-xlib", "xkbcommon-system", "xcb-native-painting"
                     ]
                 },
                 {

@@ -6,7 +6,7 @@ INCLUDEPATH += $$PWD
 HEADERS += kernel/qtnetworkglobal.h \
            kernel/qtnetworkglobal_p.h \
            kernel/qauthenticator.h \
-	   kernel/qauthenticator_p.h \
+           kernel/qauthenticator_p.h \
            kernel/qdnslookup.h \
            kernel/qdnslookup_p.h \
            kernel/qhostaddress.h \
@@ -49,8 +49,6 @@ win32: {
         SOURCES += kernel/qdnslookup_win.cpp \
                    kernel/qnetworkinterface_win.cpp
         LIBS_PRIVATE += -ldnsapi -liphlpapi
-        DEFINES += WINVER=0x0600 _WIN32_WINNT=0x0600
-
     } else {
         SOURCES += kernel/qdnslookup_winrt.cpp \
                    kernel/qnetworkinterface_winrt.cpp
@@ -63,7 +61,7 @@ mac {
 }
 
 osx:SOURCES += kernel/qnetworkproxy_mac.cpp
-else:win32:SOURCES += kernel/qnetworkproxy_win.cpp
+else:win32:!winrt: SOURCES += kernel/qnetworkproxy_win.cpp
 else: qtConfig(libproxy) {
     SOURCES += kernel/qnetworkproxy_libproxy.cpp
     QMAKE_USE_PRIVATE += libproxy libdl

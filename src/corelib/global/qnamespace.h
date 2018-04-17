@@ -241,8 +241,11 @@ public:
         TextForceRightToLeft = 0x40000,
         // Ensures that the longest variant is always used when computing the
         // size of a multi-variant string.
-        TextLongestVariant = 0x80000,
-        TextBypassShaping = 0x100000
+        TextLongestVariant = 0x80000
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+        , TextBypassShaping = 0x100000
+#endif
     };
 
     enum TextElideMode {
@@ -474,6 +477,8 @@ public:
 
         WA_TabletTracking = 129,
 
+        WA_ContentsMarginsRespectsSafeArea = 130,
+
         // Add new attributes before this line
         WA_AttributeCount
     };
@@ -508,6 +513,9 @@ public:
         AA_CompressHighFrequencyEvents = 25,
         AA_DontCheckOpenGLContextThreadAffinity = 26,
         AA_DisableShaderDiskCache = 27,
+        AA_DontShowShortcutsInContextMenus = 28,
+        AA_CompressTabletEvents = 29,
+        AA_DisableWindowContextHelpButton = 30, // ### Qt 6: remove me
 
         // Add new attributes before this line
         AA_AttributeCount

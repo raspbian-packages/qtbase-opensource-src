@@ -1686,7 +1686,8 @@ bool QSslSocket::waitForDisconnected(int msecs)
 
     if (!d->plainSocket)
         return false;
-    if (d->mode == UnencryptedMode)
+    // Forward to the plain socket unless the connection is secure.
+    if (d->mode == UnencryptedMode && !d->autoStartHandshake)
         return d->plainSocket->waitForDisconnected(msecs);
 
     QElapsedTimer stopWatch;
@@ -1697,6 +1698,17 @@ bool QSslSocket::waitForDisconnected(int msecs)
         if (!waitForEncrypted(msecs))
             return false;
     }
+    // We are delaying the disconnect, if the write buffer is not empty.
+    // So, start the transmission.
+    if (!d->writeBuffer.isEmpty())
+        d->transmit();
+
+    // At this point, the socket might be disconnected, if disconnectFromHost()
+    // was called just after the connectToHostEncrypted() call. Also, we can
+    // lose the connection as a result of the transmit() call.
+    if (state() == UnconnectedState)
+        return true;
+
     bool retVal = d->plainSocket->waitForDisconnected(qt_subtract_from_timeout(msecs, stopWatch.elapsed()));
     if (!retVal) {
         setSocketState(d->plainSocket->state());
@@ -1993,6 +2005,8 @@ qint64 QSslSocket::readData(char *data, qint64 maxlen)
         // possibly trigger another transmit() to decrypt more data from the socket
         if (d->plainSocket->bytesAvailable())
             QMetaObject::invokeMethod(this, "_q_flushReadBuffer", Qt::QueuedConnection);
+        else if (d->state != QAbstractSocket::ConnectedState)
+            return maxlen ? qint64(-1) : qint64(0);
     }
 
     return readBytes;
@@ -2013,7 +2027,10 @@ qint64 QSslSocket::writeData(const char *data, qint64 len)
     d->writeBuffer.append(data, len);
 
     // make sure we flush to the plain socket's buffer
-    QMetaObject::invokeMethod(this, "_q_flushWriteBuffer", Qt::QueuedConnection);
+    if (!d->flushTriggered) {
+        d->flushTriggered = true;
+        QMetaObject::invokeMethod(this, "_q_flushWriteBuffer", Qt::QueuedConnection);
+    }
 
     return len;
 }
@@ -2032,6 +2049,7 @@ QSslSocketPrivate::QSslSocketPrivate()
     , allowRootCertOnDemandLoading(true)
     , plainSocket(0)
     , paused(false)
+    , flushTriggered(false)
 {
     QSslConfigurationPrivate::deepCopyDefaultConfiguration(&configuration);
 }
@@ -2054,6 +2072,7 @@ void QSslSocketPrivate::init()
     ignoreAllSslErrors = false;
     shutdown = false;
     pendingClose = false;
+    flushTriggered = false;
 
     // we don't want to clear the ignoreErrorsList, so
     // that it is possible setting it before connecting
@@ -2522,6 +2541,10 @@ void QSslSocketPrivate::_q_readChannelFinishedSlot()
 void QSslSocketPrivate::_q_flushWriteBuffer()
 {
     Q_Q(QSslSocket);
+
+    // need to notice if knock-on effects of this flush (e.g. a readReady() via transmit())
+    // make another necessary, so clear flag before calling:
+    flushTriggered = false;
     if (!writeBuffer.isEmpty())
         q->flush();
 }

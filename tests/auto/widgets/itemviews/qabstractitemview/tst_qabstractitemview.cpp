@@ -28,6 +28,7 @@
 
 
 #include <QtTest/QtTest>
+#include <QtTest/private/qtesthelpers_p.h>
 
 #include <qabstractitemview.h>
 #include <qstandarditemmodel.h>
@@ -57,19 +58,7 @@
 
 Q_DECLARE_METATYPE(Qt::ItemFlags);
 
-static inline void setFrameless(QWidget *w)
-{
-    Qt::WindowFlags flags = w->windowFlags();
-    flags |= Qt::FramelessWindowHint;
-    flags &= ~(Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
-    w->setWindowFlags(flags);
-}
-
-static inline void centerOnScreen(QWidget *w)
-{
-    const QPoint offset = QPoint(w->width() / 2, w->height() / 2);
-    w->move(QGuiApplication::primaryScreen()->availableGeometry().center() - offset);
-}
+using namespace QTestPrivate;
 
 // Move cursor out of widget area to avoid undesired interaction on Mac.
 static inline void moveCursorAway(const QWidget *topLevel)
@@ -631,7 +620,9 @@ void tst_QAbstractItemView::rowDelegate()
     QVERIFY(QTest::qWaitForWindowExposed(&view));
 
     QModelIndex index = model.index(3, 0);
+    QVERIFY(!view.isPersistentEditorOpen(index));
     view.openPersistentEditor(index);
+    QVERIFY(view.isPersistentEditorOpen(index));
     QWidget *w = view.indexWidget(index);
     QVERIFY(w);
     QCOMPARE(w->metaObject()->className(), "QWidget");
@@ -651,7 +642,9 @@ void tst_QAbstractItemView::columnDelegate()
     QVERIFY(QTest::qWaitForWindowExposed(&view));
 
     QModelIndex index = model.index(0, 3);
+    QVERIFY(!view.isPersistentEditorOpen(index));
     view.openPersistentEditor(index);
+    QVERIFY(view.isPersistentEditorOpen(index));
     QWidget *w = view.indexWidget(index);
     QVERIFY(w);
     QCOMPARE(w->metaObject()->className(), "QWidget");
@@ -1239,8 +1232,8 @@ void tst_QAbstractItemView::task200665_itemEntered()
     moveCursorAway(&view);
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
-    QCursor::setPos( view.geometry().center() );
-    QCoreApplication::processEvents();
+    QCursor::setPos(view.geometry().center());
+    QTRY_COMPARE(QCursor::pos(), view.geometry().center());
     QSignalSpy spy(&view, SIGNAL(entered(QModelIndex)));
     view.verticalScrollBar()->setValue(view.verticalScrollBar()->maximum());
 
@@ -1811,7 +1804,7 @@ void tst_QAbstractItemView::shiftSelectionAfterChangingModelContents()
     view.setModel(&proxyModel);
     view.setSelectionMode(QAbstractItemView::ExtendedSelection);
     view.show();
-    QTest::qWaitForWindowExposed(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
 
     // Click "C"
     QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, view.visualRect(indexC).center());
@@ -1925,7 +1918,7 @@ void tst_QAbstractItemView::QTBUG48968_reentrant_updateEditorGeometries()
     tree.setRootIsDecorated(false);
     QObject::connect(&tree, SIGNAL(doubleClicked(QModelIndex)), &tree, SLOT(setRootIndex(QModelIndex)));
     tree.show();
-    QTest::qWaitForWindowActive(&tree);
+    QVERIFY(QTest::qWaitForWindowActive(&tree));
 
     // Trigger editing idx
     QModelIndex idx = m->index(1, 0);
@@ -2167,7 +2160,7 @@ void tst_QAbstractItemView::testClickToSelect()
     SetSelectionTestView view;
     view.setModel(&model);
     view.show();
-    QTest::qWaitForWindowExposed(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
 
     QSignalSpy spy(&view, &SetSelectionTestView::setSelectionCalled);
 

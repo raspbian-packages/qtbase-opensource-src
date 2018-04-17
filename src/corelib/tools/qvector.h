@@ -147,8 +147,8 @@ public:
     void remove(int i, int n);
     inline void removeFirst() { Q_ASSERT(!isEmpty()); erase(d->begin()); }
     inline void removeLast();
-    inline T takeFirst() { Q_ASSERT(!isEmpty()); T r = first(); removeFirst(); return r; }
-    inline T takeLast()  { Q_ASSERT(!isEmpty()); T r = last(); removeLast(); return r; }
+    T takeFirst() { Q_ASSERT(!isEmpty()); T r = std::move(first()); removeFirst(); return r; }
+    T takeLast()  { Q_ASSERT(!isEmpty()); T r = std::move(last()); removeLast(); return r; }
 
     QVector<T> &fill(const T &t, int size = -1);
 
@@ -164,9 +164,10 @@ public:
         const const_iterator ce = this->cend(), cit = std::find(this->cbegin(), ce, t);
         if (cit == ce)
             return 0;
-        // next operation detaches, so ce, cit may become invalidated:
+        // next operation detaches, so ce, cit, t may become invalidated:
+        const T tCopy = t;
         const int firstFoundIdx = std::distance(this->cbegin(), cit);
-        const iterator e = end(), it = std::remove(begin() + firstFoundIdx, e, t);
+        const iterator e = end(), it = std::remove(begin() + firstFoundIdx, e, tCopy);
         const int result = std::distance(it, e);
         erase(it, e);
         return result;
@@ -180,7 +181,7 @@ public:
         return true;
     }
     int length() const { return size(); }
-    T takeAt(int i) { T t = at(i); remove(i); return t; }
+    T takeAt(int i) { T t = std::move((*this)[i]); remove(i); return t; }
     void move(int from, int to)
     {
         Q_ASSERT_X(from >= 0 && from < size(), "QVector::move(int,int)", "'from' is out-of-range");
@@ -268,6 +269,7 @@ public:
     inline const_reference front() const { return first(); }
     inline reference back() { return last(); }
     inline const_reference back() const { return last(); }
+    void shrink_to_fit() { squeeze(); }
 
     // comfort
     QVector<T> &operator+=(const QVector<T> &l);
@@ -1002,6 +1004,8 @@ QT_END_INCLUDE_NAMESPACE
 Q_TEMPLATE_EXTERN template class Q_CORE_EXPORT QVector<QPointF>;
 Q_TEMPLATE_EXTERN template class Q_CORE_EXPORT QVector<QPoint>;
 #endif
+
+QVector<uint> QStringView::toUcs4() const { return QtPrivate::convertToUcs4(*this); }
 
 QT_END_NAMESPACE
 

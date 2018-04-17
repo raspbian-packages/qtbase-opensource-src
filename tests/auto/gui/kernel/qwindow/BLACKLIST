@@ -15,7 +15,14 @@ ubuntu-14.04
 [modalWindowEnterEventOnHide_QTBUG35109]
 ubuntu-14.04
 ubuntu-16.04
+osx ci
 [modalDialogClosingOneOfTwoModal]
 osx
 [modalWindowModallity]
 osx
+[visibility]
+osx-10.11 ci
+osx-10.12 ci
+
+[testInputEvents]
+rhel-7.4

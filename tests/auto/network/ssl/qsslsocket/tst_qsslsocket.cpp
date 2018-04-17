@@ -1098,6 +1098,9 @@ public:
     QString m_interFile;
     QString ciphers;
 
+signals:
+    void socketError(QAbstractSocket::SocketError);
+
 protected:
     void incomingConnection(qintptr socketDescriptor)
     {
@@ -1107,6 +1110,7 @@ protected:
         socket->setProtocol(protocol);
         if (ignoreSslErrors)
             connect(socket, SIGNAL(sslErrors(QList<QSslError>)), this, SLOT(ignoreErrorSlot()));
+        connect(socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SIGNAL(socketError(QAbstractSocket::SocketError)));
 
         QFile file(m_keyFile);
         QVERIFY(file.open(QIODevice::ReadOnly));
@@ -1166,6 +1170,19 @@ void tst_QSslSocket::protocolServerSide_data()
     QTest::addColumn<QSsl::SslProtocol>("serverProtocol");
     QTest::addColumn<QSsl::SslProtocol>("clientProtocol");
     QTest::addColumn<bool>("works");
+
+#if QT_CONFIG(opensslv11)
+#if !defined(OPENSSL_NO_SSL2)
+    // OpenSSL 1.1 has removed SSL2 support. But there is no OPENSSL_NO_SSL2 macro ...
+#define OPENSSL_NO_SSL2
+#endif
+    // A client using our OpenSSL1.1 backend will negotiate up from TLS 1.0 or 1.1
+    // to TLS 1.2 if the server asks for it, where our older backend fails to compromise.
+    // So some tests that fail for the old pass with the new.
+    const bool willUseTLS12 = true;
+#else
+    const bool willUseTLS12 = false;
+#endif // opensslv11
 
 #if !defined(OPENSSL_NO_SSL2) && !defined(QT_SECURETRANSPORT)
     QTest::newRow("ssl2-ssl2") << QSsl::SslV2 << QSsl::SslV2 << false; // no idea why it does not work, but we don't care about SSL 2
@@ -1242,6 +1259,38 @@ void tst_QSslSocket::protocolServerSide_data()
 #if !defined(OPENSSL_NO_SSL3)
     QTest::newRow("any-ssl3") << QSsl::AnyProtocol << QSsl::SslV3 << true;
 #endif
+
+#if !defined(OPENSSL_NO_SSL2) && !defined(QT_SECURETRANSPORT)
+    QTest::newRow("tls1.0orlater-ssl2") << QSsl::TlsV1_0OrLater << QSsl::SslV2 << false;
+#endif
+#if !defined(OPENSSL_NO_SSL3)
+    QTest::newRow("tls1.0orlater-ssl3") << QSsl::TlsV1_0OrLater << QSsl::SslV3 << false;
+#endif
+    QTest::newRow("tls1.0orlater-tls1.0") << QSsl::TlsV1_0OrLater << QSsl::TlsV1_0 << true;
+    QTest::newRow("tls1.0orlater-tls1.1") << QSsl::TlsV1_0OrLater << QSsl::TlsV1_1 << true;
+    QTest::newRow("tls1.0orlater-tls1.2") << QSsl::TlsV1_0OrLater << QSsl::TlsV1_2 << true;
+
+#if !defined(OPENSSL_NO_SSL2) && !defined(QT_SECURETRANSPORT)
+    QTest::newRow("tls1.1orlater-ssl2") << QSsl::TlsV1_1OrLater << QSsl::SslV2 << false;
+#endif
+#if !defined(OPENSSL_NO_SSL3)
+    QTest::newRow("tls1.1orlater-ssl3") << QSsl::TlsV1_1OrLater << QSsl::SslV3 << false;
+#endif
+
+    QTest::newRow("tls1.1orlater-tls1.0") << QSsl::TlsV1_1OrLater << QSsl::TlsV1_0 << willUseTLS12;
+    QTest::newRow("tls1.1orlater-tls1.1") << QSsl::TlsV1_1OrLater << QSsl::TlsV1_1 << true;
+    QTest::newRow("tls1.1orlater-tls1.2") << QSsl::TlsV1_1OrLater << QSsl::TlsV1_2 << true;
+
+#if !defined(OPENSSL_NO_SSL2) && !defined(QT_SECURETRANSPORT)
+    QTest::newRow("tls1.2orlater-ssl2") << QSsl::TlsV1_2OrLater << QSsl::SslV2 << false;
+#endif
+#if !defined(OPENSSL_NO_SSL3)
+    QTest::newRow("tls1.2orlater-ssl3") << QSsl::TlsV1_2OrLater << QSsl::SslV3 << false;
+#endif
+    QTest::newRow("tls1.2orlater-tls1.0") << QSsl::TlsV1_2OrLater << QSsl::TlsV1_0 << willUseTLS12;
+    QTest::newRow("tls1.2orlater-tls1.1") << QSsl::TlsV1_2OrLater << QSsl::TlsV1_1 << willUseTLS12;
+    QTest::newRow("tls1.2orlater-tls1.2") << QSsl::TlsV1_2OrLater << QSsl::TlsV1_2 << true;
+
     QTest::newRow("any-tls1.0") << QSsl::AnyProtocol << QSsl::TlsV1_0 << true;
     QTest::newRow("any-tls1ssl3") << QSsl::AnyProtocol << QSsl::TlsV1SslV3 << true;
     QTest::newRow("any-secure") << QSsl::AnyProtocol << QSsl::SecureProtocols << true;
@@ -1264,6 +1313,7 @@ void tst_QSslSocket::protocolServerSide()
     QVERIFY(server.listen());
 
     QEventLoop loop;
+    connect(&server, SIGNAL(socketError(QAbstractSocket::SocketError)), &loop, SLOT(quit()));
     QTimer::singleShot(5000, &loop, SLOT(quit()));
 
     QSslSocket client;
@@ -1281,7 +1331,15 @@ void tst_QSslSocket::protocolServerSide()
 
     QFETCH(bool, works);
     QAbstractSocket::SocketState expectedState = (works) ? QAbstractSocket::ConnectedState : QAbstractSocket::UnconnectedState;
-    QCOMPARE(int(client.state()), int(expectedState));
+    // Determine whether the client or the server caused the event loop
+    // to quit due to a socket error, and investigate the culprit.
+    if (server.socket->error() != QAbstractSocket::UnknownSocketError) {
+        QVERIFY(client.error() == QAbstractSocket::UnknownSocketError);
+        QCOMPARE(int(server.socket->state()), int(expectedState));
+    } else if (client.error() != QAbstractSocket::UnknownSocketError) {
+        QVERIFY(server.socket->error() == QAbstractSocket::UnknownSocketError);
+        QCOMPARE(int(client.state()), int(expectedState));
+    }
     QCOMPARE(client.isEncrypted(), works);
 }
 
@@ -1543,7 +1601,12 @@ void tst_QSslSocket::waitForConnectedEncryptedReadyRead()
     QFETCH_GLOBAL(bool, setProxy);
     if (setProxy && !socket->waitForEncrypted(10000))
         QSKIP("Skipping flaky test - See QTBUG-29941");
-    QVERIFY(socket->waitForReadyRead(10000));
+
+    // We only do this if we have no bytes available to read already because readyRead will
+    // not be emitted again.
+    if (socket->bytesAvailable() == 0)
+        QVERIFY(socket->waitForReadyRead(10000));
+
     QVERIFY(!socket->peerCertificate().isNull());
     QVERIFY(!socket->peerCertificateChain().isEmpty());
 }
@@ -2119,6 +2182,13 @@ void tst_QSslSocket::waitForMinusOne()
 
     // fifth verification: it should wait for 200 ms more
     QVERIFY(socket.waitForDisconnected(-1));
+
+    // sixth verification: reading from a disconnected socket returns -1
+    //                     once we deplete the read buffer
+    QCOMPARE(socket.state(), QAbstractSocket::UnconnectedState);
+    socket.readAll();
+    char aux;
+    QCOMPARE(socket.read(&aux, 1), -1);
 }
 
 class VerifyServer : public QTcpServer
@@ -3621,7 +3691,9 @@ void tst_QSslSocket::ephemeralServerKey_data()
     QTest::addColumn<QString>("cipher");
     QTest::addColumn<bool>("emptyKey");
 
+#if !QT_CONFIG(opensslv11) // 1.1 drops support for RC4-SHA
     QTest::newRow("NonForwardSecrecyCipher") << "RC4-SHA" << true;
+#endif // !opensslv11
     QTest::newRow("ForwardSecrecyCipher") << "ECDHE-RSA-AES256-SHA" << (QSslSocket::sslLibraryVersionNumber() < 0x10002000L);
 }
 

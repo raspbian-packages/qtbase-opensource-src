@@ -1699,6 +1699,9 @@ Qt::ItemFlags QTreeWidgetItem::flags() const
 
     The \a role describes the type of data specified by \a value, and is defined by
     the Qt::ItemDataRole enum.
+
+    \note The default implementation treats Qt::EditRole and Qt::DisplayRole as
+    referring to the same data.
 */
 void QTreeWidgetItem::setData(int column, int role, const QVariant &value)
 {
@@ -2906,7 +2909,7 @@ void QTreeWidget::editItem(QTreeWidgetItem *item, int column)
 /*!
   Opens a persistent editor for the \a item in the given \a column.
 
-  \sa closePersistentEditor()
+  \sa closePersistentEditor(), isPersistentEditorOpen()
 */
 
 void QTreeWidget::openPersistentEditor(QTreeWidgetItem *item, int column)
@@ -2921,13 +2924,28 @@ void QTreeWidget::openPersistentEditor(QTreeWidgetItem *item, int column)
   This function has no effect if no persistent editor is open for this
   combination of item and column.
 
-  \sa openPersistentEditor()
+  \sa openPersistentEditor(), isPersistentEditorOpen()
 */
 
 void QTreeWidget::closePersistentEditor(QTreeWidgetItem *item, int column)
 {
     Q_D(QTreeWidget);
     QAbstractItemView::closePersistentEditor(d->index(item, column));
+}
+
+/*!
+    \since 5.10
+
+    Returns whether a persistent editor is open for item \a item in
+    column \a column.
+
+    \sa openPersistentEditor(), closePersistentEditor()
+*/
+
+bool QTreeWidget::isPersistentEditorOpen(QTreeWidgetItem *item, int column) const
+{
+    Q_D(const QTreeWidget);
+    return QAbstractItemView::isPersistentEditorOpen(d->index(item, column));
 }
 
 /*!

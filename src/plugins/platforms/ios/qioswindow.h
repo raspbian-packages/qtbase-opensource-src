@@ -62,7 +62,7 @@ public:
 
     void setGeometry(const QRect &rect) Q_DECL_OVERRIDE;
 
-    void setWindowState(Qt::WindowState state) Q_DECL_OVERRIDE;
+    void setWindowState(Qt::WindowStates state) Q_DECL_OVERRIDE;
     void setParent(const QPlatformWindow *window) Q_DECL_OVERRIDE;
     void handleContentOrientationChange(Qt::ScreenOrientation orientation) Q_DECL_OVERRIDE;
     void setVisible(bool visible) Q_DECL_OVERRIDE;
@@ -70,6 +70,8 @@ public:
 
     bool isExposed() const Q_DECL_OVERRIDE;
     void propagateSizeHints() Q_DECL_OVERRIDE {}
+
+    QMargins safeAreaMargins() const override;
 
     void raise() Q_DECL_OVERRIDE{ raiseOrLower(true); }
     void lower() Q_DECL_OVERRIDE { raiseOrLower(false); }

@@ -1,11 +1,13 @@
 TARGET = qcocoa
 
-OBJECTIVE_SOURCES += main.mm \
+SOURCES += main.mm \
     qcocoaintegration.mm \
+    qcocoascreen.mm \
     qcocoatheme.mm \
     qcocoabackingstore.mm \
     qcocoawindow.mm \
     qnsview.mm \
+    qnswindow.mm \
     qnsviewaccessibility.mm \
     qnswindowdelegate.mm \
     qcocoanativeinterface.mm \
@@ -30,15 +32,16 @@ OBJECTIVE_SOURCES += main.mm \
     qcocoasystemtrayicon.mm \
     qcocoaintrospection.mm \
     qcocoakeymapper.mm \
-    qcocoamimetypes.mm
-
-SOURCES += messages.cpp
+    qcocoamimetypes.mm \
+    messages.cpp
 
 HEADERS += qcocoaintegration.h \
+    qcocoascreen.h \
     qcocoatheme.h \
     qcocoabackingstore.h \
     qcocoawindow.h \
     qnsview.h \
+    qnswindow.h \
     qnswindowdelegate.h \
     qcocoanativeinterface.h \
     qcocoaeventdispatcher.h \
@@ -66,26 +69,26 @@ HEADERS += qcocoaintegration.h \
     qcocoamimetypes.h
 
 qtConfig(opengl.*) {
-    OBJECTIVE_SOURCES += qcocoaglcontext.mm
+    SOURCES += qcocoaglcontext.mm
 
     HEADERS += qcocoaglcontext.h
 }
 
 RESOURCES += qcocoaresources.qrc
 
-LIBS += -framework AppKit -framework Carbon -framework IOKit -lcups
+LIBS += -framework AppKit -framework Carbon -framework IOKit -framework QuartzCore -lcups
 
 QT += \
     core-private gui-private \
     accessibility_support-private clipboard_support-private theme_support-private \
-    fontdatabase_support-private graphics_support-private cgl_support-private
+    fontdatabase_support-private graphics_support-private
 
 CONFIG += no_app_extension_api_only
 
 qtHaveModule(widgets) {
     QT_FOR_CONFIG += widgets
 
-    OBJECTIVE_SOURCES += \
+    SOURCES += \
         qpaintengine_mac.mm \
         qprintengine_mac.mm \
         qcocoaprintersupport.mm \

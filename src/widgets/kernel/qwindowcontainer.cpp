@@ -89,7 +89,7 @@ public:
 
     void updateUsesNativeWidgets()
     {
-        if (usesNativeWidgets || window->parent() == 0)
+        if (window->parent() == 0)
             return;
         Q_Q(QWindowContainer);
         if (q->internalWinId()) {
@@ -97,6 +97,7 @@ public:
             usesNativeWidgets = true;
             return;
         }
+        bool nativeWidgetSet = false;
         QWidget *p = q->parentWidget();
         while (p) {
             if (false
@@ -108,11 +109,12 @@ public:
 #endif
                     ) {
                 q->winId();
-                usesNativeWidgets = true;
+                nativeWidgetSet = true;
                 break;
             }
             p = p->parentWidget();
         }
+        usesNativeWidgets = nativeWidgetSet;
     }
 
     void markParentChain() {
@@ -339,6 +341,19 @@ bool QWindowContainer::event(QEvent *e)
         e->accept();
         return true;
 #endif
+
+    case QEvent::Paint:
+    {
+        static bool needsPunch = !QGuiApplicationPrivate::platformIntegration()->hasCapability(
+            QPlatformIntegration::TopStackedNativeChildWindows);
+        if (needsPunch) {
+            QPainter p(this);
+            p.setCompositionMode(QPainter::CompositionMode_Source);
+            p.fillRect(rect(), Qt::transparent);
+        }
+        break;
+    }
+
     default:
         break;
     }

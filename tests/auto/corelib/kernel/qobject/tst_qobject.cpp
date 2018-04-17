@@ -140,6 +140,7 @@ private slots:
     void connectFunctorWithContext();
     void connectFunctorWithContextUnique();
     void connectFunctorDeadlock();
+    void connectFunctorMoveOnly();
     void connectStaticSlotWithObject();
     void disconnectDoesNotLeakFunctor();
     void contextDoesNotLeakFunctor();
@@ -150,6 +151,7 @@ private slots:
     void deleteLaterInAboutToBlockHandler();
     void mutableFunctor();
     void checkArgumentsForNarrowing();
+    void nullReceiver();
 };
 
 struct QObjectCreatedOnShutdown
@@ -2361,8 +2363,8 @@ void tst_QObject::testUserData()
 
     // Randomize the table a bit
     for (int i=0; i<100; ++i) {
-        int p1 = rand() % USER_DATA_COUNT;
-        int p2 = rand() % USER_DATA_COUNT;
+        int p1 = QRandomGenerator::global()->bounded(USER_DATA_COUNT);
+        int p2 = QRandomGenerator::global()->bounded(USER_DATA_COUNT);
 
         int tmp = user_data_ids[p1];
         user_data_ids[p1] = user_data_ids[p2];
@@ -6237,6 +6239,47 @@ void tst_QObject::connectFunctorDeadlock()
     sender.emitSignal1();
 }
 
+void tst_QObject::connectFunctorMoveOnly()
+{
+    struct MoveOnlyFunctor {
+        Q_DISABLE_COPY(MoveOnlyFunctor)
+        MoveOnlyFunctor(int *status) : status(status) {}
+        MoveOnlyFunctor(MoveOnlyFunctor &&o) : status(o.status) { o.status = nullptr; };
+        void operator()(int i) { *status = i; }
+        void operator()() { *status = -8; }
+        int *status;
+    };
+
+    int status = 1;
+    SenderObject obj;
+    QEventLoop e;
+
+    connect(&obj, &SenderObject::signal1, MoveOnlyFunctor(&status));
+    QCOMPARE(status, 1);
+    obj.signal1();
+    QCOMPARE(status, -8);
+
+    connect(&obj, &SenderObject::signal7, MoveOnlyFunctor(&status));
+    QCOMPARE(status, -8);
+    obj.signal7(7888, "Hello");
+    QCOMPARE(status, 7888);
+
+    // With a context
+    status = 1;
+    connect(&obj, &SenderObject::signal2, this, MoveOnlyFunctor(&status));
+    QCOMPARE(status, 1);
+    obj.signal2();
+    QCOMPARE(status, -8);
+
+    // QueuedConnection
+    status = 1;
+    connect(&obj, &SenderObject::signal3, this, MoveOnlyFunctor(&status), Qt::QueuedConnection);
+    obj.signal3();
+    QCOMPARE(status, 1);
+    QCoreApplication::processEvents();
+    QCOMPARE(status, -8);
+}
+
 static int s_static_slot_checker = 1;
 
 class StaticSlotChecker : public QObject
@@ -7378,6 +7421,16 @@ void tst_QObject::checkArgumentsForNarrowing()
 #undef FITS_IF
 #undef NARROWS
 #undef FITS
+}
+
+void tst_QObject::nullReceiver()
+{
+    QObject o;
+    QObject *nullObj = nullptr; // Passing nullptr directly doesn't compile with gcc 4.8
+    QVERIFY(!connect(&o, &QObject::destroyed, nullObj, &QObject::deleteLater));
+    QVERIFY(!connect(&o, &QObject::destroyed, nullObj, [] {}));
+    QVERIFY(!connect(&o, &QObject::destroyed, nullObj, Functor_noexcept()));
+    QVERIFY(!connect(&o, SIGNAL(destroyed()), nullObj, SLOT(deleteLater())));
 }
 
 // Test for QtPrivate::HasQ_OBJECT_Macro

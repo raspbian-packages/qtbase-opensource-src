@@ -79,7 +79,8 @@ win32 {
                 kernel/qsharedmemory_win.cpp \
                 kernel/qsystemsemaphore_win.cpp
         HEADERS += \
-                kernel/qwineventnotifier.h
+                kernel/qwineventnotifier.h \
+                kernel/qwineventnotifier_p.h
 
         winrt {
             SOURCES += kernel/qeventdispatcher_winrt.cpp
@@ -187,7 +188,7 @@ vxworks {
                 kernel/qfunctions_vxworks.h
 }
 
-qqnx_pps {
+qnx:qtConfig(qqnx_pps) {
         QMAKE_USE_PRIVATE += pps
         SOURCES += \
                 kernel/qppsattribute.cpp \
@@ -199,7 +200,7 @@ qqnx_pps {
                 kernel/qppsobjectprivate_p.h
 }
 
-android {
+android:!android-embedded {
         SOURCES += \
                    kernel/qjnionload.cpp \
                    kernel/qjnihelpers.cpp \

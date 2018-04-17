@@ -62,9 +62,9 @@ static QTimeZonePrivate *newBackendTimeZone()
 #else
 #if defined Q_OS_MAC
     return new QMacTimeZonePrivate();
-#elif defined Q_OS_ANDROID
+#elif defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
     return new QAndroidTimeZonePrivate();
-#elif defined Q_OS_UNIX
+#elif defined(Q_OS_UNIX) || defined(Q_OS_ANDROID_EMBEDDED)
     return new QTzTimeZonePrivate();
     // Registry based timezone backend not available on WinRT
 #elif defined Q_OS_WIN
@@ -89,9 +89,9 @@ static QTimeZonePrivate *newBackendTimeZone(const QByteArray &ianaId)
 #else
 #if defined Q_OS_MAC
     return new QMacTimeZonePrivate(ianaId);
-#elif defined Q_OS_ANDROID
+#elif defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
     return new QAndroidTimeZonePrivate(ianaId);
-#elif defined Q_OS_UNIX
+#elif defined(Q_OS_UNIX) || defined(Q_OS_ANDROID_EMBEDDED)
     return new QTzTimeZonePrivate(ianaId);
     // Registry based timezone backend not available on WinRT
 #elif defined Q_OS_WIN
@@ -338,12 +338,9 @@ QTimeZone::QTimeZone(const QByteArray &ianaId)
 */
 
 QTimeZone::QTimeZone(int offsetSeconds)
+    : d((offsetSeconds >= MinUtcOffsetSecs && offsetSeconds <= MaxUtcOffsetSecs)
+        ? new QUtcTimeZonePrivate(offsetSeconds) : nullptr)
 {
-    // offsetSeconds must fall between -14:00 and +14:00 hours
-    if (offsetSeconds >= -50400 && offsetSeconds <= 50400)
-        d = new QUtcTimeZonePrivate(offsetSeconds);
-    else
-        d = 0;
 }
 
 /*!

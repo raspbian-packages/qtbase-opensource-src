@@ -1365,6 +1365,9 @@ QTableWidgetItem *QTableWidgetItem::clone() const
 /*!
     Sets the item's data for the given \a role to the specified \a value.
 
+    \note The default implementation treats Qt::EditRole and Qt::DisplayRole as
+    referring to the same data.
+
     \sa Qt::ItemDataRole, data()
 */
 void QTableWidgetItem::setData(int role, const QVariant &value)
@@ -2220,7 +2223,7 @@ void QTableWidget::editItem(QTableWidgetItem *item)
 /*!
   Opens an editor for the give \a item. The editor remains open after editing.
 
-  \sa closePersistentEditor()
+  \sa closePersistentEditor(), isPersistentEditorOpen()
 */
 void QTableWidget::openPersistentEditor(QTableWidgetItem *item)
 {
@@ -2234,7 +2237,7 @@ void QTableWidget::openPersistentEditor(QTableWidgetItem *item)
 /*!
   Closes the persistent editor for \a item.
 
-  \sa openPersistentEditor()
+  \sa openPersistentEditor(), isPersistentEditorOpen()
 */
 void QTableWidget::closePersistentEditor(QTableWidgetItem *item)
 {
@@ -2243,6 +2246,20 @@ void QTableWidget::closePersistentEditor(QTableWidgetItem *item)
         return;
     QModelIndex index = d->tableModel()->index(item);
     QAbstractItemView::closePersistentEditor(index);
+}
+
+/*!
+    \since 5.10
+
+    Returns whether a persistent editor is open for item \a item.
+
+    \sa openPersistentEditor(), closePersistentEditor()
+*/
+bool QTableWidget::isPersistentEditorOpen(QTableWidgetItem *item) const
+{
+    Q_D(const QTableWidget);
+    const QModelIndex index = d->tableModel()->index(item);
+    return QAbstractItemView::isPersistentEditorOpen(index);
 }
 
 /*!

@@ -49,6 +49,11 @@ src_tools_qdbuscpp2xml.target = sub-qdbuscpp2xml
 force_bootstrap: src_tools_qdbuscpp2xml.depends = src_tools_bootstrap_dbus
 else: src_tools_qdbuscpp2xml.depends = src_dbus
 
+src_tools_qvkgen.subdir = tools/qvkgen
+src_tools_qvkgen.target = sub-qvkgen
+force_bootstrap: src_tools_qvkgen.depends = src_tools_bootstrap
+else: src_tools_qvkgen.depends = src_corelib
+
 src_winmain.subdir = $$PWD/winmain
 src_winmain.target = sub-winmain
 src_winmain.depends = sub-corelib  # just for the module .pri file
@@ -188,14 +193,19 @@ qtConfig(gui) {
         SUBDIRS += src_3rdparty_freetype
         src_platformsupport.depends += src_3rdparty_freetype
     }
+    SUBDIRS += src_tools_qvkgen
+    src_gui.depends += src_tools_qvkgen
+    TOOLS += src_tools_qvkgen
     SUBDIRS += src_gui src_platformsupport src_platformheaders
     qtConfig(opengl): SUBDIRS += src_openglextensions
     src_plugins.depends += src_gui src_platformsupport src_platformheaders
     src_testlib.depends += src_gui      # if QtGui is enabled, QtTest requires QtGui's headers
     qtConfig(widgets) {
-        SUBDIRS += src_tools_uic src_widgets src_printsupport
+        SUBDIRS += src_tools_uic src_widgets
+        !android-embedded: SUBDIRS += src_printsupport
         TOOLS += src_tools_uic
-        src_plugins.depends += src_widgets src_printsupport
+        src_plugins.depends += src_widgets
+        !android-embedded: src_plugins.depends += src_printsupport
         src_testlib.depends += src_widgets        # if QtWidgets is enabled, QtTest requires QtWidgets's headers
         qtConfig(opengl) {
             SUBDIRS += src_opengl
@@ -207,7 +217,7 @@ SUBDIRS += src_plugins
 
 nacl: SUBDIRS -= src_network src_testlib
 
-android: SUBDIRS += src_android src_3rdparty_gradle
+android:!android-embedded: SUBDIRS += src_android src_3rdparty_gradle
 
 TR_EXCLUDE = \
     src_tools_bootstrap src_tools_moc src_tools_rcc src_tools_uic src_tools_qlalr \

@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.9.2+dfsg-12+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.10.1+dfsg-5+rpi1) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,98 @@ qtbase-opensource-src (5.9.2+dfsg-12+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 01 Mar 2018 02:55:10 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Tue, 17 Apr 2018 02:16:06 +0000
+
+qtbase-opensource-src (5.10.1+dfsg-5) unstable; urgency=medium
+
+  * Update symbols files with buildd's logs.
+  * Release to unstable.
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Sat, 07 Apr 2018 16:35:57 -0300
+
+qtbase-opensource-src (5.10.1+dfsg-4) experimental; urgency=medium
+
+  * Brown paperbag release: remove support_legacy_x11_keymaps.patch which I
+    included in the previous upload. It clearly does not builds. Sadly this
+    also means that backporting the fixes might not be easy to achieve.
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Sat, 17 Mar 2018 15:29:52 -0300
+
+qtbase-opensource-src (5.10.1+dfsg-3) experimental; urgency=medium
+
+  [ Dmitry Shachnev ]
+  * Update list of Qt WebKit build-dependencies in debian/README.source.
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Backport support_legacy_x11_keymaps.patch (Closes: #814959, #818232).
+  * Update symbols files with buildds' logs.
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Sat, 17 Mar 2018 13:14:47 -0300
+
+qtbase-opensource-src (5.10.1+dfsg-2) experimental; urgency=medium
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Merge 5.9.2+dfsg-12 upload from unstable.
+  * Refresh patches, specially those coming from merging master.
+
+  [ Pino Toscano ]
+  * Update patch nonlinux_utime.diff with a new UTIME_OMIT usage in 5.10.
+
+  [ Dmitry Shachnev ]
+  * Add upstream patch to fix installation of resources for example sources.
+    Thanks to Alexander Volkov.
+  * Add upstream patch to fix rendering issues with Mesa 18.
+  * Update debian/libqt5network5.symbols for powerpc.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 23 Feb 2018 00:04:29 +0300
+
+qtbase-opensource-src (5.10.1+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Rename gnukfreebsd_cloexec.diff to gnukfreebsd_linker_warnings.diff.
+    Add two more places where config tests are currently false positives.
+  * Merge 5.9.2+dfsg-10 upload from unstable.
+  * Update symbols files from buildds’ and current build logs.
+  * Drop qdnslookup_crash.diff and http2_headers.diff, included in the new
+    release.
+  * Refresh other patches.
+  * Update Vcs fields for migration to salsa.debian.org.
+  * Update debian/copyright with help of debian/scripts/update-copyright.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 16 Feb 2018 18:03:53 +0300
+
+qtbase-opensource-src (5.10.0+dfsg-2) experimental; urgency=medium
+
+  * Bump qtbase-abi to 5-10-0, as in 5.10 there were removed symbols.
+  * Do not attempt to use arc4random_buf() on GNU/kFreeBSD, it is missing
+    there (no_arc4random_buf.diff).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 07 Dec 2017 17:27:40 +0300
+
+qtbase-opensource-src (5.10.0+dfsg-1) experimental; urgency=medium
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Merge 5.9.2+dfsg-6 upload from unstable.
+
+  [ Dmitry Shachnev ]
+  * New upstream stable release.
+  * Update symbols files from buildds’ logs.
+  * Update debian/watch to track 5.10.0 official releases.
+  * Exclude licheck binaries from the tarball, they have no source.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 07 Dec 2017 11:17:10 +0300
+
+qtbase-opensource-src (5.10.0~rc1+dfsg-1) experimental; urgency=medium
+
+  * New upstream release candidate.
+  * Update debian/watch to track 5.10 development releases.
+  * Drop qglxconvenience_nullptr.diff, included upstream.
+  * Build with OpenSSL 1.1 (closes: #859671).
+  * Update install files for the new version.
+  * Update symbols files from the current build logs.
+  * Update debian/copyright using debian/scripts/update-copyright.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Tue, 28 Nov 2017 16:43:35 +0300
 
 qtbase-opensource-src (5.9.2+dfsg-12) unstable; urgency=medium
 

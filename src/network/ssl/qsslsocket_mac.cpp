@@ -47,6 +47,7 @@
 #include "qsslkey_p.h"
 
 #include <QtCore/qmessageauthenticationcode.h>
+#include <QtCore/qoperatingsystemversion.h>
 #include <QtCore/qcryptographichash.h>
 #include <QtCore/qdatastream.h>
 #include <QtCore/qsysinfo.h>
@@ -92,20 +93,18 @@ EphemeralSecKeychain::EphemeralSecKeychain()
 {
     const auto uuid = QUuid::createUuid();
     if (uuid.isNull()) {
-        qCWarning(lcSsl) << "Failed to create an unique keychain name";
+        qCWarning(lcSsl) << "Failed to create a unique keychain name";
         return;
     }
 
-    QString uuidAsString(uuid.toString());
-    Q_ASSERT(uuidAsString.size() > 2);
-    Q_ASSERT(uuidAsString.startsWith(QLatin1Char('{'))
-             && uuidAsString.endsWith(QLatin1Char('}')));
-    uuidAsString = uuidAsString.mid(1, uuidAsString.size() - 2);
+    const QByteArray uuidAsByteArray = uuid.toByteArray();
+    Q_ASSERT(uuidAsByteArray.size() > 2);
+    Q_ASSERT(uuidAsByteArray.startsWith('{'));
+    Q_ASSERT(uuidAsByteArray.endsWith('}'));
+    const auto uuidAsString = QLatin1String(uuidAsByteArray.data(), uuidAsByteArray.size()).mid(1, uuidAsByteArray.size() - 2);
 
-    QString keychainName(QDir::tempPath());
-    keychainName.append(QDir::separator());
-    keychainName += uuidAsString;
-    keychainName += QLatin1String(".keychain");
+    const QString keychainName
+            = QDir::tempPath() + QDir::separator() + uuidAsString + QLatin1String(".keychain");
     // SecKeychainCreate, pathName parameter:
     //
     // "A constant character string representing the POSIX path indicating where
@@ -1108,6 +1107,12 @@ bool QSslSocketBackendPrivate::verifySessionProtocol() const
         protocolOk = (sessionProtocol() >= QSsl::SslV3);
     else if (configuration.protocol == QSsl::SecureProtocols)
         protocolOk = (sessionProtocol() >= QSsl::TlsV1_0);
+    else if (configuration.protocol == QSsl::TlsV1_0OrLater)
+        protocolOk = (sessionProtocol() >= QSsl::TlsV1_0);
+    else if (configuration.protocol == QSsl::TlsV1_1OrLater)
+        protocolOk = (sessionProtocol() >= QSsl::TlsV1_1);
+    else if (configuration.protocol == QSsl::TlsV1_2OrLater)
+        protocolOk = (sessionProtocol() >= QSsl::TlsV1_2);
     else
         protocolOk = (sessionProtocol() == configuration.protocol);
 
@@ -1241,13 +1246,17 @@ bool QSslSocketBackendPrivate::verifyPeerTrust()
     // actual system CA certificate list (which most use-cases need) other than
     // by letting SecTrustEvaluate fall through to the system list; so, in this case
     // (even though the client code may have provided its own certs), we retain
-    // the default behavior.
+    // the default behavior. Note, with macOS SDK below 10.12 using 'trust my
+    // anchors only' may result in some valid chains rejected, apparently the
+    // ones containing intermediated certificates; so we use this functionality
+    // on more recent versions only.
+
+    bool anchorsFromConfigurationOnly = false;
 
 #ifdef Q_OS_MACOS
-    const bool anchorsFromConfigurationOnly = true;
-#else
-    const bool anchorsFromConfigurationOnly = false;
-#endif
+    if (QOperatingSystemVersion::current() >= QOperatingSystemVersion::MacOSSierra)
+        anchorsFromConfigurationOnly = true;
+#endif // Q_OS_MACOS
 
     SecTrustSetAnchorCertificatesOnly(trust, anchorsFromConfigurationOnly);
 

@@ -55,8 +55,6 @@
 
 #include <algorithm>
 
-#include <Carbon/Carbon.h>
-
 QT_BEGIN_NAMESPACE
 
 Q_LOGGING_CATEGORY(lcQpaCocoaWindow, "qt.qpa.cocoa.window");
@@ -308,7 +306,7 @@ QT_END_NAMESPACE
 @synthesize panelContents = _panelContents;
 @synthesize panelContentsMargins = _panelContentsMargins;
 
-- (instancetype)initWithPanelDelegate:(id<QT_MANGLE_NAMESPACE(QNSPanelDelegate)>)panelDelegate
+- (instancetype)initWithPanelDelegate:(id<QNSPanelDelegate>)panelDelegate
 {
     if ((self = [super initWithFrame:NSZeroRect])) {
         // create OK and Cancel buttons and add these as subviews
@@ -407,6 +405,7 @@ QT_END_NAMESPACE
     self.panelContents.needsDisplay = YES;
 
     self.needsDisplay = YES;
+    [super layout];
 }
 
 @end

@@ -127,11 +127,11 @@ QImageData * QImageData::create(const QSize &size, QImage::Format format)
     const int bytes_per_line = ((width * depth + 31) >> 5) << 2; // bytes per scanline (must be multiple of 4)
 
     // sanity check for potential overflows
-    if (INT_MAX/depth < width
+    if (std::numeric_limits<int>::max()/depth < width
         || bytes_per_line <= 0
         || height <= 0
-        || INT_MAX/uint(bytes_per_line) < height
-        || INT_MAX/sizeof(uchar *) < uint(height))
+        || std::numeric_limits<qsizetype>::max()/uint(bytes_per_line) < height
+        || std::numeric_limits<int>::max()/sizeof(uchar *) < uint(height))
         return 0;
 
     QScopedPointer<QImageData> d(new QImageData);
@@ -452,7 +452,7 @@ bool QImageData::checkForAlphaPixels() const
     used. For more information see the
     \l {QImage#Image Formats}{Image Formats} section.
 
-    The format(), bytesPerLine(), and byteCount() functions provide
+    The format(), bytesPerLine(), and sizeInBytes() functions provide
     low-level information about the data stored in the image.
 
     The cacheKey() function returns a number that uniquely
@@ -931,7 +931,8 @@ QImage::QImage(const uchar *data, int width, int height, int bytesPerLine, Forma
 
     The loader attempts to read the image using the specified \a
     format. If the \a format is not specified (which is the default),
-    the loader probes the file for a header to guess the file format.
+    it is auto-detected based on the file's suffix and header. For
+    details, see {QImageReader::setAutoDetectImageFormat()}{QImageReader}.
 
     If the loading of the image failed, this object is a null image.
 
@@ -1448,12 +1449,29 @@ void QImage::setDevicePixelRatio(qreal scaleFactor)
 
 /*!
     \since 4.6
+    \obsolete
     Returns the number of bytes occupied by the image data.
 
-    \sa bytesPerLine(), bits(), {QImage#Image Information}{Image
+    Note this method should never be called on an image larger than 2 gigabytes.
+    Instead use sizeInBytes().
+
+    \sa sizeInBytes(), bytesPerLine(), bits(), {QImage#Image Information}{Image
     Information}
 */
 int QImage::byteCount() const
+{
+    Q_ASSERT(!d || d->nbytes < std::numeric_limits<int>::max());
+    return d ? int(d->nbytes) : 0;
+}
+
+/*!
+    \since 5.10
+    Returns the image data size in bytes.
+
+    \sa byteCount(), bytesPerLine(), bits(), {QImage#Image Information}{Image
+    Information}
+*/
+qsizetype QImage::sizeInBytes() const
 {
     return d ? d->nbytes : 0;
 }
@@ -1461,13 +1479,13 @@ int QImage::byteCount() const
 /*!
     Returns the number of bytes per image scanline.
 
-    This is equivalent to byteCount() / height().
+    This is equivalent to sizeInBytes() / height() if height() is non-zero.
 
     \sa scanLine()
 */
 int QImage::bytesPerLine() const
 {
-    return (d && d->height) ? d->nbytes / d->height : 0;
+    return d ? d->bytes_per_line : 0;
 }
 
 
@@ -1594,7 +1612,7 @@ const uchar *QImage::constScanLine(int i) const
     data, thus ensuring that this QImage is the only one using the
     current return value.
 
-    \sa scanLine(), byteCount(), constBits()
+    \sa scanLine(), sizeInBytes(), constBits()
 */
 uchar *QImage::bits()
 {
@@ -3389,8 +3407,9 @@ void QImage::rgbSwapped_inplace()
     and returns \c false.
 
     The loader attempts to read the image using the specified \a format, e.g.,
-    PNG or JPG. If \a format is not specified (which is the default), the
-    loader probes the file for a header to guess the file format.
+    PNG or JPG. If \a format is not specified (which is the default), it is
+    auto-detected based on the file's suffix and header. For details, see
+    {QImageReader::setAutoDetectImageFormat()}{QImageReader}.
 
     The file name can either refer to an actual file on disk or to one
     of the application's embedded resources. See the
@@ -3457,14 +3476,10 @@ bool QImage::loadFromData(const uchar *data, int len, const char *format)
     Constructs a QImage from the first \a size bytes of the given
     binary \a data. The loader attempts to read the image using the
     specified \a format. If \a format is not specified (which is the default),
-    the loader probes the file for a header to guess the file format.
-    binary \a data. The loader attempts to read the image, either using the
-    optional image \a format specified or by determining the image format from
-    the data.
+    the loader probes the data for a header to guess the file format.
 
-    If \a format is not specified (which is the default), the loader probes the
-    file for a header to determine the file format. If \a format is specified,
-    it must be one of the values returned by QImageReader::supportedImageFormats().
+    If \a format is specified, it must be one of the values returned by
+    QImageReader::supportedImageFormats().
 
     If the loading of the image fails, the image returned will be a null image.
 
@@ -4664,12 +4679,12 @@ QImage QImage::transformed(const QTransform &matrix, Qt::TransformationMode mode
         if (dImage.d->colortable.size() < 256) {
             // colors are left in the color table, so pick that one as transparent
             dImage.d->colortable.append(0x0);
-            memset(dImage.bits(), dImage.d->colortable.size() - 1, dImage.byteCount());
+            memset(dImage.bits(), dImage.d->colortable.size() - 1, dImage.d->nbytes);
         } else {
-            memset(dImage.bits(), 0, dImage.byteCount());
+            memset(dImage.bits(), 0, dImage.d->nbytes);
         }
     } else
-        memset(dImage.bits(), 0x00, dImage.byteCount());
+        memset(dImage.bits(), 0x00, dImage.d->nbytes);
 
     if (target_format >= QImage::Format_RGB32) {
         // Prevent QPainter from applying devicePixelRatio corrections
@@ -4774,7 +4789,7 @@ QDebug operator<<(QDebug dbg, const QImage &i)
         if (i.colorCount())
             dbg << ",colorCount=" << i.colorCount();
         dbg << ",devicePixelRatio=" << i.devicePixelRatio()
-            << ",bytesPerLine=" << i.bytesPerLine() << ",byteCount=" << i.byteCount();
+            << ",bytesPerLine=" << i.bytesPerLine() << ",sizeInBytes=" << i.sizeInBytes();
     }
     dbg << ')';
     return dbg;
@@ -4796,7 +4811,7 @@ QDebug operator<<(QDebug dbg, const QImage &i)
 
     Returns the number of bytes occupied by the image data.
 
-    \sa byteCount()
+    \sa sizeInBytes()
  */
 
 /*!

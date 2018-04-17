@@ -260,7 +260,10 @@ QModelIndex QFileSystemModel::index(int row, int column, const QModelIndex &pare
     Q_ASSERT(parentNode);
 
     // now get the internal pointer for the index
-    const QString &childName = parentNode->visibleChildren.at(d->translateVisibleLocation(parentNode, row));
+    const int i = d->translateVisibleLocation(parentNode, row);
+    if (i >= parentNode->visibleChildren.size())
+        return QModelIndex();
+    const QString &childName = parentNode->visibleChildren.at(i);
     const QFileSystemModelPrivate::QFileSystemNode *indexNode = parentNode->children.value(childName);
     Q_ASSERT(indexNode);
 
@@ -744,7 +747,7 @@ QVariant QFileSystemModel::data(const QModelIndex &index, int role) const
         break;
     case Qt::TextAlignmentRole:
         if (index.column() == 1)
-            return Qt::AlignRight;
+            return QVariant(Qt::AlignTrailing | Qt::AlignVCenter);
         break;
     case FilePermissions:
         int p = permissions(index);
@@ -778,21 +781,7 @@ QString QFileSystemModelPrivate::size(const QModelIndex &index) const
 
 QString QFileSystemModelPrivate::size(qint64 bytes)
 {
-    // According to the Si standard KB is 1000 bytes, KiB is 1024
-    // but on windows sizes are calculated by dividing by 1024 so we do what they do.
-    const qint64 kb = 1024;
-    const qint64 mb = 1024 * kb;
-    const qint64 gb = 1024 * mb;
-    const qint64 tb = 1024 * gb;
-    if (bytes >= tb)
-        return QFileSystemModel::tr("%1 TB").arg(QLocale().toString(qreal(bytes) / tb, 'f', 3));
-    if (bytes >= gb)
-        return QFileSystemModel::tr("%1 GB").arg(QLocale().toString(qreal(bytes) / gb, 'f', 2));
-    if (bytes >= mb)
-        return QFileSystemModel::tr("%1 MB").arg(QLocale().toString(qreal(bytes) / mb, 'f', 1));
-    if (bytes >= kb)
-        return QFileSystemModel::tr("%1 KB").arg(QLocale().toString(bytes / kb));
-    return QFileSystemModel::tr("%1 bytes").arg(QLocale().toString(bytes));
+    return QLocale::system().formattedDataSize(bytes);
 }
 
 /*!
@@ -1097,8 +1086,8 @@ void QFileSystemModelPrivate::sortChildren(int column, const QModelIndex &parent
         return;
 
     QVector<QFileSystemModelPrivate::QFileSystemNode*> values;
-    QHash<QString, QFileSystemNode *>::const_iterator iterator;
-    for(iterator = indexNode->children.constBegin() ; iterator != indexNode->children.constEnd() ; ++iterator) {
+
+    for (auto iterator = indexNode->children.constBegin(), cend = indexNode->children.constEnd(); iterator != cend; ++iterator) {
         if (filtersAcceptsNode(iterator.value())) {
             values.append(iterator.value());
         } else {
@@ -1658,13 +1647,10 @@ void QFileSystemModelPrivate::_q_directoryChanged(const QString &directory, cons
     QStringList toRemove;
     QStringList newFiles = files;
     std::sort(newFiles.begin(), newFiles.end());
-    QHash<QString, QFileSystemNode*>::const_iterator i = parentNode->children.constBegin();
-    while (i != parentNode->children.constEnd()) {
+    for (auto i = parentNode->children.constBegin(), cend = parentNode->children.constEnd(); i != cend; ++i) {
         QStringList::iterator iterator = std::lower_bound(newFiles.begin(), newFiles.end(), i.value()->fileName);
         if ((iterator == newFiles.end()) || (i.value()->fileName < *iterator))
             toRemove.append(i.value()->fileName);
-
-        ++i;
     }
     for (int i = 0 ; i < toRemove.count() ; ++i )
         removeNode(parentNode, toRemove[i]);

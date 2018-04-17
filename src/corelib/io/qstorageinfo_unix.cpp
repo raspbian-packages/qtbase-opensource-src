@@ -107,6 +107,13 @@
 #  endif // QT_LARGEFILE_SUPPORT
 #endif // Q_OS_BSD4
 
+#if QT_HAS_INCLUDE(<paths.h>)
+#  include <paths.h>
+#endif
+#ifndef _PATH_MOUNTED
+#  define _PATH_MOUNTED     "/etc/mnttab"
+#endif
+
 QT_BEGIN_NAMESPACE
 
 class QStorageIterator
@@ -241,11 +248,9 @@ inline QByteArray QStorageIterator::options() const
 
 #elif defined(Q_OS_SOLARIS)
 
-static const char pathMounted[] = "/etc/mnttab";
-
 inline QStorageIterator::QStorageIterator()
 {
-    const int fd = qt_safe_open(pathMounted, O_RDONLY);
+    const int fd = qt_safe_open(_PATH_MOUNTED, O_RDONLY);
     fp = ::fdopen(fd, "r");
 }
 
@@ -282,11 +287,9 @@ inline QByteArray QStorageIterator::device() const
 
 #elif defined(Q_OS_ANDROID)
 
-static const QLatin1String pathMounted("/proc/mounts");
-
 inline QStorageIterator::QStorageIterator()
 {
-    file.setFileName(pathMounted);
+    file.setFileName(_PATH_MOUNTED);
     file.open(QIODevice::ReadOnly | QIODevice::Text);
 }
 
@@ -339,14 +342,13 @@ inline QByteArray QStorageIterator::options() const
 
 #elif defined(Q_OS_LINUX) || defined(Q_OS_HURD)
 
-static const char pathMounted[] = "/etc/mtab";
 static const int bufferSize = 1024; // 2 paths (mount point+device) and metainfo;
                                     // should be enough
 
 inline QStorageIterator::QStorageIterator() :
     buffer(QByteArray(bufferSize, 0))
 {
-    fp = ::setmntent(pathMounted, "r");
+    fp = ::setmntent(_PATH_MOUNTED, "r");
 }
 
 inline QStorageIterator::~QStorageIterator()
@@ -544,6 +546,38 @@ void QStorageInfoPrivate::initRootPath()
     }
 }
 
+#ifdef Q_OS_LINUX
+// udev encodes the labels with ID_LABEL_FS_ENC which is done with
+// blkid_encode_string(). Within this function some 1-byte utf-8
+// characters not considered safe (e.g. '\' or ' ') are encoded as hex
+static QString decodeFsEncString(const QString &str)
+{
+    QString decoded;
+    decoded.reserve(str.size());
+
+    int i = 0;
+    while (i < str.size()) {
+        if (i <= str.size() - 4) {    // we need at least four characters \xAB
+            if (str.at(i) == QLatin1Char('\\') &&
+                str.at(i+1) == QLatin1Char('x')) {
+                bool bOk;
+                const int code = str.midRef(i+2, 2).toInt(&bOk, 16);
+                // only decode characters between 0x20 and 0x7f but not
+                // the backslash to prevent collisions
+                if (bOk && code >= 0x20 && code < 0x80 && code != '\\') {
+                    decoded += QChar(code);
+                    i += 4;
+                    continue;
+                }
+            }
+        }
+        decoded += str.at(i);
+        ++i;
+    }
+    return decoded;
+}
+#endif
+
 static inline QString retrieveLabel(const QByteArray &device)
 {
 #ifdef Q_OS_LINUX
@@ -557,7 +591,7 @@ static inline QString retrieveLabel(const QByteArray &device)
         it.next();
         QFileInfo fileInfo(it.fileInfo());
         if (fileInfo.isSymLink() && fileInfo.symLinkTarget() == devicePath)
-            return fileInfo.fileName();
+            return decodeFsEncString(fileInfo.fileName());
     }
 #elif defined Q_OS_HAIKU
     fs_info fsInfo;
