@@ -50,7 +50,7 @@
 
 #if QT_CONFIG(getentropy)
 #  include <sys/random.h>
-#elif !defined(Q_OS_BSD4) && !defined(Q_OS_WIN)
+#elif (!defined(Q_OS_BSD4) || defined(__GLIBC__)) && !defined(Q_OS_WIN)
 #  include "qdeadlinetimer.h"
 #  include "qhashfunctions.h"
 
@@ -260,7 +260,7 @@ static void fallback_fill(quint32 *, qsizetype) Q_DECL_NOTHROW
     // no fallback necessary, getentropy cannot fail under normal circumstances
     Q_UNREACHABLE();
 }
-#elif defined(Q_OS_BSD4)
+#elif defined(Q_OS_BSD4) && !defined(__GLIBC__)
 static void fallback_update_seed(unsigned) {}
 static void fallback_fill(quint32 *ptr, qsizetype left) Q_DECL_NOTHROW
 {
