@@ -1,10 +1,8 @@
 # Backported from upstream.
-dead_key_symbols.diff
-extend_mariadb_define_check.diff
-resources_for_examples.diff
-mesa_18.diff
-fix_loading_opengl.diff
 hidpi_scale_at_192.diff
+Revert-QWidgetWindow-Immediately-forward-close-event.patch
+fix_regresion_in_QPointF_operator_equals.patch
+fix-selection-rendering.patch
 
 # Debian specific.
 gnukfreebsd.diff
