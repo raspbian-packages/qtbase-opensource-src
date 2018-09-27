@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.11.1+dfsg-7+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.11.1+dfsg-8+rpi1) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,20 @@ qtbase-opensource-src (5.11.1+dfsg-7+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 13 Sep 2018 16:25:16 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Thu, 27 Sep 2018 15:45:32 +0000
+
+qtbase-opensource-src (5.11.1+dfsg-8) unstable; urgency=medium
+
+  * Override dh_auto_test to avoid compiling in indep builds.
+  * Refresh nonlinux_utime.diff.
+  * Update symbols files from buildds’ logs.
+  * Bump required qttools-dev-tools version to 5.11.1-6, where a bug in
+    qdoc was fixed (closes: #908328).
+  * Bump Standards-Version to 4.2.1, no changes needed.
+  * Temporarily use TLS1_2_VERSION instead of TLS_MAX_VERSION, to make
+    Qt Network work with OpenSSL 1.1.0 in testing (closes: #907774).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Tue, 11 Sep 2018 13:29:28 +0300
 
 qtbase-opensource-src (5.11.1+dfsg-7) unstable; urgency=medium
 

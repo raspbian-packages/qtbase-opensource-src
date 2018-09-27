@@ -14,4 +14,5 @@ gnukfreebsd_linker_warnings.diff
 armv4.diff
 nonlinux_utime.diff
 no_arc4random_buf.diff
+ssl_max_version.diff
 modify-configure.json-to-disable-neon.patch
