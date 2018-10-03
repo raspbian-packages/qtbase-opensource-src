@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.11.1+dfsg-8+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.11.1+dfsg-9+rpi1) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,16 @@ qtbase-opensource-src (5.11.1+dfsg-8+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 27 Sep 2018 15:45:32 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 03 Oct 2018 00:33:38 +0000
+
+qtbase-opensource-src (5.11.1+dfsg-9) unstable; urgency=medium
+
+  * Add libvulkan-dev to provide Vulkan support (Closes:#909579).
+  * Backport fix_possible_heap_corruption_in_qxmlstream.patch to solve
+    possible heap corruption on QXmlStream.
+  * Update symbols files with buildds' and current logs.
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Tue, 25 Sep 2018 18:26:54 -0300
 
 qtbase-opensource-src (5.11.1+dfsg-8) unstable; urgency=medium
 
