@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.11.1+dfsg-9+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.11.2+dfsg-3+rpi1) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,41 @@ qtbase-opensource-src (5.11.1+dfsg-9+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Wed, 03 Oct 2018 00:33:38 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Thu, 25 Oct 2018 04:50:32 +0000
+
+qtbase-opensource-src (5.11.2+dfsg-3) unstable; urgency=medium
+
+  * Make `pkg-config --variable=host_bins Qt5Core`/qmake work with cross
+    compilation (closes: #909575):
+    - Patch Qt5Core.pc to make host_bins variable point to the multi-arch
+      location (/usr/lib/${DEB_HOST_MULTIARCH}/qt5/bin).
+    - Make /usr/lib/${DEB_HOST_MULTIARCH}/qt5/bin/qmake point to
+      /usr/bin/${DEB_HOST_GNU_TYPE}-qmake. Also move this symlink from
+      qt5-qmake-bin to qt5-qmake.
+  * Correctly update symbols files for Vulkan symbols introduction.
+    Use arch-bits=32/64 where appropriate.
+  * Upload to unstable.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 15 Oct 2018 20:45:46 +0300
+
+qtbase-opensource-src (5.11.2+dfsg-2) experimental; urgency=medium
+
+  * Bump ABI version to qtbase-abi-5-11-2.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 22 Sep 2018 09:21:33 +0300
+
+qtbase-opensource-src (5.11.2+dfsg-1) experimental; urgency=medium
+
+  * New upstreaam release.
+  * Drop patches, applied upstream:
+    - fix_regresion_in_QPointF_operator_equals.patch
+    - fix-glibc-2.28-build.patch
+  * Refresh other patches.
+  * Update metadata for two patches wrongly marked as applied upstream.
+  * Update symbols files from buildds’ and the current build logs.
+  * Update debian/copyright.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 21 Sep 2018 10:57:47 +0300
 
 qtbase-opensource-src (5.11.1+dfsg-9) unstable; urgency=medium
 

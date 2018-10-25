@@ -1,11 +1,8 @@
 # Backported from upstream.
-hidpi_scale_at_192.diff
-Revert-QWidgetWindow-Immediately-forward-close-event.patch
-fix_regresion_in_QPointF_operator_equals.patch
 fix-selection-rendering.patch
-fix-glibc-2.28-build.patch
-fix_possible_heap_corruption_in_qxmlstream.patch
 
+# Forwarded upstream.
+hidpi_scale_at_192.diff
 # Debian specific.
 gnukfreebsd.diff
 no_htmlinfo_example.diff
@@ -16,4 +13,5 @@ armv4.diff
 nonlinux_utime.diff
 no_arc4random_buf.diff
 ssl_max_version.diff
+Revert-QWidgetWindow-Immediately-forward-close-event.patch
 modify-configure.json-to-disable-neon.patch
