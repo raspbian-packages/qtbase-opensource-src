@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.11.2+dfsg-3+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.11.2+dfsg-4+rpi1) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,27 @@ qtbase-opensource-src (5.11.2+dfsg-3+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 25 Oct 2018 04:50:32 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 04 Nov 2018 12:08:16 +0000
+
+qtbase-opensource-src (5.11.2+dfsg-4) unstable; urgency=medium
+
+  * Mark libvulkan-dev build-dependency as linux-any (closes: #911422).
+    Thanks to Samuel Thibault for the initial patch.
+  * Move all QtVulkanSupport headers to qtbase5-private-dev package.
+    The static library is there, so the headers should also be there.
+  * Sort debian/qtbase5-dev.install using wrap-and-sort.
+  * Make qtbase5-dev depend on libvulkan-dev on linux, as Qt headers
+    include Vulkan headers.
+  * Add a patch to pass default include directories to qdoc.
+  * Bump qttools build-dependency to 5.11.2-4 (to get unpatched qdoc).
+  * Drop Revert-QWidgetWindow-Immediately-forward-close-event.patch.
+    The issue was fixed in kxmlgui v5.49.0, no need to patch Qt anymore.
+  * Replace hidpi_scale_at_192.diff with a version that has been applied
+    upstream (reference_dpi.diff).
+  * Backport upstream patch to fix freezes when opening applications
+    (dont_get_screen_rotation.diff).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 29 Oct 2018 22:59:29 +0300
 
 qtbase-opensource-src (5.11.2+dfsg-3) unstable; urgency=medium
 

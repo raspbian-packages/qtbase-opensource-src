@@ -1,8 +1,8 @@
 # Backported from upstream.
 fix-selection-rendering.patch
+reference_dpi.diff
+dont_get_screen_rotation.diff
 
-# Forwarded upstream.
-hidpi_scale_at_192.diff
 # Debian specific.
 gnukfreebsd.diff
 no_htmlinfo_example.diff
@@ -13,5 +13,5 @@ armv4.diff
 nonlinux_utime.diff
 no_arc4random_buf.diff
 ssl_max_version.diff
-Revert-QWidgetWindow-Immediately-forward-close-event.patch
+qdoc_default_incdirs.diff
 modify-configure.json-to-disable-neon.patch

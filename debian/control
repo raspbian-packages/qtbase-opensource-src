@@ -40,7 +40,7 @@ Build-Depends: debhelper (>= 11),
                libsqlite3-dev,
                libssl-dev,
                libudev-dev [linux-any],
-               libvulkan-dev,
+               libvulkan-dev [linux-any],
                libx11-dev,
                libx11-xcb-dev,
                libxcb-icccm4-dev,
@@ -65,7 +65,7 @@ Build-Depends: debhelper (>= 11),
                publicsuffix,
                unixodbc-dev,
                zlib1g-dev
-Build-Depends-Indep: qttools5-dev-tools (>= 5.11.1-6~) <!nodoc>
+Build-Depends-Indep: qttools5-dev-tools (>= 5.11.2-4~) <!nodoc>
 Standards-Version: 4.2.1
 Homepage: http://qt-project.org/
 Vcs-Git: https://salsa.debian.org/qt-kde-team/qt/qtbase.git
@@ -326,6 +326,7 @@ Depends: libgl1-mesa-dev [!armel !armhf] | libgl-dev [!armel !armhf],
          libqt5test5 (= ${binary:Version}),
          libqt5widgets5 (= ${binary:Version}),
          libqt5xml5 (= ${binary:Version}),
+         libvulkan-dev [linux-any],
          libxext-dev,
          qt5-qmake (= ${binary:Version}),
          qtbase5-dev-tools (= ${binary:Version}),
@@ -357,8 +358,8 @@ Depends: libinput-dev [linux-any],
          libxkbcommon-dev,
          qtbase5-dev (= ${binary:Version}),
          ${misc:Depends}
-Breaks: qtbase5-dev (<< 5.4.0+dfsg-6~)
-Replaces: qtbase5-dev (<< 5.4.0+dfsg-6~)
+Breaks: qtbase5-dev (<< 5.11.2+dfsg-4~)
+Replaces: qtbase5-dev (<< 5.11.2+dfsg-4~)
 Description: Qt 5 base private development files
  Qt is a cross-platform C++ application framework. Qt's primary feature
  is its rich set of widgets that provide standard GUI functionality.
