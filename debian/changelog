@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.7.1+dfsg-3+rpi1) stretch-staging; urgency=medium
+qtbase-opensource-src (5.7.1+dfsg-3+rpi1+deb9u1) stretch-staging; urgency=medium
 
   [changes brought forward from 5.3.2+dfsg-4+rpi1 by Peter Michael Green <plugwash@raspbian.org> at Thu, 27 Nov 2014 01:56:58 +0000]
   * Disable neon (-no-neon no longer seems to work, so edit configure instead)
@@ -6,7 +6,18 @@ qtbase-opensource-src (5.7.1+dfsg-3+rpi1) stretch-staging; urgency=medium
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
 
- -- Raspbian forward porter <root@raspbian.org>  Sun, 22 Jan 2017 09:01:54 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 30 Jan 2019 21:53:04 +0000
+
+qtbase-opensource-src (5.7.1+dfsg-3+deb9u1) stretch-security; urgency=medium
+
+  * Backport fixes for:
+    - CVE-2018-15518: “double free or corruption” in QXmlStreamReader
+    - CVE-2018-19873: QBmpHandler segfault on malformed BMP file
+    - CVE-2018-19870: Check for QImage allocation failure in qgifhandler
+  * Backport ensure_pixel_density_of_at_least_1.patch in order to fix VLC after
+    it's security update (Closes: #907139).
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Fri, 25 Jan 2019 11:11:01 -0300
 
 qtbase-opensource-src (5.7.1+dfsg-3) unstable; urgency=medium
 
