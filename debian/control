@@ -340,6 +340,9 @@ Suggests: default-libmysqlclient-dev,
           libpq-dev,
           libsqlite3-dev,
           unixodbc-dev
+Breaks: qt5-qmake (<< 5.11.3+dfsg-3~), qtbase5-private-dev (<< 5.11.3+dfsg-5~)
+Replaces: qt5-qmake (<< 5.11.3+dfsg-3~),
+          qtbase5-private-dev (<< 5.11.3+dfsg-5~)
 Description: Qt 5 base development files
  Qt is a cross-platform C++ application framework. Qt's primary feature
  is its rich set of widgets that provide standard GUI functionality.
@@ -358,8 +361,8 @@ Depends: libinput-dev [linux-any],
          libxkbcommon-dev,
          qtbase5-dev (= ${binary:Version}),
          ${misc:Depends}
-Breaks: qtbase5-dev (<< 5.11.2+dfsg-4~)
-Replaces: qtbase5-dev (<< 5.11.2+dfsg-4~)
+Breaks: qt5-qmake (<< 5.11.3+dfsg-3~), qtbase5-dev (<< 5.11.2+dfsg-4~)
+Replaces: qt5-qmake (<< 5.11.3+dfsg-3~), qtbase5-dev (<< 5.11.2+dfsg-4~)
 Description: Qt 5 base private development files
  Qt is a cross-platform C++ application framework. Qt's primary feature
  is its rich set of widgets that provide standard GUI functionality.
@@ -376,8 +379,8 @@ Section: libdevel
 Depends: libqt5opengl5 (= ${binary:Version}),
          qtbase5-dev (= ${binary:Version}),
          ${misc:Depends}
-Breaks: qtbase5-dev (<< 5.4.0+dfsg-6~)
-Replaces: qtbase5-dev (<< 5.4.0+dfsg-6~)
+Breaks: qtbase5-dev (<< 5.11.3+dfsg-4~)
+Replaces: qtbase5-dev (<< 5.11.3+dfsg-4~)
 Provides: libqt5opengl5-desktop-dev (= ${binary:Version}) [!armel !armhf]
 Description: Qt 5 OpenGL library development files
  Qt is a cross-platform C++ application framework. Qt's primary feature
