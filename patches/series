@@ -1,0 +1,15 @@
+# Backported from upstream.
+mysql_free_results_when_qsqlquery_finished_is_called.patch
+qdockwidget_undocked_notification.diff
+docs_fixes.diff
+postgresql_12.diff
+
+# Debian specific.
+gnukfreebsd.diff
+no_htmlinfo_example.diff
+remove_privacy_breaches.diff
+link_fbclient.diff
+gnukfreebsd_linker_warnings.diff
+armv4.diff
+nonlinux_utime.diff
+qdoc_default_incdirs.diff
