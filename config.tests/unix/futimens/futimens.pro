@@ -4,3 +4,4 @@ SOURCES += futimens.cpp
 # targets. This simplifies the logic at the call site dramatically, as it isn't
 # strictly needed compared to futimes().
 darwin: QMAKE_CXXFLAGS += -Werror=unguarded-availability
+QMAKE_LFLAGS += -Wl,--fatal-warnings
