@@ -76,6 +76,10 @@ Q_DECLARE_METATYPE(MYSQL_STMT*)
 #  define Q_CLIENT_MULTI_STATEMENTS 0
 #endif
 
+// MySQL above version 8 removed my_bool typedef while MariaDB kept it,
+// by redefining it we can regain source compatibility.
+using my_bool = decltype(mysql_stmt_bind_result(nullptr, nullptr));
+
 QT_BEGIN_NAMESPACE
 
 class QMYSQLDriverPrivate : public QSqlDriverPrivate
@@ -308,7 +312,9 @@ static QVariant::Type qDecodeMYSQLType(int mysqltype, uint flags)
         type = QVariant::Date;
         break;
     case FIELD_TYPE_TIME :
-        type = QVariant::Time;
+        // A time field can be within the range '-838:59:59' to '838:59:59' so
+        // use QString instead of QTime since QTime is limited to 24 hour clock
+        type = QVariant::String;
         break;
     case FIELD_TYPE_DATETIME :
     case FIELD_TYPE_TIMESTAMP :
@@ -1460,7 +1466,7 @@ bool QMYSQLDriver::open(const QString& db,
     d->preparedQuerysEnabled = false;
 #endif
 
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
     mysql_thread_init();
 #endif
 
@@ -1474,7 +1480,7 @@ void QMYSQLDriver::close()
 {
     Q_D(QMYSQLDriver);
     if (isOpen()) {
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
         mysql_thread_end();
 #endif
         mysql_close(d->mysql);

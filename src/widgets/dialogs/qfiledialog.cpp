@@ -57,7 +57,9 @@
 #include <qmessagebox.h>
 #endif
 #include <stdlib.h>
+#if QT_CONFIG(settings)
 #include <qsettings.h>
+#endif
 #include <qdebug.h>
 #if QT_CONFIG(mimetype)
 #include <qmimedatabase.h>
@@ -221,6 +223,9 @@ Q_GLOBAL_STATIC(QUrl, lastVisitedDir)
     of QFileDialog that contains the Q_OBJECT macro, or the platform
     does not have a native dialog of the type that you require.
 
+    \note This option must be set before changing dialog properties
+    or showing the dialog.
+
     \value ReadOnly Indicates that the model is readonly.
 
     \value HideNameFilterDetails Indicates if the file name filter details are
@@ -383,7 +388,7 @@ QFileDialog::QFileDialog(const QFileDialogArgs &args)
 */
 QFileDialog::~QFileDialog()
 {
-#ifndef QT_NO_SETTINGS
+#if QT_CONFIG(settings)
     Q_D(QFileDialog);
     d->saveSettings();
 #endif
@@ -519,7 +524,7 @@ void QFileDialog::changeEvent(QEvent *e)
 
 QFileDialogPrivate::QFileDialogPrivate()
     :
-#ifndef QT_NO_PROXYMODEL
+#if QT_CONFIG(proxymodel)
         proxyModel(0),
 #endif
         model(0),
@@ -665,7 +670,7 @@ void QFileDialogPrivate::retranslateStrings()
 
     QList<QAction*> actions = qFileDialogUi->treeView->header()->actions();
     QAbstractItemModel *abstractModel = model;
-#ifndef QT_NO_PROXYMODEL
+#if QT_CONFIG(proxymodel)
     if (proxyModel)
         abstractModel = proxyModel;
 #endif
@@ -722,6 +727,16 @@ bool QFileDialogPrivate::usingWidgets() const
     Sets the given \a option to be enabled if \a on is true; otherwise,
     clears the given \a option.
 
+    Options (particularly the DontUseNativeDialogs option) should be set
+    before changing dialog properties or showing the dialog.
+
+    Setting options while the dialog is visible is not guaranteed to have
+    an immediate effect on the dialog (depending on the option and on the
+    platform).
+
+    Setting options after changing other properties may cause these
+    values to have no effect.
+
     \sa options, testOption()
 */
 void QFileDialog::setOption(Option option, bool on)
@@ -752,9 +767,15 @@ bool QFileDialog::testOption(Option option) const
 
     By default, all options are disabled.
 
-    Options should be set before showing the dialog. Setting them while the
-    dialog is visible is not guaranteed to have an immediate effect on the
-    dialog (depending on the option and on the platform).
+    Options (particularly the DontUseNativeDialogs option) should be set
+    before changing dialog properties or showing the dialog.
+
+    Setting options while the dialog is visible is not guaranteed to have
+    an immediate effect on the dialog (depending on the option and on the
+    platform).
+
+    Setting options after changing other properties may cause these
+    values to have no effect.
 
     \sa setOption(), testOption()
 */
@@ -804,8 +825,6 @@ QFileDialog::Options QFileDialog::options() const
 }
 
 /*!
-    \overload
-
     \since 4.5
 
     This function connects one of its signals to the slot specified by \a receiver
@@ -1049,10 +1068,15 @@ void QFileDialog::selectFile(const QString &filename)
         return;
 
     if (!d->usingWidgets()) {
-        QUrl url = QUrl::fromLocalFile(filename);
+        QUrl url;
         if (QFileInfo(filename).isRelative()) {
-            QDir dir(d->options->initialDirectory().toLocalFile());
-            url = QUrl::fromLocalFile(dir.absoluteFilePath(filename));
+            url = d->options->initialDirectory();
+            QString path = url.path();
+            if (!path.endsWith(QLatin1Char('/')))
+                path += QLatin1Char('/');
+            url.setPath(path + filename);
+        } else {
+            url = QUrl::fromLocalFile(filename);
         }
         d->selectFile_sys(url);
         d->options->setInitiallySelectedFiles(QList<QUrl>() << url);
@@ -1110,7 +1134,7 @@ Q_AUTOTEST_EXPORT QString qt_tildeExpansion(const QString &path)
         const QString homePath = QDir::homePath();
 #else
         const QByteArray userName = path.midRef(1, separatorPosition - 1).toLocal8Bit();
-# if defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD)
+# if defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && !defined(Q_OS_WASM)
         passwd pw;
         passwd *tmpPw;
         char buf[200];
@@ -2108,9 +2132,7 @@ QString QFileDialog::labelText(DialogLabel label) const
     strings. If you want multiple filters, separate them with ';;', for
     example:
 
-    \code
-    "Images (*.png *.xpm *.jpg);;Text files (*.txt);;XML files (*.xml)"
-    \endcode
+    \snippet code/src_gui_dialogs_qfiledialog.cpp 14
 
     The \a options argument holds various options about how to run the dialog,
     see the QFileDialog::Option enum for more information on the flags you can
@@ -2223,9 +2245,7 @@ QUrl QFileDialog::getOpenFileUrl(QWidget *parent,
     \a selectedFilter and \a filter may be empty strings. If you need multiple
     filters, separate them with ';;', for instance:
 
-    \code
-    "Images (*.png *.xpm *.jpg);;Text files (*.txt);;XML files (*.xml)"
-    \endcode
+    \snippet code/src_gui_dialogs_qfiledialog.cpp 14
 
     The dialog's caption is set to \a caption. If \a caption is not specified
     then a default caption will be used.
@@ -2339,9 +2359,7 @@ QList<QUrl> QFileDialog::getOpenFileUrls(QWidget *parent,
     parameters \a dir, \a selectedFilter, and \a filter may be empty strings.
     Multiple filters are separated with ';;'. For instance:
 
-    \code
-    "Images (*.png *.xpm *.jpg);;Text files (*.txt);;XML files (*.xml)"
-    \endcode
+    \snippet code/src_gui_dialogs_qfiledialog.cpp 14
 
     The \a options argument holds various options about how to run the dialog,
     see the QFileDialog::Option enum for more information on the flags you can
@@ -2723,7 +2741,7 @@ void QFileDialog::accept()
     }
 }
 
-#ifndef QT_NO_SETTINGS
+#if QT_CONFIG(settings)
 void QFileDialogPrivate::saveSettings()
 {
     Q_Q(QFileDialog);
@@ -2781,7 +2799,7 @@ bool QFileDialogPrivate::restoreFromSettings()
 
     return restoreWidgetState(history, settings.value(QLatin1String("sidebarWidth"), -1).toInt());
 }
-#endif // QT_NO_SETTINGS
+#endif // settings
 
 bool QFileDialogPrivate::restoreWidgetState(QStringList &history, int splitterPosition)
 {
@@ -2815,7 +2833,7 @@ bool QFileDialogPrivate::restoreWidgetState(QStringList &history, int splitterPo
 
     QList<QAction*> actions = headerView->actions();
     QAbstractItemModel *abstractModel = model;
-#ifndef QT_NO_PROXYMODEL
+#if QT_CONFIG(proxymodel)
     if (proxyModel)
         abstractModel = proxyModel;
 #endif
@@ -2848,13 +2866,17 @@ void QFileDialogPrivate::init(const QUrl &directory, const QString &nameFilter,
     q->setFileMode(QFileDialog::AnyFile);
     if (!nameFilter.isEmpty())
         q->setNameFilter(nameFilter);
+    // QTBUG-70798, prevent the default blocking the restore logic.
+    const bool dontStoreDir = !directory.isValid() && !lastVisitedDir()->isValid();
     q->setDirectoryUrl(workingDirectory(directory));
+    if (dontStoreDir)
+        lastVisitedDir()->clear();
     if (directory.isLocalFile())
         q->selectFile(initialSelection(directory));
     else
         q->selectUrl(directory);
 
-#ifndef QT_NO_SETTINGS
+#if QT_CONFIG(settings)
     // Try to restore from the FileDialog settings group; if it fails, fall back
     // to the pre-5.5 QByteArray serialized settings.
     if (!restoreFromSettings()) {
@@ -2984,7 +3006,7 @@ void QFileDialogPrivate::createWidgets()
                      q, SLOT(_q_showHeader(QAction*)));;
 
     QAbstractItemModel *abstractModel = model;
-#ifndef QT_NO_PROXYMODEL
+#if QT_CONFIG(proxymodel)
     if (proxyModel)
         abstractModel = proxyModel;
 #endif
@@ -3019,7 +3041,7 @@ void QFileDialogPrivate::createWidgets()
     createToolButtons();
     createMenuActions();
 
-#ifndef QT_NO_SETTINGS
+#if QT_CONFIG(settings)
     // Try to restore from the FileDialog settings group; if it fails, fall back
     // to the pre-5.5 QByteArray serialized settings.
     if (!restoreFromSettings()) {
@@ -3065,7 +3087,7 @@ void QFileDialogPrivate::_q_showHeader(QAction *action)
     qFileDialogUi->treeView->header()->setSectionHidden(actionGroup->actions().indexOf(action) + 1, !action->isChecked());
 }
 
-#ifndef QT_NO_PROXYMODEL
+#if QT_CONFIG(proxymodel)
 /*!
     \since 4.3
 
@@ -3143,7 +3165,7 @@ QAbstractProxyModel *QFileDialog::proxyModel() const
     Q_D(const QFileDialog);
     return d->proxyModel;
 }
-#endif // QT_NO_PROXYMODEL
+#endif // QT_CONFIG(proxymodel)
 
 /*!
     \internal

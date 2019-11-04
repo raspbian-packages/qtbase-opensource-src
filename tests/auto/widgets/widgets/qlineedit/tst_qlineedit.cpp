@@ -304,7 +304,7 @@ private slots:
     void QTBUG59957_clearButtonLeftmostAction();
     void QTBUG_60319_setInputMaskCheckImSurroundingText();
     void testQuickSelectionWithMouse();
-
+    void inputRejected();
 protected slots:
     void editingFinished();
 
@@ -2279,6 +2279,16 @@ void tst_QLineEdit::deleteSelectedText()
 
 }
 
+class ToUpperValidator : public QValidator
+{
+public:
+    ToUpperValidator() {}
+    State validate(QString &input, int &) const override
+    {
+        input = input.toUpper();
+        return QValidator::Acceptable;
+    }
+};
 
 void tst_QLineEdit::textChangedAndTextEdited()
 {
@@ -2320,6 +2330,23 @@ void tst_QLineEdit::textChangedAndTextEdited()
     QCOMPARE(edited_count, 0);
     QVERIFY(changed_string.isEmpty());
     QVERIFY(!changed_string.isNull());
+
+    changed_count = 0;
+    edited_count = 0;
+    changed_string.clear();
+
+    QScopedPointer<ToUpperValidator> validator(new ToUpperValidator());
+    testWidget->setValidator(validator.data());
+    testWidget->setText("foo");
+    QCOMPARE(changed_count, 1);
+    QCOMPARE(edited_count, 0);
+    QCOMPARE(changed_string, QLatin1String("FOO"));
+    testWidget->setCursorPosition(sizeof("foo"));
+    QTest::keyClick(testWidget, 'b');
+    QCOMPARE(changed_count, 2);
+    QCOMPARE(edited_count, 1);
+    QCOMPARE(changed_string, QLatin1String("FOOB"));
+    testWidget->setValidator(nullptr);
 }
 
 void tst_QLineEdit::onTextChanged(const QString &text)
@@ -2637,9 +2664,9 @@ void tst_QLineEdit::setValidator_QIntValidator_data()
             << 0
             << 100
             << QString("153")
-            << QString(useKeys ? "15" : "")
+            << QString("153")
             << bool(useKeys)
-            << bool(useKeys ? true : false)
+            << bool(false)
             << uint(QLineEdit::Normal);
         QTest::newRow(QString(inputMode + "range [-100,100] int '-153'").toLatin1())
             << -100
@@ -2660,7 +2687,7 @@ void tst_QLineEdit::setValidator_QIntValidator_data()
         QTest::newRow(QString(inputMode + "range [3,7] int '8'").toLatin1())
             << 3
             << 7
-            << QString("8")
+            << QString("")
             << QString("")
             << bool(useKeys)
             << bool(false)
@@ -3265,7 +3292,7 @@ void tst_QLineEdit::editInvalidText()
 {
     QLineEdit *testWidget = ensureTestWidget();
     testWidget->clear();
-    testWidget->setValidator(new QIntValidator(0, 120, 0));
+    testWidget->setValidator(new QIntValidator(0, 12, 0));
     testWidget->setText("1234");
 
     QVERIFY(!testWidget->hasAcceptableInput());
@@ -4424,10 +4451,11 @@ void tst_QLineEdit::clearButtonVisibleAfterSettingText_QTBUG_45518()
     QTRY_VERIFY(clearButton->opacity() > 0);
     QTRY_COMPARE(clearButton->cursor().shape(), Qt::ArrowCursor);
 
-    QTest::mouseClick(clearButton, Qt::LeftButton, 0, clearButton->rect().center());
+    QTest::mouseClick(clearButton, Qt::LeftButton, nullptr, clearButton->rect().center());
     QTRY_COMPARE(edit.text(), QString());
 
     QTRY_COMPARE(clearButton->opacity(), qreal(0));
+    QVERIFY(clearButton->isHidden());
     QTRY_COMPARE(clearButton->cursor().shape(), clearButton->parentWidget()->cursor().shape());
 
     edit.setClearButtonEnabled(false);
@@ -4726,6 +4754,9 @@ void tst_QLineEdit::testQuickSelectionWithMouse()
     QTest::mousePress(lineEdit.windowHandle(), Qt::LeftButton, Qt::NoModifier, center);
     QTest::mouseMove(lineEdit.windowHandle(), center + QPoint(20, 0));
     qCDebug(lcTests) << "Selected text:" << lineEdit.selectedText();
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "WinRT does not support QTest::mousePress/-Move", Abort);
+#endif
     QVERIFY(!lineEdit.selectedText().isEmpty());
     QVERIFY(!lineEdit.selectedText().endsWith(suffix));
 
@@ -4791,6 +4822,61 @@ void tst_QLineEdit::testQuickSelectionWithMouse()
     QTest::mousePress(lineEdit.windowHandle(), Qt::LeftButton, Qt::NoModifier, center);
     QTest::mouseMove(lineEdit.windowHandle(), center + QPoint(1, -offset));
     QVERIFY(lineEdit.selectedText().endsWith(suffix));
+}
+
+void tst_QLineEdit::inputRejected()
+{
+    QLineEdit *testWidget = ensureTestWidget();
+    QSignalSpy spyInputRejected(testWidget, SIGNAL(inputRejected()));
+
+    QTest::keyClicks(testWidget, "abcde");
+    QCOMPARE(spyInputRejected.count(), 0);
+    testWidget->setText("fghij");
+    QCOMPARE(spyInputRejected.count(), 0);
+    testWidget->insert("k");
+    QCOMPARE(spyInputRejected.count(), 0);
+
+    testWidget->clear();
+    testWidget->setMaxLength(5);
+    QTest::keyClicks(testWidget, "abcde");
+    QCOMPARE(spyInputRejected.count(), 0);
+    QTest::keyClicks(testWidget, "fgh");
+    QCOMPARE(spyInputRejected.count(), 3);
+#if QT_CONFIG(clipboard)
+    testWidget->clear();
+    spyInputRejected.clear();
+    QApplication::clipboard()->setText("ijklmno");
+    testWidget->paste();
+    // The first 5 characters are accepted, but
+    // the last 2 are not.
+    QCOMPARE(spyInputRejected.count(), 1);
+#endif
+
+    testWidget->setMaxLength(INT_MAX);
+    testWidget->clear();
+    spyInputRejected.clear();
+    QIntValidator intValidator(1, 100);
+    testWidget->setValidator(&intValidator);
+    QTest::keyClicks(testWidget, "11");
+    QCOMPARE(spyInputRejected.count(), 0);
+    QTest::keyClicks(testWidget, "a#");
+    QCOMPARE(spyInputRejected.count(), 2);
+#if QT_CONFIG(clipboard)
+    testWidget->clear();
+    spyInputRejected.clear();
+    QApplication::clipboard()->setText("a#");
+    testWidget->paste();
+    QCOMPARE(spyInputRejected.count(), 1);
+#endif
+
+    testWidget->clear();
+    testWidget->setValidator(0);
+    spyInputRejected.clear();
+    testWidget->setInputMask("999.999.999.999;_");
+    QTest::keyClicks(testWidget, "11");
+    QCOMPARE(spyInputRejected.count(), 0);
+    QTest::keyClicks(testWidget, "a#");
+    QCOMPARE(spyInputRejected.count(), 2);
 }
 
 QTEST_MAIN(tst_QLineEdit)

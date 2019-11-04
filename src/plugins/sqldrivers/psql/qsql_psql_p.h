@@ -92,6 +92,8 @@ public:
         Version9_5 = 21,
         Version9_6 = 22,
         Version10 = 23,
+        Version11 = 24,
+        Version12 = 25,
         UnknownLaterVersion = 100000
     };
 

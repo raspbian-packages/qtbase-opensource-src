@@ -170,18 +170,12 @@ QT_BEGIN_NAMESPACE
     will have appropriate stream operators declared as non-member of
     the class:
 
-    \code
-    QDataStream &operator<<(QDataStream &, const QXxx &);
-    QDataStream &operator>>(QDataStream &, QXxx &);
-    \endcode
+    \snippet code/src_corelib_serialization_qdatastream.cpp 0
 
     For example, here are the stream operators declared as non-members
     of the QImage class:
 
-    \code
-    QDataStream & operator<< (QDataStream& stream, const QImage& image);
-    QDataStream & operator>> (QDataStream& stream, QImage& image);
-    \endcode
+    \snippet code/src_corelib_serialization_qdatastream.cpp 1
 
     To see if your favorite Qt class has similar stream operators
     defined, check the \b {Related Non-Members} section of the
@@ -564,6 +558,7 @@ void QDataStream::setByteOrder(ByteOrder bo)
     \value Qt_5_9 Same as Qt_5_6
     \value Qt_5_10 Same as Qt_5_6
     \value Qt_5_11 Same as Qt_5_6
+    \value Qt_5_12 Version 18 (Qt 5.12)
     \omitvalue Qt_DefaultCompiledVersion
 
     \sa setVersion(), version()

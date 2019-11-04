@@ -336,12 +336,20 @@ QT_BEGIN_NAMESPACE
 class QSslSocketGlobalData
 {
 public:
-    QSslSocketGlobalData() : config(new QSslConfigurationPrivate) {}
+    QSslSocketGlobalData()
+        : config(new QSslConfigurationPrivate),
+          dtlsConfig(new QSslConfigurationPrivate)
+    {
+#if QT_CONFIG(dtls)
+        dtlsConfig->protocol = QSsl::DtlsV1_2OrLater;
+#endif // dtls
+    }
 
     QMutex mutex;
     QList<QSslCipher> supportedCiphers;
     QVector<QSslEllipticCurve> supportedEllipticCurves;
     QExplicitlySharedDataPointer<QSslConfigurationPrivate> config;
+    QExplicitlySharedDataPointer<QSslConfigurationPrivate> dtlsConfig;
 };
 Q_GLOBAL_STATIC(QSslSocketGlobalData, globalData)
 
@@ -371,7 +379,7 @@ QSslSocket::~QSslSocket()
     qCDebug(lcSsl) << "QSslSocket::~QSslSocket(), this =" << (void *)this;
 #endif
     delete d->plainSocket;
-    d->plainSocket = 0;
+    d->plainSocket = nullptr;
 }
 
 /*!
@@ -445,6 +453,12 @@ void QSslSocket::connectToHostEncrypted(const QString &hostName, quint16 port, O
         return;
     }
 
+    if (!supportsSsl()) {
+        qCWarning(lcSsl, "QSslSocket::connectToHostEncrypted: TLS initialization failed");
+        d->setErrorAndEmit(QAbstractSocket::SslInternalError, tr("TLS initialization failed"));
+        return;
+    }
+
     d->init();
     d->autoStartHandshake = true;
     d->initialized = true;
@@ -473,6 +487,12 @@ void QSslSocket::connectToHostEncrypted(const QString &hostName, quint16 port,
     if (d->state == ConnectedState || d->state == ConnectingState) {
         qCWarning(lcSsl,
                   "QSslSocket::connectToHostEncrypted() called when already connecting/connected");
+        return;
+    }
+
+    if (!supportsSsl()) {
+        qCWarning(lcSsl, "QSslSocket::connectToHostEncrypted: TLS initialization failed");
+        d->setErrorAndEmit(QAbstractSocket::SslInternalError, tr("TLS initialization failed"));
         return;
     }
 
@@ -1820,6 +1840,12 @@ void QSslSocket::startClientEncryption()
                   "QSslSocket::startClientEncryption: cannot start handshake when not connected");
         return;
     }
+
+    if (!supportsSsl()) {
+        qCWarning(lcSsl, "QSslSocket::startClientEncryption: TLS initialization failed");
+        d->setErrorAndEmit(QAbstractSocket::SslInternalError, tr("TLS initialization failed"));
+        return;
+    }
 #ifdef QSSLSOCKET_DEBUG
     qCDebug(lcSsl) << "QSslSocket::startClientEncryption()";
 #endif
@@ -1858,6 +1884,11 @@ void QSslSocket::startServerEncryption()
 #ifdef QSSLSOCKET_DEBUG
     qCDebug(lcSsl) << "QSslSocket::startServerEncryption()";
 #endif
+    if (!supportsSsl()) {
+        qCWarning(lcSsl, "QSslSocket::startServerEncryption: TLS initialization failed");
+        d->setErrorAndEmit(QAbstractSocket::SslInternalError, tr("TLS initialization failed"));
+        return;
+    }
     d->mode = SslServerMode;
     emit modeChanged(d->mode);
     d->startServerEncryption();
@@ -2049,9 +2080,9 @@ QSslSocketPrivate::QSslSocketPrivate()
     , connectionEncrypted(false)
     , shutdown(false)
     , ignoreAllSslErrors(false)
-    , readyReadEmittedPointer(0)
+    , readyReadEmittedPointer(nullptr)
     , allowRootCertOnDemandLoading(true)
-    , plainSocket(0)
+    , plainSocket(nullptr)
     , paused(false)
     , flushTriggered(false)
 {
@@ -2131,6 +2162,26 @@ void QSslSocketPrivate::setDefaultSupportedCiphers(const QList<QSslCipher> &ciph
 /*!
     \internal
 */
+void q_setDefaultDtlsCiphers(const QList<QSslCipher> &ciphers)
+{
+    QMutexLocker locker(&globalData()->mutex);
+    globalData()->dtlsConfig.detach();
+    globalData()->dtlsConfig->ciphers = ciphers;
+}
+
+/*!
+    \internal
+*/
+QList<QSslCipher> q_getDefaultDtlsCiphers()
+{
+    QSslSocketPrivate::ensureInitialized();
+    QMutexLocker locker(&globalData()->mutex);
+    return globalData()->dtlsConfig->ciphers;
+}
+
+/*!
+    \internal
+*/
 QVector<QSslEllipticCurve> QSslSocketPrivate::supportedEllipticCurves()
 {
     QSslSocketPrivate::ensureInitialized();
@@ -2145,6 +2196,7 @@ void QSslSocketPrivate::setDefaultSupportedEllipticCurves(const QVector<QSslElli
 {
     const QMutexLocker locker(&globalData()->mutex);
     globalData()->config.detach();
+    globalData()->dtlsConfig.detach();
     globalData()->supportedEllipticCurves = curves;
 }
 
@@ -2167,6 +2219,8 @@ void QSslSocketPrivate::setDefaultCaCertificates(const QList<QSslCertificate> &c
     QMutexLocker locker(&globalData()->mutex);
     globalData()->config.detach();
     globalData()->config->caCertificates = certs;
+    globalData()->dtlsConfig.detach();
+    globalData()->dtlsConfig->caCertificates = certs;
     // when the certificates are set explicitly, we do not want to
     // load the system certificates on demand
     s_loadRootCertsOnDemand = false;
@@ -2186,6 +2240,8 @@ bool QSslSocketPrivate::addDefaultCaCertificates(const QString &path, QSsl::Enco
     QMutexLocker locker(&globalData()->mutex);
     globalData()->config.detach();
     globalData()->config->caCertificates += certs;
+    globalData()->dtlsConfig.detach();
+    globalData()->dtlsConfig->caCertificates += certs;
     return true;
 }
 
@@ -2198,6 +2254,8 @@ void QSslSocketPrivate::addDefaultCaCertificate(const QSslCertificate &cert)
     QMutexLocker locker(&globalData()->mutex);
     globalData()->config.detach();
     globalData()->config->caCertificates += cert;
+    globalData()->dtlsConfig.detach();
+    globalData()->dtlsConfig->caCertificates += cert;
 }
 
 /*!
@@ -2209,6 +2267,8 @@ void QSslSocketPrivate::addDefaultCaCertificates(const QList<QSslCertificate> &c
     QMutexLocker locker(&globalData()->mutex);
     globalData()->config.detach();
     globalData()->config->caCertificates += certs;
+    globalData()->dtlsConfig.detach();
+    globalData()->dtlsConfig->caCertificates += certs;
 }
 
 /*!
@@ -2261,6 +2321,33 @@ void QSslConfigurationPrivate::deepCopyDefaultConfiguration(QSslConfigurationPri
     ptr->sslOptions = global->sslOptions;
     ptr->ellipticCurves = global->ellipticCurves;
     ptr->backendConfig = global->backendConfig;
+#if QT_CONFIG(dtls)
+    ptr->dtlsCookieEnabled = global->dtlsCookieEnabled;
+#endif
+}
+
+/*!
+    \internal
+*/
+QSslConfiguration QSslConfigurationPrivate::defaultDtlsConfiguration()
+{
+    QSslSocketPrivate::ensureInitialized();
+    QMutexLocker locker(&globalData()->mutex);
+
+    return QSslConfiguration(globalData()->dtlsConfig.data());
+}
+
+/*!
+    \internal
+*/
+void QSslConfigurationPrivate::setDefaultDtlsConfiguration(const QSslConfiguration &configuration)
+{
+    QSslSocketPrivate::ensureInitialized();
+    QMutexLocker locker(&globalData()->mutex);
+    if (globalData()->dtlsConfig == configuration.d)
+        return;                 // nothing to do
+
+    globalData()->dtlsConfig = const_cast<QSslConfigurationPrivate*>(configuration.d.constData());
 }
 
 /*!
@@ -2307,8 +2394,8 @@ void QSslSocketPrivate::createPlainSocket(QIODevice::OpenMode openMode)
     q->connect(plainSocket, SIGNAL(bytesWritten(qint64)),
                q, SLOT(_q_bytesWrittenSlot(qint64)),
                Qt::DirectConnection);
-    q->connect(plainSocket, SIGNAL(channelBytesWritten(int, qint64)),
-               q, SLOT(_q_channelBytesWrittenSlot(int, qint64)),
+    q->connect(plainSocket, SIGNAL(channelBytesWritten(int,qint64)),
+               q, SLOT(_q_channelBytesWrittenSlot(int,qint64)),
                Qt::DirectConnection);
     q->connect(plainSocket, SIGNAL(readChannelFinished()),
                q, SLOT(_q_readChannelFinishedSlot()),

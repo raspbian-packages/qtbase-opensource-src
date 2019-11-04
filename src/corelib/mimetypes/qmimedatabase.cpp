@@ -149,7 +149,9 @@ void QMimeDatabasePrivate::loadProviders()
 
 QVector<QMimeProviderBase *> QMimeDatabasePrivate::providers()
 {
+#ifndef Q_OS_WASM // stub implementation always returns true
     Q_ASSERT(!mutex.tryLock()); // caller should have locked mutex
+#endif
     if (m_providers.isEmpty()) {
         loadProviders();
         m_lastCheck.start();
@@ -380,9 +382,12 @@ QMimeType QMimeDatabasePrivate::mimeTypeForFileNameAndData(const QString &fileNa
 
         // Disambiguate conflicting extensions (if magic matching found something)
         if (candidateByData.isValid() && magicAccuracy > 0) {
-            // "for glob_match in glob_matches:"
-            // "if glob_match is subclass or equal to sniffed_type, use glob_match"
             const QString sniffedMime = candidateByData.name();
+            // If the sniffedMime matches a glob match, use it
+            if (candidatesByName.m_matchingMimeTypes.contains(sniffedMime)) {
+                *accuracyPtr = 100;
+                return candidateByData;
+            }
             for (const QString &m : qAsConst(candidatesByName.m_matchingMimeTypes)) {
                 if (inherits(m, sniffedMime)) {
                     // We have magic + pattern pointing to this, so it's a pretty good match
@@ -446,25 +451,14 @@ bool QMimeDatabasePrivate::inherits(const QString &mime, const QString &parent)
     Applications which want to define custom MIME types need to install an
     XML file into the locations searched for MIME definitions.
     These locations can be queried with
-    \code
-    QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, QLatin1String("mime/packages"),
-                              QStandardPaths::LocateDirectory);
-    \endcode
+    \snippet code/src_corelib_mimetype_qmimedatabase.cpp 1
     On a typical Unix system, this will be /usr/share/mime/packages/, but it is also
     possible to extend the list of directories by setting the environment variable
     \c XDG_DATA_DIRS. For instance adding /opt/myapp/share to \c XDG_DATA_DIRS will result
     in /opt/myapp/share/mime/packages/ being searched for MIME definitions.
 
     Here is an example of MIME XML:
-    \code
-    <?xml version="1.0" encoding="UTF-8"?>
-    <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
-      <mime-type type="application/vnd.qt.qmakeprofile">
-        <comment xml:lang="en">Qt qmake Profile</comment>
-        <glob pattern="*.pro" weight="50"/>
-      </mime-type>
-    </mime-info>
-    \endcode
+    \snippet code/src_corelib_mimetype_qmimedatabase.cpp 2
 
     For more details about the syntax of XML MIME definitions, including defining
     "magic" in order to detect MIME types based on data as well, read the

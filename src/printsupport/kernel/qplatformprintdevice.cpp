@@ -50,23 +50,6 @@ QT_BEGIN_NAMESPACE
 
 #ifndef QT_NO_PRINTER
 
-QPlatformPrintDevice::QPlatformPrintDevice()
-    : m_isRemote(false),
-      m_supportsMultipleCopies(false),
-      m_supportsCollateCopies(false),
-      m_havePageSizes(false),
-      m_supportsCustomPageSizes(false),
-      m_haveResolutions(false),
-      m_haveInputSlots(false),
-      m_haveOutputBins(false),
-      m_haveDuplexModes(false),
-      m_haveColorModes(false)
-#if QT_CONFIG(mimetype)
-    , m_haveMimeTypes(false)
-#endif
-{
-}
-
 QPlatformPrintDevice::QPlatformPrintDevice(const QString &id)
     : m_id(id),
       m_isRemote(false),
@@ -247,6 +230,10 @@ QPageSize QPlatformPrintDevice::supportedPageSize(const QSizeF &size, QPageSize:
 
 QPageSize QPlatformPrintDevice::supportedPageSizeMatch(const QPageSize &pageSize) const
 {
+    // If it's a known page size, just return itself
+    if (m_pageSizes.contains(pageSize))
+        return pageSize;
+
     // Try to find a supported page size based on point size
     for (const QPageSize &ps : m_pageSizes) {
         if (ps.sizePoints() == pageSize.sizePoints())

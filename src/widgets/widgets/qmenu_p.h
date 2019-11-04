@@ -343,6 +343,7 @@ public:
     void updateActionRects(const QRect &screen) const;
     QRect popupGeometry() const;
     QRect popupGeometry(int screen) const;
+    bool useFullScreenForPopup() const;
     int getLastVisibleAction() const;
 
     //selection
@@ -456,7 +457,6 @@ public:
 
     bool hasMouseMoved(const QPoint &globalPos);
 
-    void adjustMenuScreen(const QPoint &p);
     void updateLayoutDirection();
 
     QPointer<QPlatformMenu> platformMenu;
@@ -509,6 +509,8 @@ public:
     bool tearoffHighlighted : 1;
     //menu fading/scrolling effects
     bool doChildEffects : 1;
+
+    int popupScreen = -1;
 };
 
 QT_END_NAMESPACE

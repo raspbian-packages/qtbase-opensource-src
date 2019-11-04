@@ -747,6 +747,77 @@ static constexpr inline bool hasFastInterpolate4() { return false; }
 
 #endif
 
+static inline QRgba64 multiplyAlpha256(QRgba64 rgba64, uint alpha256)
+{
+    return QRgba64::fromRgba64((rgba64.red()   * alpha256) >> 8,
+                               (rgba64.green() * alpha256) >> 8,
+                               (rgba64.blue()  * alpha256) >> 8,
+                               (rgba64.alpha() * alpha256) >> 8);
+}
+static inline QRgba64 interpolate256(QRgba64 x, uint alpha1, QRgba64 y, uint alpha2)
+{
+    return QRgba64::fromRgba64(multiplyAlpha256(x, alpha1) + multiplyAlpha256(y, alpha2));
+}
+
+#ifdef __SSE2__
+static inline QRgba64 interpolate_4_pixels_rgb64(const QRgba64 t[], const QRgba64 b[], uint distx, uint disty)
+{
+    __m128i vt = _mm_loadu_si128((const __m128i*)t);
+    if (disty) {
+       __m128i vb = _mm_loadu_si128((const __m128i*)b);
+        vt = _mm_mulhi_epu16(vt, _mm_set1_epi16(0x10000 - disty));
+        vb = _mm_mulhi_epu16(vb, _mm_set1_epi16(disty));
+        vt = _mm_add_epi16(vt, vb);
+    }
+    if (distx) {
+        const __m128i vdistx = _mm_shufflelo_epi16(_mm_cvtsi32_si128(distx), _MM_SHUFFLE(0, 0, 0, 0));
+        const __m128i vidistx = _mm_shufflelo_epi16(_mm_cvtsi32_si128(0x10000 - distx), _MM_SHUFFLE(0, 0, 0, 0));
+        vt = _mm_mulhi_epu16(vt, _mm_unpacklo_epi64(vidistx, vdistx));
+        vt = _mm_add_epi16(vt, _mm_srli_si128(vt, 8));
+    }
+#ifdef Q_PROCESSOR_X86_64
+    return QRgba64::fromRgba64(_mm_cvtsi128_si64(vt));
+#else
+    QRgba64 out;
+    _mm_storel_epi64((__m128i*)&out, vt);
+    return out;
+#endif // Q_PROCESSOR_X86_64
+}
+#elif defined(__ARM_NEON__)
+static inline QRgba64 interpolate_4_pixels_rgb64(const QRgba64 t[], const QRgba64 b[], uint distx, uint disty)
+{
+    uint64x1x2_t vt = vld2_u64(reinterpret_cast<const uint64_t *>(t));
+    if (disty) {
+        uint64x1x2_t vb = vld2_u64(reinterpret_cast<const uint64_t *>(b));
+        uint32x4_t vt0 = vmull_n_u16(vreinterpret_u16_u64(vt.val[0]), 0x10000 - disty);
+        uint32x4_t vt1 = vmull_n_u16(vreinterpret_u16_u64(vt.val[1]), 0x10000 - disty);
+        vt0 = vmlal_n_u16(vt0, vreinterpret_u16_u64(vb.val[0]), disty);
+        vt1 = vmlal_n_u16(vt1, vreinterpret_u16_u64(vb.val[1]), disty);
+        vt.val[0] = vreinterpret_u64_u16(vshrn_n_u32(vt0, 16));
+        vt.val[1] = vreinterpret_u64_u16(vshrn_n_u32(vt1, 16));
+    }
+    if (distx) {
+        uint32x4_t vt0 = vmull_n_u16(vreinterpret_u16_u64(vt.val[0]), 0x10000 - distx);
+        vt0 = vmlal_n_u16(vt0, vreinterpret_u16_u64(vt.val[1]), distx);
+        vt.val[0] = vreinterpret_u64_u16(vshrn_n_u32(vt0, 16));
+    }
+    QRgba64 out;
+    vst1_u64(reinterpret_cast<uint64_t *>(&out), vt.val[0]);
+    return out;
+}
+#else
+static inline QRgba64 interpolate_4_pixels_rgb64(const QRgba64 t[], const QRgba64 b[], uint distx, uint disty)
+{
+    const uint dx = distx>>8;
+    const uint dy = disty>>8;
+    const uint idx = 256 - dx;
+    const uint idy = 256 - dy;
+    QRgba64 xtop = interpolate256(t[0], idx, t[1], dx);
+    QRgba64 xbot = interpolate256(b[0], idx, b[1], dx);
+    return interpolate256(xtop, idy, xbot, dy);
+}
+#endif // __SSE2__
+
 #if Q_BYTE_ORDER == Q_BIG_ENDIAN
 static Q_ALWAYS_INLINE quint32 RGBA2ARGB(quint32 x) {
     quint32 rgb = x >> 8;
@@ -798,6 +869,7 @@ static Q_ALWAYS_INLINE uint qAlphaRgb30(uint c)
 }
 
 struct quint24 {
+    quint24() = default;
     quint24(uint value);
     operator uint() const;
     uchar data[3];
@@ -1142,6 +1214,8 @@ static Q_ALWAYS_INLINE const uint *qt_convertRGBA8888ToARGB32PM(uint *buffer, co
     return buffer;
 }
 
+template<bool RGBA> void qt_convertRGBA64ToARGB32(uint *dst, const QRgba64 *src, int count);
+
 const uint qt_bayer_matrix[16][16] = {
     { 0x1, 0xc0, 0x30, 0xf0, 0xc, 0xcc, 0x3c, 0xfc,
       0x3, 0xc3, 0x33, 0xf3, 0xf, 0xcf, 0x3f, 0xff},
@@ -1205,15 +1279,43 @@ inline uint comp_func_Plus_one_pixel(uint d, const uint s)
 #undef MIX
 #undef AMIX
 
+// must be multiple of 4 for easier SIMD implementations
+static Q_CONSTEXPR int BufferSize = 2048;
+
+// A buffer of intermediate results used by simple bilinear scaling.
+struct IntermediateBuffer
+{
+    // The idea is first to do the interpolation between the row s1 and the row s2
+    // into this intermediate buffer, then later interpolate between two pixel of this buffer.
+    //
+    // buffer_rb is a buffer of red-blue component of the pixel, in the form 0x00RR00BB
+    // buffer_ag is the alpha-green component of the pixel, in the form 0x00AA00GG
+    // +1 for the last pixel to interpolate with, and +1 for rounding errors.
+    quint32 buffer_rb[BufferSize+2];
+    quint32 buffer_ag[BufferSize+2];
+};
+
 struct QDitherInfo {
     int x;
     int y;
 };
 
-typedef const uint *(QT_FASTCALL *ConvertFunc)(uint *buffer, const uint *src, int count,
-                                               const QVector<QRgb> *clut, QDitherInfo *dither);
-typedef const QRgba64 *(QT_FASTCALL *ConvertFunc64)(QRgba64 *buffer, const uint *src, int count,
-                                                    const QVector<QRgb> *clut, QDitherInfo *dither);
+typedef const uint *(QT_FASTCALL *FetchAndConvertPixelsFunc)(uint *buffer, const uchar *src, int index, int count,
+                                                             const QVector<QRgb> *clut, QDitherInfo *dither);
+typedef void (QT_FASTCALL *ConvertAndStorePixelsFunc)(uchar *dest, const uint *src, int index, int count,
+                                                      const QVector<QRgb> *clut, QDitherInfo *dither);
+
+typedef const QRgba64 *(QT_FASTCALL *FetchAndConvertPixelsFunc64)(QRgba64 *buffer, const uchar *src, int index, int count,
+                                                                 const QVector<QRgb> *clut, QDitherInfo *dither);
+typedef void (QT_FASTCALL *ConvertAndStorePixelsFunc64)(uchar *dest, const QRgba64 *src, int index, int count,
+                                                        const QVector<QRgb> *clut, QDitherInfo *dither);
+
+typedef void (QT_FASTCALL *ConvertFunc)(uint *buffer, int count, const QVector<QRgb> *clut);
+typedef void (QT_FASTCALL *Convert64Func)(quint64 *buffer, int count, const QVector<QRgb> *clut);
+typedef const QRgba64 *(QT_FASTCALL *ConvertTo64Func)(QRgba64 *buffer, const uint *src, int count,
+                                                      const QVector<QRgb> *clut, QDitherInfo *dither);
+typedef void (QT_FASTCALL *RbSwapFunc)(uchar *dst, const uchar *src, int count);
+
 
 struct QPixelLayout
 {
@@ -1226,35 +1328,27 @@ struct QPixelLayout
         BPP16,
         BPP24,
         BPP32,
+        BPP64,
         BPPCount
     };
 
-    // All numbers in bits.
-    uchar redWidth;
-    uchar redShift;
-    uchar greenWidth;
-    uchar greenShift;
-    uchar blueWidth;
-    uchar blueShift;
-    uchar alphaWidth;
-    uchar alphaShift;
+    bool hasAlphaChannel;
     bool premultiplied;
     BPP bpp;
+    RbSwapFunc rbSwap;
     ConvertFunc convertToARGB32PM;
-    ConvertFunc convertFromARGB32PM;
-    ConvertFunc convertFromRGB32;
-    ConvertFunc64 convertToARGB64PM;
+    ConvertTo64Func convertToRGBA64PM;
+    FetchAndConvertPixelsFunc fetchToARGB32PM;
+    FetchAndConvertPixelsFunc64 fetchToRGBA64PM;
+    ConvertAndStorePixelsFunc storeFromARGB32PM;
+    ConvertAndStorePixelsFunc storeFromRGB32;
 };
 
-typedef const uint *(QT_FASTCALL *FetchPixelsFunc)(uint *buffer, const uchar *src, int index, int count);
-typedef void (QT_FASTCALL *StorePixelsFunc)(uchar *dest, const uint *src, int index, int count);
+extern ConvertAndStorePixelsFunc64 qStoreFromRGBA64PM[QImage::NImageFormats];
 
 extern QPixelLayout qPixelLayouts[QImage::NImageFormats];
-extern const FetchPixelsFunc qFetchPixels[QPixelLayout::BPPCount];
-extern StorePixelsFunc qStorePixels[QPixelLayout::BPPCount];
 
 extern MemRotateFunc qMemRotateFunctions[QPixelLayout::BPPCount][3];
-
 
 QT_END_NAMESPACE
 

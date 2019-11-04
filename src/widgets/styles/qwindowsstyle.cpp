@@ -842,17 +842,19 @@ void QWindowsStyle::drawPrimitive(PrimitiveElement pe, const QStyleOption *opt, 
                         : opt->palette.text().color());
             if (opt->state & State_NoChange)
                 p->setBrush(opt->palette.brush(QPalette::Button));
-            p->drawRect(opt->rect.x() + 1, opt->rect.y() + 1, 11, 11);
+            p->drawRect(opt->rect.x() + 1, opt->rect.y() + 1, opt->rect.width() - 2, opt->rect.height() - 2);
         }
 #endif // QT_CONFIG(itemviews)
         if (!(opt->state & State_Off)) {
             QPointF  points[6];
-            points[0] = { opt->rect.x() + QStyleHelper::dpiScaled(3.5), opt->rect.y() + QStyleHelper::dpiScaled(5.5) };
-            points[1] = { points[0].x(), points[0].y() + QStyleHelper::dpiScaled(2) };
-            points[2] = { points[1].x() + QStyleHelper::dpiScaled(2), points[1].y() + QStyleHelper::dpiScaled(2) };
-            points[3] = { points[2].x() + QStyleHelper::dpiScaled(4), points[2].y() - QStyleHelper::dpiScaled(4) };
-            points[4] = { points[3].x(), points[3].y() - QStyleHelper::dpiScaled(2) };
-            points[5] = { points[4].x() - QStyleHelper::dpiScaled(4), points[4].y() + QStyleHelper::dpiScaled(4) };
+            qreal scaleh = opt->rect.width() / 12.0;
+            qreal scalev = opt->rect.height() / 12.0;
+            points[0] = { opt->rect.x() + 3.5 * scaleh, opt->rect.y() + 5.5 * scalev };
+            points[1] = { points[0].x(),                points[0].y() + 2 * scalev };
+            points[2] = { points[1].x() + 2 * scaleh,   points[1].y() + 2 * scalev };
+            points[3] = { points[2].x() + 4 * scaleh,   points[2].y() - 4 * scalev };
+            points[4] = { points[3].x(),                points[3].y() - 2 * scalev };
+            points[5] = { points[4].x() - 4 * scaleh,   points[4].y() + 4 * scalev };
             p->setPen(QPen(opt->palette.text().color(), 0));
             p->setBrush(opt->palette.text().color());
             p->drawPolygon(points, 6);
@@ -1150,9 +1152,6 @@ void QWindowsStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPai
                     pixmap = menuitem->icon.pixmap(proxy()->pixelMetric(PM_SmallIconSize, opt, widget), mode);
                 const int pixw = pixmap.width() / pixmap.devicePixelRatio();
                 const int pixh = pixmap.height() / pixmap.devicePixelRatio();
-                if (act && !dis && !checked)
-                    qDrawShadePanel(p, vCheckRect,  menuitem->palette, false, 1,
-                                    &menuitem->palette.brush(QPalette::Button));
                 QRect pmr(0, 0, pixw, pixh);
                 pmr.moveCenter(vCheckRect.center());
                 p->setPen(menuitem->palette.text().color());

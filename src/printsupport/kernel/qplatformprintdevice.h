@@ -1,6 +1,7 @@
 /****************************************************************************
 **
 ** Copyright (C) 2014 John Layt <jlayt@kde.org>
+** Copyright (C) 2018 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtPrintSupport module of the Qt Toolkit.
@@ -71,8 +72,7 @@ class Q_PRINTSUPPORT_EXPORT QPlatformPrintDevice
 {
     Q_DISABLE_COPY(QPlatformPrintDevice)
 public:
-    QPlatformPrintDevice();
-    explicit QPlatformPrintDevice(const QString &id);
+    explicit QPlatformPrintDevice(const QString &id = QString());
     virtual ~QPlatformPrintDevice();
 
     virtual QString id() const;
@@ -154,16 +154,16 @@ protected:
 
     bool m_isRemote;
 
-    bool m_supportsMultipleCopies;
-    bool m_supportsCollateCopies;
+    mutable bool m_supportsMultipleCopies;
+    mutable bool m_supportsCollateCopies;
 
     mutable bool m_havePageSizes;
     mutable QList<QPageSize> m_pageSizes;
 
-    bool m_supportsCustomPageSizes;
+    mutable bool m_supportsCustomPageSizes;
 
-    QSize m_minimumPhysicalPageSize;
-    QSize m_maximumPhysicalPageSize;
+    mutable QSize m_minimumPhysicalPageSize;
+    mutable QSize m_maximumPhysicalPageSize;
 
     mutable bool m_haveResolutions;
     mutable QList<int> m_resolutions;

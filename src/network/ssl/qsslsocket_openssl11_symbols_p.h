@@ -105,6 +105,8 @@ ASN1_TIME *q_X509_getm_notAfter(X509 *a);
 long q_X509_get_version(X509 *a);
 EVP_PKEY *q_X509_get_pubkey(X509 *a);
 void q_X509_STORE_set_verify_cb(X509_STORE *ctx, X509_STORE_CTX_verify_cb verify_cb);
+int q_X509_STORE_set_ex_data(X509_STORE *ctx, int idx, void *data);
+void *q_X509_STORE_get_ex_data(X509_STORE *r, int idx);
 STACK_OF(X509) *q_X509_STORE_CTX_get0_chain(X509_STORE_CTX *ctx);
 void q_DH_get0_pqg(const DH *dh, const BIGNUM **p, const BIGNUM **q, const BIGNUM **g);
 int q_DH_bits(DH *dh);
@@ -128,11 +130,60 @@ long q_OpenSSL_version_num();
 const char *q_OpenSSL_version(int type);
 
 unsigned long q_SSL_SESSION_get_ticket_lifetime_hint(const SSL_SESSION *session);
+unsigned long q_SSL_set_options(SSL *s, unsigned long op);
+
+#ifdef TLS1_3_VERSION
+int q_SSL_CTX_set_ciphersuites(SSL_CTX *ctx, const char *str);
+#endif
+
+#if QT_CONFIG(dtls)
+// Functions and types required for DTLS support:
+extern "C"
+{
+
+typedef int (*CookieVerifyCallback)(SSL *, const unsigned char *, unsigned);
+typedef int (*DgramWriteCallback) (BIO *, const char *, int);
+typedef int (*DgramReadCallback) (BIO *, char *, int);
+typedef int (*DgramPutsCallback) (BIO *, const char *);
+typedef long (*DgramCtrlCallback) (BIO *, int, long, void *);
+typedef int (*DgramCreateCallback) (BIO *);
+typedef int (*DgramDestroyCallback) (BIO *);
+
+}
+
+int q_DTLSv1_listen(SSL *s, BIO_ADDR *client);
+BIO_ADDR *q_BIO_ADDR_new();
+void q_BIO_ADDR_free(BIO_ADDR *ap);
+
+// API we need for a custom dgram BIO:
+
+BIO_METHOD *q_BIO_meth_new(int type, const char *name);
+void q_BIO_meth_free(BIO_METHOD *biom);
+int q_BIO_meth_set_write(BIO_METHOD *biom, DgramWriteCallback);
+int q_BIO_meth_set_read(BIO_METHOD *biom, DgramReadCallback);
+int q_BIO_meth_set_puts(BIO_METHOD *biom, DgramPutsCallback);
+int q_BIO_meth_set_ctrl(BIO_METHOD *biom, DgramCtrlCallback);
+int q_BIO_meth_set_create(BIO_METHOD *biom, DgramCreateCallback);
+int q_BIO_meth_set_destroy(BIO_METHOD *biom, DgramDestroyCallback);
+
+#endif // dtls
+
+void q_BIO_set_data(BIO *a, void *ptr);
+void *q_BIO_get_data(BIO *a);
+void q_BIO_set_init(BIO *a, int init);
+int q_BIO_get_shutdown(BIO *a);
+void q_BIO_set_shutdown(BIO *a, int shut);
 
 #define q_SSL_CTX_set_min_proto_version(ctx, version) \
         q_SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, version, nullptr)
 
 #define q_SSL_CTX_set_max_proto_version(ctx, version) \
         q_SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MAX_PROTO_VERSION, version, nullptr)
+
+extern "C" {
+typedef int (*q_SSL_psk_use_session_cb_func_t)(SSL *, const EVP_MD *, const unsigned char **, size_t *,
+                                               SSL_SESSION **);
+}
+void q_SSL_set_psk_use_session_callback(SSL *s, q_SSL_psk_use_session_cb_func_t);
 
 #endif

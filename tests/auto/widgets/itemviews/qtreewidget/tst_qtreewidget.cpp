@@ -160,6 +160,7 @@ private slots:
     void task20345_sortChildren();
     void getMimeDataWithInvalidItem();
     void testVisualItemRect();
+    void reparentHiddenItem();
 
 public slots:
     void itemSelectionChanged();
@@ -1938,23 +1939,38 @@ void tst_QTreeWidget::setData()
     }
 }
 
+class QTreeWidgetDataChanged : public QTreeWidget
+{
+    Q_OBJECT
+public:
+    using QTreeWidget::QTreeWidget;
+
+    void dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles) override
+    {
+        QTreeWidget::dataChanged(topLeft, bottomRight, roles);
+        currentRoles = roles;
+    }
+    QVector<int> currentRoles;
+};
+
 void tst_QTreeWidget::itemData()
 {
-    QTreeWidget widget;
+    QTreeWidgetDataChanged widget;
     QTreeWidgetItem item(&widget);
     widget.setColumnCount(2);
     item.setFlags(item.flags() | Qt::ItemIsEditable);
     item.setData(0, Qt::DisplayRole,  QString("0"));
+    QCOMPARE(widget.currentRoles, QVector<int>({Qt::DisplayRole, Qt::EditRole}));
     item.setData(0, Qt::CheckStateRole, Qt::PartiallyChecked);
-    item.setData(0, Qt::UserRole + 0, QString("1"));
-    item.setData(0, Qt::UserRole + 1, QString("2"));
-    item.setData(0, Qt::UserRole + 2, QString("3"));
-    item.setData(0, Qt::UserRole + 3, QString("4"));
-
+    QCOMPARE(widget.currentRoles, {Qt::CheckStateRole});
+    for (int i = 0; i < 4; ++i) {
+        item.setData(0, Qt::UserRole + i, QString::number(i + 1));
+        QCOMPARE(widget.currentRoles, {Qt::UserRole + i});
+    }
     QMap<int, QVariant> flags = widget.model()->itemData(widget.model()->index(0, 0));
     QCOMPARE(flags.count(), 6);
-    QCOMPARE(flags[Qt::UserRole + 0].toString(), QString("1"));
-
+    for (int i = 0; i < 4; ++i)
+        QCOMPARE(flags[Qt::UserRole + i].toString(), QString::number(i + 1));
     flags = widget.model()->itemData(widget.model()->index(0, 1));
     QCOMPARE(flags.count(), 0);
 }
@@ -3352,6 +3368,7 @@ void tst_QTreeWidget::setChildIndicatorPolicy()
     treeWidget.setItemDelegate(&delegate);
     treeWidget.show();
     QVERIFY(QTest::qWaitForWindowExposed(&treeWidget));
+    QCoreApplication::processEvents(); // Process all queued paint events
 
     QTreeWidgetItem *item = new QTreeWidgetItem(QStringList("Hello"));
     treeWidget.insertTopLevelItem(0, item);
@@ -3412,8 +3429,9 @@ void tst_QTreeWidget::taskQTBUG_34717_collapseAtBottom()
 
 void tst_QTreeWidget::task20345_sortChildren()
 {
-    if (!QGuiApplication::platformName().compare(QLatin1String("wayland"), Qt::CaseInsensitive))
-        QSKIP("Wayland: This causes a crash triggered by setVisible(false)");
+    if (!QGuiApplication::platformName().compare(QLatin1String("wayland"), Qt::CaseInsensitive)
+        || !QGuiApplication::platformName().compare(QLatin1String("winrt"), Qt::CaseInsensitive))
+        QSKIP("Wayland/WinRT: This causes a crash triggered by setVisible(false)");
 
     // This test case is considered successful if it is executed (no crash in sorting)
     QTreeWidget tw;
@@ -3481,6 +3499,35 @@ void tst_QTreeWidget::testVisualItemRect()
     tw.hideColumn(0);
     r = tw.visualItemRect(item);
     QCOMPARE(r.width(), sectionSize);
+}
+
+void tst_QTreeWidget::reparentHiddenItem()
+{
+    QTreeWidgetItem *parent = new QTreeWidgetItem(testWidget);
+    parent->setText(0, "parent");
+    QTreeWidgetItem *otherParent = new QTreeWidgetItem(testWidget);
+    otherParent->setText(0, "other parent");
+    QTreeWidgetItem *child = new QTreeWidgetItem(parent);
+    child->setText(0, "child");
+    QTreeWidgetItem *grandChild = new QTreeWidgetItem(child);
+    grandChild->setText(0, "grandchild");
+    QVERIFY(child->parent());
+    QVERIFY(grandChild->parent());
+
+    testWidget->expandItem(parent);
+    testWidget->expandItem(otherParent);
+    testWidget->expandItem(child);
+
+    QVERIFY(!parent->isHidden());
+    QVERIFY(!child->isHidden());
+    QVERIFY(!grandChild->isHidden());
+
+    grandChild->setHidden(true);
+
+    QVERIFY(grandChild->isHidden());
+    parent->removeChild(child);
+    otherParent->addChild(child);
+    QVERIFY(grandChild->isHidden());
 }
 
 QTEST_MAIN(tst_QTreeWidget)

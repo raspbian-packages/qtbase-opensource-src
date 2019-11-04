@@ -43,7 +43,7 @@
 #include <QtCore/qt_windows.h>
 
 #include <QtGui/private/qinternalmimedata_p.h>
-#include <QtCore/QVariant>
+#include <QtCore/qvariant.h>
 
 QT_BEGIN_NAMESPACE
 

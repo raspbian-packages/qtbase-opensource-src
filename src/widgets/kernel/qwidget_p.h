@@ -181,6 +181,7 @@ struct QTLWExtra {
     QRect frameStrut;
     QRect normalGeometry; // used by showMin/maximized/FullScreen
     Qt::WindowFlags savedFlags; // Save widget flags while showing fullscreen
+    // ### TODO replace initialScreenIndex with QScreen *, in case the screens change at runtime
     int initialScreenIndex; // Screen number when passing a QDesktop[Screen]Widget as parent.
 
     QVector<QPlatformTextureList *> widgetTextures;
@@ -190,7 +191,6 @@ struct QTLWExtra {
     uint posIncludesFrame : 1;
     uint sizeAdjusted : 1;
     uint inTopLevelResize : 1;
-    uint inRepaint : 1;
     uint embedded : 1;
 
     // *************************** Platform specific values (bit fields first) **********
@@ -352,9 +352,12 @@ public:
     void update(T t);
 
     void init(QWidget *desktopWidget, Qt::WindowFlags f);
-    void create_sys(WId window, bool initializeWindow, bool destroyOldWindow);
+    void create();
     void createRecursively();
     void createWinId();
+
+    bool setScreenForPoint(const QPoint &pos);
+    bool setScreen(QScreen *screen);
 
     void createTLExtra();
     void createExtra();
@@ -382,10 +385,11 @@ public:
 
     void updateFont(const QFont &);
     inline void setFont_helper(const QFont &font) {
-        if (data.fnt.resolve() == font.resolve() && data.fnt == font)
+        if (directFontResolveMask == font.resolve() && data.fnt == font)
             return;
         updateFont(font);
     }
+    QFont localFont() const;
     void resolveFont();
     QFont naturalWidgetFont(uint inheritedMask) const;
 
@@ -395,7 +399,7 @@ public:
     void setLocale_helper(const QLocale &l, bool forceUpdate = false);
     void resolveLocale();
 
-    void setStyle_helper(QStyle *newStyle, bool propagate, bool metalHack = false);
+    void setStyle_helper(QStyle *newStyle, bool propagate);
     void inheritStyle();
 
     void setUpdatesEnabled_helper(bool );
@@ -453,7 +457,7 @@ public:
     // ### Qt 4.6: Merge into a template function (after MSVC isn't supported anymore).
     void invalidateBuffer(const QRegion &);
     void invalidateBuffer(const QRect &);
-    bool isOverlapped(const QRect&) const;
+    QRegion overlappedRegion(const QRect &rect, bool breakAfterFirst = false) const;
     void syncBackingStore();
     void syncBackingStore(const QRegion &region);
 
@@ -481,9 +485,9 @@ public:
     void hide_sys();
     void hide_helper();
     void _q_showIfNotHidden();
+    void setVisible(bool);
 
     void setEnabled_helper(bool);
-    void registerDropSite(bool);
     static void adjustFlags(Qt::WindowFlags &flags, QWidget *w = 0);
 
     void updateFrameStrut();
@@ -729,6 +733,7 @@ public:
 #endif
 
     // Other variables.
+    uint directFontResolveMask;
     uint inheritedFontResolveMask;
     uint inheritedPaletteResolveMask;
     short leftmargin;

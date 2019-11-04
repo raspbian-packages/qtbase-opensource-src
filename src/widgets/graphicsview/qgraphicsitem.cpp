@@ -1598,7 +1598,7 @@ QGraphicsItem::~QGraphicsItem()
 #ifndef QT_NO_GESTURES
     if (d_ptr->isObject && !d_ptr->gestureContext.isEmpty()) {
         QGraphicsObject *o = static_cast<QGraphicsObject *>(this);
-        if (QGestureManager *manager = QGestureManager::instance()) {
+        if (QGestureManager *manager = QGestureManager::instance(QGestureManager::DontForceCreation)) {
             const auto types  = d_ptr->gestureContext.keys(); // FIXME: iterate over the map directly?
             for (Qt::GestureType type : types)
                 manager->cleanupCachedGestures(o, type);
@@ -1726,8 +1726,8 @@ QGraphicsItem *QGraphicsItem::topLevelItem() const
 /*!
     \since 4.6
 
-    Returns a pointer to the item's parent, cast to a QGraphicsObject. returns 0 if the parent item
-    is not a QGraphicsObject.
+    Returns a pointer to the item's parent, cast to a QGraphicsObject. Returns
+    \nullptr if the parent item is not a QGraphicsObject.
 
     \sa parentItem(), childItems()
 */
@@ -4666,9 +4666,7 @@ void QGraphicsItem::resetTransform()
 
     Use
 
-    \code
-    item->setTransform(QTransform().rotate(angle), true);
-    \endcode
+    \snippet code/src_gui_graphicsview_qgraphicsitem.cpp 20
 
     instead.
 
@@ -4689,9 +4687,7 @@ void QGraphicsItem::resetTransform()
 
     Use
 
-    \code
-    setTransform(QTransform::fromScale(sx, sy), true);
-    \endcode
+    \snippet code/src_gui_graphicsview_qgraphicsitem.cpp 21
 
     instead.
 
@@ -4712,9 +4708,7 @@ void QGraphicsItem::resetTransform()
 
     Use
 
-    \code
-    setTransform(QTransform().shear(sh, sv), true);
-    \endcode
+    \snippet code/src_gui_graphicsview_qgraphicsitem.cpp 22
 
     instead.
 
@@ -4730,9 +4724,7 @@ void QGraphicsItem::resetTransform()
     Use setPos() or setTransformOriginPoint() instead. For identical
     behavior, use
 
-    \code
-    setTransform(QTransform::fromTranslate(dx, dy), true);
-    \endcode
+    \snippet code/src_gui_graphicsview_qgraphicsitem.cpp 23
 
     Translates the current item transformation by (\a dx, \a dy).
 
@@ -7310,7 +7302,7 @@ void QGraphicsItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
             selectedItems = d_ptr->scene->selectedItems();
             initialPositions = d_ptr->scene->d_func()->movingItemsInitialPositions;
             if (initialPositions.isEmpty()) {
-                foreach (QGraphicsItem *item, selectedItems)
+                for (QGraphicsItem *item : qAsConst(selectedItems))
                     initialPositions[item] = item->pos();
                 initialPositions[this] = pos();
             }
@@ -9794,9 +9786,9 @@ QRectF QGraphicsPixmapItem::boundingRect() const
         return QRectF();
     if (d->flags & ItemIsSelectable) {
         qreal pw = 1.0;
-        return QRectF(d->offset, d->pixmap.size() / d->pixmap.devicePixelRatio()).adjusted(-pw/2, -pw/2, pw/2, pw/2);
+        return QRectF(d->offset, QSizeF(d->pixmap.size()) / d->pixmap.devicePixelRatio()).adjusted(-pw/2, -pw/2, pw/2, pw/2);
     } else {
-        return QRectF(d->offset, d->pixmap.size() / d->pixmap.devicePixelRatio());
+        return QRectF(d->offset, QSizeF(d->pixmap.size()) / d->pixmap.devicePixelRatio());
     }
 }
 
@@ -10577,14 +10569,11 @@ void QGraphicsTextItemPrivate::_q_update(QRectF rect)
 */
 void QGraphicsTextItemPrivate::_q_updateBoundingRect(const QSizeF &size)
 {
-    if (!control) return; // can't happen
-    const QSizeF pageSize = control->document()->pageSize();
-    // paged items have a constant (page) size
-    if (size == boundingRect.size() || pageSize.height() != -1)
-        return;
-    qq->prepareGeometryChange();
-    boundingRect.setSize(size);
-    qq->update();
+    if (size != boundingRect.size()) {
+        qq->prepareGeometryChange();
+        boundingRect.setSize(size);
+        qq->update();
+    }
 }
 
 /*!
@@ -11345,7 +11334,7 @@ void QGraphicsItemEffectSourcePrivate::draw(QPainter *painter)
 }
 
 // sourceRect must be in the given coordinate system
-QRect QGraphicsItemEffectSourcePrivate::paddedEffectRect(Qt::CoordinateSystem system, QGraphicsEffect::PixmapPadMode mode, const QRectF &sourceRect, bool *unpadded) const
+QRectF QGraphicsItemEffectSourcePrivate::paddedEffectRect(Qt::CoordinateSystem system, QGraphicsEffect::PixmapPadMode mode, const QRectF &sourceRect, bool *unpadded) const
 {
     QRectF effectRectF;
 
@@ -11373,7 +11362,7 @@ QRect QGraphicsItemEffectSourcePrivate::paddedEffectRect(Qt::CoordinateSystem sy
             *unpadded = true;
     }
 
-    return effectRectF.toAlignedRect();
+    return effectRectF;
 }
 
 QPixmap QGraphicsItemEffectSourcePrivate::pixmap(Qt::CoordinateSystem system, QPoint *offset,
@@ -11391,7 +11380,8 @@ QPixmap QGraphicsItemEffectSourcePrivate::pixmap(Qt::CoordinateSystem system, QP
 
     bool unpadded;
     const QRectF sourceRect = boundingRect(system);
-    QRect effectRect = paddedEffectRect(system, mode, sourceRect, &unpadded);
+    QRectF effectRectF = paddedEffectRect(system, mode, sourceRect, &unpadded);
+    QRect effectRect = effectRectF.toAlignedRect();
 
     if (offset)
         *offset = effectRect.topLeft();
@@ -11407,7 +11397,9 @@ QPixmap QGraphicsItemEffectSourcePrivate::pixmap(Qt::CoordinateSystem system, QP
     if (effectRect.isEmpty())
         return QPixmap();
 
-    QPixmap pixmap(effectRect.size());
+    const auto dpr = info ? info->painter->device()->devicePixelRatioF() : 1.0;
+    QPixmap pixmap(QRectF(effectRectF.topLeft(), effectRectF.size() * dpr).toAlignedRect().size());
+    pixmap.setDevicePixelRatio(dpr);
     pixmap.fill(Qt::transparent);
     QPainter pixmapPainter(&pixmap);
     pixmapPainter.setRenderHints(info ? info->painter->renderHints() : QPainter::TextAntialiasing);

@@ -38,9 +38,6 @@
 ****************************************************************************/
 
 #include <QDebug>
-#if QT_CONFIG(library)
-#include <QLibrary>
-#endif
 
 #include "qxcbwindow.h"
 #include "qxcbscreen.h"
@@ -51,6 +48,9 @@
 #undef register
 #include <GL/glx.h>
 
+#if QT_CONFIG(regularexpression)
+#  include <QtCore/QRegularExpression>
+#endif
 #include <QtGui/QOpenGLContext>
 #include <QtGui/QOffscreenSurface>
 
@@ -59,10 +59,6 @@
 #include <QtPlatformHeaders/QGLXNativeContext>
 
 #include "qxcbglintegration.h"
-
-#if !defined(QT_STATIC) && QT_CONFIG(dlopen)
-#include <dlfcn.h>
-#endif
 
 QT_BEGIN_NAMESPACE
 
@@ -167,10 +163,12 @@ static void updateFormatFromContext(QSurfaceFormat &format)
         format.setOption(QSurfaceFormat::StereoBuffers);
 
     if (format.renderableType() == QSurfaceFormat::OpenGL) {
-        GLint value = 0;
-        glGetIntegerv(GL_RESET_NOTIFICATION_STRATEGY_ARB, &value);
-        if (value == GL_LOSE_CONTEXT_ON_RESET_ARB)
-            format.setOption(QSurfaceFormat::ResetNotification);
+        if (format.version() >= qMakePair(4, 0)) {
+            GLint value = 0;
+            glGetIntegerv(GL_RESET_NOTIFICATION_STRATEGY_ARB, &value);
+            if (value == GL_LOSE_CONTEXT_ON_RESET_ARB)
+                format.setOption(QSurfaceFormat::ResetNotification);
+        }
 
         if (format.version() < qMakePair(3, 0)) {
             format.setOption(QSurfaceFormat::DeprecatedFunctions);
@@ -179,7 +177,7 @@ static void updateFormatFromContext(QSurfaceFormat &format)
 
         // Version 3.0 onwards - check if it includes deprecated functionality or is
         // a debug context
-        value = 0;
+        GLint value = 0;
         glGetIntegerv(GL_CONTEXT_FLAGS, &value);
         if (!(value & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT))
             format.setOption(QSurfaceFormat::DeprecatedFunctions);
@@ -208,7 +206,6 @@ QGLXContext::QGLXContext(QXcbScreen *screen, const QSurfaceFormat &format, QPlat
     , m_shareContext(0)
     , m_format(format)
     , m_isPBufferCurrent(false)
-    , m_swapInterval(-1)
     , m_ownsContext(nativeHandle.isNull())
     , m_getGraphicsResetStatus(0)
     , m_lost(false)
@@ -274,7 +271,9 @@ void QGLXContext::init(QXcbScreen *screen, QPlatformOpenGLContext *share)
                 // ES does not support any format option
                 m_format.setOptions(QSurfaceFormat::FormatOptions());
             }
-
+            // Robustness must match that of the shared context.
+            if (share && share->format().testOption(QSurfaceFormat::ResetNotification))
+                m_format.setOption(QSurfaceFormat::ResetNotification);
             Q_ASSERT(glVersions.count() > 0);
 
             for (int i = 0; !m_context && i < glVersions.count(); i++) {
@@ -569,9 +568,9 @@ bool QGLXContext::makeCurrent(QPlatformSurface *surface)
 
     if (success && surfaceClass == QSurface::Window) {
         int interval = surface->format().swapInterval();
+        QXcbWindow *window = static_cast<QXcbWindow *>(surface);
         QXcbScreen *screen = screenForPlatformSurface(surface);
-        if (interval >= 0 && m_swapInterval != interval && screen) {
-            m_swapInterval = interval;
+        if (interval >= 0 && interval != window->swapInterval() && screen) {
             typedef void (*qt_glXSwapIntervalEXT)(Display *, GLXDrawable, int);
             typedef void (*qt_glXSwapIntervalMESA)(unsigned int);
             static qt_glXSwapIntervalEXT glXSwapIntervalEXT = 0;
@@ -590,6 +589,7 @@ bool QGLXContext::makeCurrent(QPlatformSurface *surface)
                 glXSwapIntervalEXT(m_display, glxDrawable, interval);
             else if (glXSwapIntervalMESA)
                 glXSwapIntervalMESA(interval);
+            window->setSwapInterval(interval);
         }
     }
 
@@ -656,30 +656,10 @@ static const char *qglx_threadedgl_blacklist_renderer[] = {
     0
 };
 
-// This disables threaded rendering on anything using mesa, e.g.
-// - nvidia/nouveau
-// - amd/gallium
-// - intel
-// - some software opengl implementations
-//
-// The client glx vendor string is used to identify those setups as that seems to show the least
-// variance between the bad configurations. It's always "Mesa Project and SGI". There are some
-// configurations which don't use mesa and which can do threaded rendering (amd and nvidia chips
-// with their own proprietary drivers).
-//
-// This, of course, is very broad and disables threaded rendering on a lot of devices which would
-// be able to use it. However, the bugs listed below don't follow any easily recognizable pattern
-// and we should rather be safe.
-//
-// http://cgit.freedesktop.org/xcb/libxcb/commit/?id=be0fe56c3bcad5124dcc6c47a2fad01acd16f71a will
-// fix some of the issues. Basically, the proprietary drivers seem to have a way of working around
-// a fundamental flaw with multithreaded access to xcb, but mesa doesn't. The blacklist should be
-// reevaluated once that patch is released in some version of xcb.
 static const char *qglx_threadedgl_blacklist_vendor[] = {
-    "Mesa Project and SGI",                // QTCREATORBUG-10875 (crash in creator)
-                                           // QTBUG-34492 (flickering in fullscreen)
-                                           // QTBUG-38221
-    0
+    "llvmpipe",                             // QTCREATORBUG-10666
+    "nouveau",                              // https://bugs.freedesktop.org/show_bug.cgi?id=91632
+    nullptr
 };
 
 void QGLXContext::queryDummyContext()
@@ -740,18 +720,47 @@ void QGLXContext::queryDummyContext()
             }
         }
     }
-
-    if (glxvendor) {
+    if (const char *vendor = (const char *) glGetString(GL_VENDOR)) {
         for (int i = 0; qglx_threadedgl_blacklist_vendor[i]; ++i) {
-            if (strstr(glxvendor, qglx_threadedgl_blacklist_vendor[i]) != 0) {
+            if (strstr(vendor, qglx_threadedgl_blacklist_vendor[i]) != 0) {
                 qCDebug(lcQpaGl).nospace() << "Multithreaded OpenGL disabled: "
-                                             "blacklisted vendor \""
-                                          << qglx_threadedgl_blacklist_vendor[i]
-                                          << "\"";
-
+                                              "blacklisted vendor \""
+                                           << qglx_threadedgl_blacklist_vendor[i]
+                                           << "\"";
                 m_supportsThreading = false;
                 break;
             }
+        }
+    }
+
+    if (glxvendor && m_supportsThreading) {
+        // Blacklist Mesa drivers due to QTCREATORBUG-10875 (crash in creator),
+        // QTBUG-34492 (flickering in fullscreen) and QTBUG-38221
+        const char *mesaVersionStr = nullptr;
+        if (strstr(glxvendor, "Mesa Project") != 0) {
+            mesaVersionStr = (const char *) glGetString(GL_VERSION);
+            m_supportsThreading = false;
+        }
+
+        if (mesaVersionStr) {
+            // The issue was fixed in Xcb 1.11, but we can't check for that
+            // at runtime, so instead assume it fixed with recent Mesa versions
+            // released several years after the Xcb fix.
+#if QT_CONFIG(regularexpression)
+            QRegularExpression versionTest(QStringLiteral("Mesa (\\d+)"));
+            QRegularExpressionMatch result = versionTest.match(QString::fromLatin1(mesaVersionStr));
+            int versionNr = 0;
+            if (result.hasMatch())
+                versionNr = result.captured(1).toInt();
+            if (versionNr >= 17) {
+                // White-listed
+                m_supportsThreading = true;
+            }
+#endif
+        }
+        if (!m_supportsThreading) {
+            qCDebug(lcQpaGl).nospace() << "Multithreaded OpenGL disabled: "
+                                          "blacklisted vendor \"Mesa Project\"";
         }
     }
 

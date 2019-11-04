@@ -477,7 +477,7 @@ private:
 void tst_QGraphicsItem::construction()
 {
     for (int i = 0; i < 7; ++i) {
-        QGraphicsItem *item;
+        QGraphicsItem *item = nullptr;
         switch (i) {
         case 0:
             item = new QGraphicsEllipseItem;
@@ -986,6 +986,7 @@ void tst_QGraphicsItem::inputMethodHints()
     QGraphicsView view(&scene);
     QApplication::setActiveWindow(&view);
     view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     item->setFocus();
     QTRY_VERIFY(item->hasFocus());
@@ -1036,6 +1037,7 @@ void tst_QGraphicsItem::toolTip()
     view.setFixedSize(200, 200);
     view.show();
     QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     {
         QHelpEvent helpEvent(QEvent::ToolTip, view.viewport()->rect().topLeft(),
@@ -1809,7 +1811,8 @@ void tst_QGraphicsItem::selected_multi()
 
     {
         // Ctrl-move on item1
-        QMouseEvent event(QEvent::MouseMove, view.mapFromScene(item1->scenePos()) + QPoint(1, 0), Qt::LeftButton, Qt::LeftButton, Qt::ControlModifier);
+        const QPoint item1Point = view.mapFromScene(item1->scenePos()) + QPoint(1, 0);
+        QMouseEvent event(QEvent::MouseMove, item1Point, view.viewport()->mapToGlobal(item1Point), Qt::LeftButton, Qt::LeftButton, Qt::ControlModifier);
         QApplication::sendEvent(view.viewport(), &event);
         QVERIFY(!item1->isSelected());
         QVERIFY(!item2->isSelected());
@@ -1830,7 +1833,8 @@ void tst_QGraphicsItem::selected_multi()
 
     {
         // Ctrl-move on item1
-        QMouseEvent event(QEvent::MouseMove, view.mapFromScene(item1->scenePos()) + QPoint(1, 0), Qt::LeftButton, Qt::LeftButton, Qt::ControlModifier);
+        const QPoint item1Point = view.mapFromScene(item1->scenePos()) + QPoint(1, 0);
+        QMouseEvent event(QEvent::MouseMove, item1Point, view.viewport()->mapToGlobal(item1Point), Qt::LeftButton, Qt::LeftButton, Qt::ControlModifier);
         QApplication::sendEvent(view.viewport(), &event);
         QVERIFY(item1->isSelected());
         QVERIFY(!item2->isSelected());
@@ -2204,10 +2208,11 @@ void tst_QGraphicsItem::setMatrix()
     QCOMPARE(spy.count(), 3);
     QList<QRectF> rlist = qvariant_cast<QList<QRectF> >(spy.last().at(0));
 
-    QCOMPARE(rlist.size(), 3);
-    QCOMPARE(rlist.at(0), rotatedRect);   // From item.setMatrix() (clearing rotated rect)
-    QCOMPARE(rlist.at(1), rotatedRect);   // From scene.update()   (updating scene rect)
-    QCOMPARE(rlist.at(2), unrotatedRect); // From post-update      (update current state)
+    QCOMPARE(rlist.size(), 2);
+    // From item.setMatrix() (clearing rotated rect), from scene.update() (updating scene rect),
+    // squashed into one
+    QCOMPARE(rlist.at(0), rotatedRect);
+    QCOMPARE(rlist.at(1), unrotatedRect); // From post-update      (update current state)
 }
 
 static QList<QGraphicsItem *> _paintedItems;
@@ -3226,7 +3231,9 @@ void tst_QGraphicsItem::hoverEventsGenerateRepaints()
     QGraphicsScene scene;
     QGraphicsView view(&scene);
     view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
 
     EventTester *tester = new EventTester;
     scene.addItem(tester);
@@ -4143,10 +4150,13 @@ void tst_QGraphicsItem::ensureVisible()
 void tst_QGraphicsItem::cursor()
 {
     QGraphicsScene scene;
-    QGraphicsRectItem *item1 = scene.addRect(QRectF(0, 0, 50, 50));
-    QGraphicsRectItem *item2 = scene.addRect(QRectF(0, 0, 50, 50));
-    item1->setPos(-100, 0);
-    item2->setPos(50, 0);
+    QGraphicsView view(&scene);
+    view.showFullScreen();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    const Qt::CursorShape viewportShape = view.viewport()->cursor().shape();
+
+    QGraphicsRectItem *item1 = scene.addRect(QRectF(-100, 0, 50, 50));
+    QGraphicsRectItem *item2 = scene.addRect(QRectF(50, 0, 50, 50));
 
     QVERIFY(!item1->hasCursor());
     QVERIFY(!item2->hasCursor());
@@ -4172,49 +4182,45 @@ void tst_QGraphicsItem::cursor()
     item1->setCursor(Qt::IBeamCursor);
     item2->setCursor(Qt::PointingHandCursor);
 
-    QWidget topLevel;
-    topLevel.resize(250, 150);
-    QTestPrivate::centerOnScreen(&topLevel);
-    QGraphicsView view(&scene,&topLevel);
-    view.setFixedSize(200, 100);
-    topLevel.show();
-    QVERIFY(QTest::qWaitForWindowExposed(&topLevel));
-
-    QTest::mouseMove(&view, view.rect().center());
-
-    const Qt::CursorShape viewportShape = view.viewport()->cursor().shape();
+    QPoint viewCenter = view.rect().center();
+    QPoint item1Center = view.mapFromScene(item1->sceneBoundingRect().center());
+    QPoint item2Center = view.mapFromScene(item2->sceneBoundingRect().center());
 
     {
-        QTest::mouseMove(view.viewport(), QPoint(100, 50));
-        QMouseEvent event(QEvent::MouseMove, QPoint(100, 50), Qt::NoButton, 0, 0);
+        QMouseEvent event(QEvent::MouseMove, viewCenter, view.viewport()->mapToGlobal(viewCenter), Qt::NoButton, 0, 0);
         QApplication::sendEvent(view.viewport(), &event);
     }
 
-    QTRY_COMPARE(view.viewport()->cursor().shape(), viewportShape);
+    QCOMPARE(view.viewport()->cursor().shape(), viewportShape);
 
     {
-        QTest::mouseMove(view.viewport(), view.mapFromScene(item1->sceneBoundingRect().center()));
-        QMouseEvent event(QEvent::MouseMove, view.mapFromScene(item1->sceneBoundingRect().center()), Qt::NoButton, 0, 0);
+        QMouseEvent event(QEvent::MouseMove, item1Center, view.viewport()->mapToGlobal(item1Center), Qt::NoButton, 0, 0);
         QApplication::sendEvent(view.viewport(), &event);
     }
 
-    QTRY_COMPARE(view.viewport()->cursor().shape(), item1->cursor().shape());
+    QCOMPARE(view.viewport()->cursor().shape(), item1->cursor().shape());
 
     {
-        QTest::mouseMove(view.viewport(), view.mapFromScene(item2->sceneBoundingRect().center()));
-        QMouseEvent event(QEvent::MouseMove, view.mapFromScene(item2->sceneBoundingRect().center()), Qt::NoButton, 0, 0);
+        QMouseEvent event(QEvent::MouseMove, item2Center, view.viewport()->mapToGlobal(item2Center), Qt::NoButton, 0, 0);
         QApplication::sendEvent(view.viewport(), &event);
     }
 
-    QTRY_COMPARE(view.viewport()->cursor().shape(), item2->cursor().shape());
+    QCOMPARE(view.viewport()->cursor().shape(), item2->cursor().shape());
 
     {
-        QTest::mouseMove(view.viewport(), view.rect().center());
-        QMouseEvent event(QEvent::MouseMove, QPoint(100, 25), Qt::NoButton, 0, 0);
+        QMouseEvent event(QEvent::MouseMove, viewCenter, view.viewport()->mapToGlobal(viewCenter), Qt::NoButton, 0, 0);
         QApplication::sendEvent(view.viewport(), &event);
     }
 
-    QTRY_COMPARE(view.viewport()->cursor().shape(), viewportShape);
+    QCOMPARE(view.viewport()->cursor().shape(), viewportShape);
+
+    item1->setEnabled(false);
+    {
+        QMouseEvent event(QEvent::MouseMove, item1Center, view.viewport()->mapToGlobal(item1Center), Qt::NoButton, 0, 0);
+        QApplication::sendEvent(view.viewport(), &event);
+    }
+
+    QCOMPARE(view.viewport()->cursor().shape(), viewportShape);
 }
 #endif
 /*
@@ -4938,6 +4944,7 @@ void tst_QGraphicsItem::sceneEventFilter()
     QGraphicsView view(&scene);
     view.show();
     QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
 
     QGraphicsTextItem *text1 = scene.addText(QLatin1String("Text1"));
@@ -5074,26 +5081,30 @@ void tst_QGraphicsItem::paint()
     QGraphicsView view2(&scene2);
     view2.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view2));
+    QCoreApplication::processEvents(); // Process all queued paint events
 
     PaintTester tester2;
     scene2.addItem(&tester2);
 
-    //First show one paint
-    QTRY_COMPARE(tester2.painted, 1);
+    //First show at least one paint
+    QCOMPARE(tester2.painted, 0);
+    QTRY_VERIFY(tester2.painted > 0);
+    int painted = tester2.painted;
 
     //nominal case, update call paint
     tester2.update();
-    QTRY_COMPARE(tester2.painted, 2);
+    QTRY_COMPARE(tester2.painted, painted + 1);
+    painted = tester2.painted;
 
     //we remove the item from the scene, number of updates is still the same
     tester2.update();
     scene2.removeItem(&tester2);
-    QTRY_COMPARE(tester2.painted, 2);
+    QTRY_COMPARE(tester2.painted, painted);
 
     //We re-add the item, the number of paint should increase
     scene2.addItem(&tester2);
     tester2.update();
-    QTRY_COMPARE(tester2.painted, 3);
+    QTRY_COMPARE(tester2.painted, painted + 1);
 }
 
 class HarakiriItem : public QGraphicsRectItem
@@ -6531,6 +6542,7 @@ void tst_QGraphicsItem::ensureUpdateOnTextItem()
     QGraphicsView view(&scene);
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
     TextItem *text1 = new TextItem(QLatin1String("123"));
     scene.addItem(text1);
     QTRY_COMPARE(text1->updates,1);
@@ -6802,7 +6814,9 @@ void tst_QGraphicsItem::opacity2()
 
     MyGraphicsView view(&scene);
     view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
     QTRY_VERIFY(view.repaints >= 1);
 
 #define RESET_REPAINT_COUNTERS \
@@ -6874,7 +6888,9 @@ void tst_QGraphicsItem::opacityZeroUpdates()
 
     MyGraphicsView view(&scene);
     view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
     QTRY_VERIFY(view.repaints > 0);
 
     view.reset();
@@ -6891,6 +6907,9 @@ void tst_QGraphicsItem::opacityZeroUpdates()
     QRegion expectedRegion = parentDeviceBoundingRect.adjusted(-2, -2, 2, 2);
     expectedRegion += childDeviceBoundingRect.adjusted(-2, -2, 2, 2);
 
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Fails on WinRT. Figure out why - QTBUG-68297", Abort);
+#endif
     COMPARE_REGIONS(view.paintedRegion, expectedRegion);
 }
 
@@ -7262,7 +7281,9 @@ void tst_QGraphicsItem::cacheMode()
     view.resize(150, 150);
     view.show();
     QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
 
     EventTester *tester = new EventTester;
     EventTester *testerChild = new EventTester;
@@ -7440,7 +7461,9 @@ void tst_QGraphicsItem::cacheMode2()
     view.resize(150, 150);
     view.show();
     QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
 
     EventTester *tester = new EventTester;
     scene.addItem(tester);
@@ -7931,6 +7954,7 @@ void tst_QGraphicsItem::itemUsesExtendedStyleOption()
     rect->startTrack = false;
     topLevel.show();
     QVERIFY(QTest::qWaitForWindowExposed(&topLevel));
+    QCoreApplication::processEvents(); // Process all queued paint events
     QTRY_VERIFY(rect->repaints > 0);
     rect->repaints = 0;
     rect->startTrack = true;
@@ -8017,6 +8041,7 @@ void tst_QGraphicsItem::moveItem()
     MyGraphicsView view(&scene);
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
 
     EventTester *parent = new EventTester;
     EventTester *child = new EventTester(parent);
@@ -8093,7 +8118,9 @@ void tst_QGraphicsItem::moveLineItem()
 
     MyGraphicsView view(&scene);
     view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
     view.reset();
 
     QRectF brect = item->boundingRect();
@@ -8108,6 +8135,9 @@ void tst_QGraphicsItem::moveLineItem()
 
     // Make sure the calculated region is correct.
     item->update();
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Fails on WinRT. Figure out why - QTBUG-68297", Abort);
+#endif
     QTRY_COMPARE(view.paintedRegion, expectedRegion);
     view.reset();
 
@@ -8161,6 +8191,7 @@ void tst_QGraphicsItem::sorting()
     view.setFrameStyle(0);
     view.show();
     qApp->setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QTRY_VERIFY(_paintedItems.count() > 0);
 
@@ -8197,6 +8228,7 @@ void tst_QGraphicsItem::itemHasNoContents()
     QGraphicsView view(&scene);
     view.show();
     qApp->setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QTRY_VERIFY(!_paintedItems.isEmpty());
 
@@ -8269,6 +8301,7 @@ void tst_QGraphicsItem::hitTestGraphicsEffectItem()
     toplevel.resize(300, 300);
     toplevel.show();
     QVERIFY(QTest::qWaitForWindowExposed(&toplevel));
+    QCoreApplication::processEvents(); // Process all queued paint events
 
     // Confuse the BSP with dummy items.
     QGraphicsRectItem *dummy = new QGraphicsRectItem(0, 0, 20, 20);
@@ -9204,6 +9237,7 @@ void tst_QGraphicsItem::ensureDirtySceneTransform()
     QGraphicsView view(&scene);
     view.show();
     QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QCOMPARE(QApplication::activeWindow(), static_cast<QWidget *>(&view));
 
@@ -9590,6 +9624,7 @@ void tst_QGraphicsItem::QTBUG_4233_updateCachedWithSceneRect()
     QGraphicsView view(&scene);
     view.show();
     QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QCOMPARE(QApplication::activeWindow(), (QWidget *)&view);
 
@@ -10720,6 +10755,7 @@ void tst_QGraphicsItem::scroll()
     MyGraphicsView view(&scene);
     view.setFrameStyle(0);
     view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QTRY_VERIFY(view.repaints > 0);
 
@@ -11242,7 +11278,9 @@ void tst_QGraphicsItem::QTBUG_6738_missingUpdateWithSetParent()
     MyGraphicsView view(&scene);
     view.show();
     qApp->setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
     QTRY_VERIFY(view.repaints > 0);
 
     // test case #1
@@ -11290,7 +11328,9 @@ void tst_QGraphicsItem::QT_2653_fullUpdateDiscardingOpacityUpdate()
     parentGreen->setFlag(QGraphicsItem::ItemIgnoresTransformations);
 
     view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
+    QCoreApplication::processEvents(); // Process all queued paint events
     view.reset();
 
     parentGreen->setOpacity(1.0);
@@ -11324,7 +11364,9 @@ void tst_QGraphicsItem::QTBUG_7714_fullUpdateDiscardingOpacityUpdate2()
 
     origView.show();
     QVERIFY(QTest::qWaitForWindowActive(&origView));
-    origView.setGeometry(origView.width() + 20, 20,
+    QCoreApplication::processEvents(); // Process all queued paint events
+
+    origView.setGeometry(origView.x() + origView.width() + 20, origView.y() + 20,
                          origView.width(), origView.height());
 
     parentGreen->setFlag(QGraphicsItem::ItemIgnoresTransformations);
@@ -11332,18 +11374,23 @@ void tst_QGraphicsItem::QTBUG_7714_fullUpdateDiscardingOpacityUpdate2()
     origView.reset();
     childYellow->setOpacity(0.0);
 
-    QTRY_COMPARE(origView.repaints, 1);
+    QTRY_VERIFY(origView.repaints > 0);
 
     view.show();
     qApp->setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     view.reset();
     origView.reset();
 
     childYellow->setOpacity(1.0);
 
-    QTRY_COMPARE(origView.repaints, 1);
-    QTRY_COMPARE(view.repaints, 1);
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("", "Fails on WinRT. Figure out why - QTBUG-68297", Abort);
+#endif
+
+    QTRY_VERIFY(origView.repaints > 0);
+    QTRY_VERIFY(view.repaints > 0);
 }
 
 void tst_QGraphicsItem::QT_2649_focusScope()
@@ -11475,7 +11522,9 @@ void tst_QGraphicsItem::doNotMarkFullUpdateIfNotInScene()
     item2->setParentItem(item);
     scene.addItem(item);
     view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(view.windowHandle()));
     QVERIFY(QTest::qWaitForWindowActive(view.windowHandle()));
+    QCoreApplication::processEvents(); // Process all queued paint events
     view.activateWindow();
     QTRY_VERIFY(view.isActiveWindow());
     QTRY_VERIFY(view.repaints >= 1);
@@ -11506,6 +11555,7 @@ void tst_QGraphicsItem::itemDiesDuringDraggingOperation()
     scene.addItem(item);
     view.show();
     QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QCOMPARE(QApplication::activeWindow(), (QWidget *)&view);
     QGraphicsSceneDragDropEvent dragEnter(QEvent::GraphicsSceneDragEnter);
@@ -11533,6 +11583,7 @@ void tst_QGraphicsItem::QTBUG_12112_focusItem()
 
     view.show();
     QApplication::setActiveWindow(&view);
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
     QVERIFY(QTest::qWaitForWindowActive(&view));
     QCOMPARE(QApplication::activeWindow(), (QWidget *)&view);
 

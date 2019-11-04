@@ -68,6 +68,7 @@
 
 #include "qmenu_p.h"
 #include "qmenubar_p.h"
+#include <private/qscreen_p.h>
 #include "qdebug.h"
 
 QT_BEGIN_NAMESPACE
@@ -322,11 +323,18 @@ void QMenuBarPrivate::popupAction(QAction *action, bool activateFirst)
         QRect adjustedActionRect = actionRect(action);
         QPoint pos(q->mapToGlobal(QPoint(adjustedActionRect.left(), adjustedActionRect.bottom() + 1)));
         QSize popup_size = activeMenu->sizeHint();
-
         //we put the popup menu on the screen containing the bottom-center of the action rect
-        QRect screenRect = QDesktopWidgetPrivate::screenGeometry(pos + QPoint(adjustedActionRect.width() / 2, 0));
+        QScreen *popupScreen = q->window()->windowHandle()->screen();
+        QPoint bottomMiddlePos = pos + QPoint(adjustedActionRect.width() / 2, 0);
+        const auto &siblings = popupScreen->virtualSiblings();
+        for (QScreen *sibling : siblings) {
+            if (sibling->geometry().contains(bottomMiddlePos)) {
+                popupScreen = sibling;
+                break;
+            }
+        }
+        QRect screenRect = popupScreen->geometry();
         pos = QPoint(qMax(pos.x(), screenRect.x()), qMax(pos.y(), screenRect.y()));
-
         const bool fitUp = (pos.y() - popup_size.height() >= screenRect.top());
         const bool fitDown = (pos.y() + popup_size.height() <= screenRect.bottom());
         const bool rtl = q->isRightToLeft();
@@ -352,6 +360,7 @@ void QMenuBarPrivate::popupAction(QAction *action, bool activateFirst)
 
         if(!defaultPopDown || (fitUp && !fitDown))
             pos.setY(qMax(screenRect.y(), q->mapToGlobal(QPoint(0, adjustedActionRect.top()-popup_size.height())).y()));
+        QMenuPrivate::get(activeMenu)->topData()->initialScreenIndex = QGuiApplication::screens().indexOf(popupScreen);
         activeMenu->popup(pos);
         if(activateFirst)
             activeMenu->d_func()->setFirstActionActive();
@@ -749,8 +758,6 @@ QMenuBar::~QMenuBar()
 }
 
 /*!
-    \overload
-
     This convenience function creates a new action with \a text.
     The function adds the newly created action to the menu's
     list of actions, and returns it.
@@ -1583,7 +1590,7 @@ bool QMenuBar::eventFilter(QObject *object, QEvent *event)
 }
 
 /*!
-  Returns the QAction at \a pt. Returns 0 if there is no action at \a pt or if
+  Returns the QAction at \a pt. Returns \nullptr if there is no action at \a pt or if
 the location has a separator.
 
     \sa addAction(), addSeparator()

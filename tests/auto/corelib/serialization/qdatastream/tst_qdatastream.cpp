@@ -174,6 +174,7 @@ private slots:
 
     void floatingPointPrecision();
 
+    void compatibility_Qt5();
     void compatibility_Qt3();
     void compatibility_Qt2();
 
@@ -262,15 +263,15 @@ static int NColorRoles[] = {
     QPalette::AlternateBase + 1,   // Qt_4_3
     QPalette::ToolTipText + 1,     // Qt_4_4
     QPalette::ToolTipText + 1,     // Qt_4_5
-    QPalette::ToolTipText + 1,     // Qt_4_6
+    QPalette::ToolTipText + 1,     // Qt_4_6, Qt_4_7, Qt_4_8, Qt_4_9
     QPalette::ToolTipText + 1,     // Qt_5_0
     QPalette::ToolTipText + 1,     // Qt_5_1
-    QPalette::ToolTipText + 1,     // Qt_5_2
-    QPalette::ToolTipText + 1,     // Qt_5_3
-    QPalette::ToolTipText + 1,     // Qt_5_4
-    QPalette::ToolTipText + 1,     // Qt_5_5
-    QPalette::ToolTipText + 1,     // Qt_5_6
-    0                              // add the correct value for Qt_5_7 here later
+    QPalette::ToolTipText + 1,     // Qt_5_2, Qt_5_3
+    QPalette::ToolTipText + 1,     // Qt_5_4, Qt_5_5
+    QPalette::ToolTipText + 1,     // Qt_5_6, Qt_5_7, Qt_5_8, Qt_5_9, Qt_5_10, Qt_5_11
+    QPalette::PlaceholderText + 1, // Qt_5_12
+    QPalette::PlaceholderText + 1, // Qt_5_13
+    0                              // add the correct value for Qt_5_14 here later
 };
 
 // Testing get/set functions
@@ -2139,7 +2140,7 @@ void tst_QDataStream::setVersion()
     */
 
     // revise the test if new color roles or color groups are added
-    QVERIFY(QPalette::NColorRoles == QPalette::ToolTipText + 1);
+    QVERIFY(QPalette::NColorRoles == QPalette::PlaceholderText + 1);
     QCOMPARE(int(QPalette::NColorGroups), 3);
 
     QByteArray ba2;
@@ -2211,25 +2212,22 @@ void tst_QDataStream::setVersion()
     }
 }
 
-class SequentialBuffer : public QBuffer
+class SequentialBuffer : public QIODevice
 {
 public:
-    SequentialBuffer(QByteArray *data) : QBuffer(data) { offset = 0; }
+    SequentialBuffer(QByteArray *data) : QIODevice() { buf.setBuffer(data); }
 
-    bool isSequential() const { return true; }
-    bool seek(qint64 pos) { offset = pos; return QBuffer::seek(pos); }
-    qint64 pos() const { return qint64(offset); }
+    bool isSequential() const override { return true; }
+    bool open(OpenMode mode) override { return buf.open(mode) && QIODevice::open(mode | QIODevice::Unbuffered); }
+    void close() override { buf.close(); QIODevice::close(); }
+    qint64 bytesAvailable() const override { return QIODevice::bytesAvailable() + buf.bytesAvailable(); }
 
 protected:
-    qint64 readData(char *data, qint64 maxSize)
-    {
-        qint64 ret = QBuffer::readData(data, maxSize);
-        offset += ret;
-        return ret;
-    }
+    qint64 readData(char *data, qint64 maxSize) override { return buf.read(data, maxSize); }
+    qint64 writeData(const char *data, qint64 maxSize) override { return buf.write(data, maxSize); }
 
 private:
-    int offset;
+    QBuffer buf;
 };
 
 void tst_QDataStream::skipRawData_data()
@@ -3105,6 +3103,37 @@ void tst_QDataStream::streamRealDataTypes()
     }
 }
 
+void tst_QDataStream::compatibility_Qt5()
+{
+    QLinearGradient gradient(QPointF(0,0), QPointF(1,1));
+    gradient.setColorAt(0, Qt::red);
+    gradient.setColorAt(1, Qt::blue);
+
+    QBrush brush(gradient);
+    QPalette palette;
+    palette.setBrush(QPalette::Button, brush);
+    palette.setColor(QPalette::Light, Qt::green);
+
+    QByteArray stream;
+    {
+        QDataStream out(&stream, QIODevice::WriteOnly);
+        out.setVersion(QDataStream::Qt_5_7);
+        out << palette;
+        out << brush;
+    }
+    QBrush in_brush;
+    QPalette in_palette;
+    {
+        QDataStream in(stream);
+        in.setVersion(QDataStream::Qt_5_7);
+        in >> in_palette;
+        in >> in_brush;
+    }
+    QCOMPARE(in_brush.style(), Qt::LinearGradientPattern);
+    QCOMPARE(in_palette.brush(QPalette::Button).style(), Qt::LinearGradientPattern);
+    QCOMPARE(in_palette.color(QPalette::Light), QColor(Qt::green));
+}
+
 void tst_QDataStream::compatibility_Qt3()
 {
     QByteArray ba("hello");
@@ -3329,15 +3358,21 @@ void tst_QDataStream::transaction_data()
     QTest::addColumn<bool>("bData");
     QTest::addColumn<float>("fData");
     QTest::addColumn<double>("dData");
+    QTest::addColumn<QImage>("imgData");
     QTest::addColumn<QByteArray>("strData");
     QTest::addColumn<QByteArray>("rawData");
 
+    QImage img1(open_xpm);
+    QImage img2;
+    QImage img3(50, 50, QImage::Format_ARGB32);
+    img3.fill(qRgba(12, 34, 56, 78));
+
     QTest::newRow("1") << qint8(1) << qint16(2) << qint32(3) << qint64(4) << true << 5.0f
-                       << double(6.0) << QByteArray("Hello world!") << QByteArray("Qt rocks!");
+                       << double(6.0) << img1 << QByteArray("Hello world!") << QByteArray("Qt rocks!");
     QTest::newRow("2") << qint8(1 << 6) << qint16(1 << 14) << qint32(1 << 30) << qint64Data(3) << false << 123.0f
-                       << double(234.0) << stringData(5).toUtf8() << stringData(6).toUtf8();
+                       << double(234.0) << img2 << stringData(5).toUtf8() << stringData(6).toUtf8();
     QTest::newRow("3") << qint8(-1) << qint16(-2) << qint32(-3) << qint64(-4) << true << -123.0f
-                       << double(-234.0) << stringData(3).toUtf8() << stringData(4).toUtf8();
+                       << double(-234.0) << img3 << stringData(3).toUtf8() << stringData(4).toUtf8();
 }
 
 void tst_QDataStream::transaction()
@@ -3351,6 +3386,7 @@ void tst_QDataStream::transaction()
     QFETCH(bool, bData);
     QFETCH(float, fData);
     QFETCH(double, dData);
+    QFETCH(QImage, imgData);
     QFETCH(QByteArray, strData);
     QFETCH(QByteArray, rawData);
 
@@ -3358,12 +3394,13 @@ void tst_QDataStream::transaction()
         QDataStream stream(&testBuffer, QIODevice::WriteOnly);
 
         stream << i8Data << i16Data << i32Data << i64Data
-               << bData << fData << dData << strData.constData();
+               << bData << fData << dData << imgData << strData.constData();
         stream.writeRawData(rawData.constData(), rawData.size());
     }
 
     for (int splitPos = 0; splitPos <= testBuffer.size(); ++splitPos) {
         QByteArray readBuffer(testBuffer.left(splitPos));
+
         SequentialBuffer dev(&readBuffer);
         dev.open(QIODevice::ReadOnly);
         QDataStream stream(&dev);
@@ -3375,12 +3412,13 @@ void tst_QDataStream::transaction()
         bool b;
         float f;
         double d;
+        QImage img;
         char *str;
         QByteArray raw(rawData.size(), 0);
 
         forever {
             stream.startTransaction();
-            stream >> i8 >> i16 >> i32 >> i64 >> b >> f >> d >> str;
+            stream >> i8 >> i16 >> i32 >> i64 >> b >> f >> d >> img >> str;
             stream.readRawData(raw.data(), raw.size());
 
             if (stream.commitTransaction())
@@ -3402,6 +3440,7 @@ void tst_QDataStream::transaction()
         QCOMPARE(b, bData);
         QCOMPARE(f, fData);
         QCOMPARE(d, dData);
+        QCOMPARE(img, imgData);
         QVERIFY(strData == str);
         delete [] str;
         QCOMPARE(raw, rawData);

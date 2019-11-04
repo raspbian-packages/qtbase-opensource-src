@@ -46,6 +46,8 @@
 #include "qxcbbackingstore.h"
 #include "qxcbnativeinterface.h"
 #include "qxcbclipboard.h"
+#include "qxcbeventqueue.h"
+#include "qxcbeventdispatcher.h"
 #if QT_CONFIG(draganddrop)
 #include "qxcbdrag.h"
 #endif
@@ -57,7 +59,6 @@
 
 #include <xcb/xcb.h>
 
-#include <QtEventDispatcherSupport/private/qgenericunixeventdispatcher_p.h>
 #include <QtFontDatabaseSupport/private/qgenericunixfontdatabase_p.h>
 #include <QtServiceSupport/private/qgenericunixservices_p.h>
 
@@ -69,11 +70,11 @@
 #define register        /* C++17 deprecated register */
 #include <X11/Xlib.h>
 #undef register
+#endif
 #if QT_CONFIG(xcb_native_painting)
 #include "qxcbnativepainting.h"
 #include "qpixmap_x11_p.h"
 #include "qbackingstore_x11_p.h"
-#endif
 #endif
 
 #include <qpa/qplatforminputcontextfactory_p.h>
@@ -136,6 +137,8 @@ QXcbIntegration::QXcbIntegration(const QStringList &parameters, int &argc, char 
     m_instance = this;
     qApp->setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
 
+    QWindowSystemInterface::setPlatformFiltersEvents(true);
+
     qRegisterMetaType<QXcbWindow*>();
 #if QT_CONFIG(xcb_xlib)
     XInitThreads();
@@ -192,25 +195,23 @@ QXcbIntegration::QXcbIntegration(const QStringList &parameters, int &argc, char 
 
     const int numParameters = parameters.size();
     m_connections.reserve(1 + numParameters / 2);
-    auto conn = new QXcbConnection(m_nativeInterface.data(), m_canGrab, m_defaultVisualId, displayName);
-    if (conn->isConnected())
-        m_connections << conn;
-    else
-        delete conn;
 
+    auto conn = new QXcbConnection(m_nativeInterface.data(), m_canGrab, m_defaultVisualId, displayName);
+    if (!conn->isConnected()) {
+        delete conn;
+        return;
+    }
+    m_connections << conn;
+
+    // ### Qt 6 (QTBUG-52408) remove this multi-connection code path
     for (int i = 0; i < numParameters - 1; i += 2) {
-        qCDebug(lcQpaScreen) << "connecting to additional display: " << parameters.at(i) << parameters.at(i+1);
+        qCDebug(lcQpaXcb) << "connecting to additional display: " << parameters.at(i) << parameters.at(i+1);
         QString display = parameters.at(i) + QLatin1Char(':') + parameters.at(i+1);
         conn = new QXcbConnection(m_nativeInterface.data(), m_canGrab, m_defaultVisualId, display.toLatin1().constData());
         if (conn->isConnected())
             m_connections << conn;
         else
             delete conn;
-    }
-
-    if (m_connections.isEmpty()) {
-        qCritical("Could not connect to any X display.");
-        exit(1);
     }
 
     m_fontDatabase.reset(new QGenericUnixFontDatabase());
@@ -241,10 +242,11 @@ QPlatformPixmap *QXcbIntegration::createPlatformPixmap(QPlatformPixmap::PixelTyp
 
 QPlatformWindow *QXcbIntegration::createPlatformWindow(QWindow *window) const
 {
-    QXcbScreen *screen = static_cast<QXcbScreen *>(window->screen()->handle());
-    QXcbGlIntegration *glIntegration = screen->connection()->glIntegration();
-    if (window->type() != Qt::Desktop) {
+    QXcbGlIntegration *glIntegration = nullptr;
+    const bool isTrayIconWindow = QXcbWindow::isTrayIconWindow(window);;
+    if (window->type() != Qt::Desktop && !isTrayIconWindow) {
         if (window->supportsOpenGL()) {
+            glIntegration = defaultConnection()->glIntegration();
             if (glIntegration) {
                 QXcbWindow *xcbWindow = glIntegration->createWindow(window);
                 xcbWindow->create();
@@ -259,7 +261,7 @@ QPlatformWindow *QXcbIntegration::createPlatformWindow(QWindow *window) const
         }
     }
 
-    Q_ASSERT(window->type() == Qt::Desktop || !window->supportsOpenGL()
+    Q_ASSERT(window->type() == Qt::Desktop || isTrayIconWindow || !window->supportsOpenGL()
              || (!glIntegration && window->surfaceType() == QSurface::RasterGLSurface)); // for VNC
     QXcbWindow *xcbWindow = new QXcbWindow(window);
     xcbWindow->create();
@@ -286,6 +288,10 @@ QPlatformOpenGLContext *QXcbIntegration::createPlatformOpenGLContext(QOpenGLCont
 
 QPlatformBackingStore *QXcbIntegration::createPlatformBackingStore(QWindow *window) const
 {
+    const bool isTrayIconWindow = QXcbWindow::isTrayIconWindow(window);
+    if (isTrayIconWindow)
+        return new QXcbSystemTrayBackingStore(window);
+
 #if QT_CONFIG(xcb_native_painting)
     if (nativePaintingEnabled())
         return new QXcbNativeBackingStore(window);
@@ -313,8 +319,7 @@ bool QXcbIntegration::hasCapability(QPlatformIntegration::Capability cap) const
     {
         const auto *connection = qAsConst(m_connections).first();
         if (const auto *integration = connection->glIntegration())
-            return cap != ThreadedOpenGL
-                || (connection->threadedEventHandling() && integration->supportsThreadedOpenGL());
+            return cap != ThreadedOpenGL || integration->supportsThreadedOpenGL();
         return false;
     }
 
@@ -338,10 +343,7 @@ bool QXcbIntegration::hasCapability(QPlatformIntegration::Capability cap) const
 
 QAbstractEventDispatcher *QXcbIntegration::createEventDispatcher() const
 {
-    QAbstractEventDispatcher *dispatcher = createUnixEventDispatcher();
-    for (int i = 0; i < m_connections.size(); i++)
-        m_connections[i]->eventReader()->registerEventDispatcher(dispatcher);
-    return dispatcher;
+    return QXcbEventDispatcher::createEventDispatcher(defaultConnection());
 }
 
 void QXcbIntegration::initialize()
@@ -381,8 +383,17 @@ QPlatformClipboard *QXcbIntegration::clipboard() const
 #endif
 
 #if QT_CONFIG(draganddrop)
+#include <private/qsimpledrag_p.h>
 QPlatformDrag *QXcbIntegration::drag() const
 {
+    static const bool useSimpleDrag = qEnvironmentVariableIsSet("QT_XCB_USE_SIMPLE_DRAG");
+    if (Q_UNLIKELY(useSimpleDrag)) { // This is useful for testing purposes
+        static QSimpleDrag *simpleDrag = nullptr;
+        if (!simpleDrag)
+            simpleDrag = new QSimpleDrag();
+        return simpleDrag;
+    }
+
     return m_connections.at(0)->drag();
 }
 #endif
@@ -414,10 +425,7 @@ QPlatformServices *QXcbIntegration::services() const
 
 Qt::KeyboardModifiers QXcbIntegration::queryKeyboardModifiers() const
 {
-    int keybMask = 0;
-    QXcbConnection *conn = m_connections.at(0);
-    QXcbCursor::queryPointer(conn, 0, 0, &keybMask);
-    return conn->keyboard()->translateModifiers(keybMask);
+    return m_connections.at(0)->queryKeyboardModifiers();
 }
 
 QList<int> QXcbIntegration::possibleKeys(const QKeyEvent *e) const

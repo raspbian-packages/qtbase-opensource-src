@@ -227,10 +227,8 @@ template <uint MaxCount> struct UnrollTailLoop
             return returnIfExited;
 
         bool check = loopCheck(i);
-        if (check) {
-            const RetType &retval = returnIfFailed(i);
-            return retval;
-        }
+        if (check)
+            return returnIfFailed(i);
 
         return UnrollTailLoop<MaxCount - 1>::exec(count - 1, returnIfExited, loopCheck, returnIfFailed, i + 1);
     }
@@ -253,95 +251,298 @@ inline RetType UnrollTailLoop<0>::exec(Number, RetType returnIfExited, Functor1,
 }
 #endif
 
+/*!
+ * \internal
+ *
+ * Searches for character \a c in the string \a str and returns a pointer to
+ * it. Unlike strchr() and wcschr() (but like glibc's strchrnul()), if the
+ * character is not found, this function returns a pointer to the end of the
+ * string -- that is, \c{str.end()}.
+ */
+const ushort *QtPrivate::qustrchr(QStringView str, ushort c) noexcept
+{
+    const ushort *n = reinterpret_cast<const ushort *>(str.begin());
+    const ushort *e = reinterpret_cast<const ushort *>(str.end());
+
 #ifdef __SSE2__
+    bool loops = true;
+    // Using the PMOVMSKB instruction, we get two bits for each character
+    // we compare.
+#  if defined(__AVX2__) && !defined(__OPTIMIZE_SIZE__)
+    // we're going to read n[0..15] (32 bytes)
+    __m256i mch256 = _mm256_set1_epi32(c | (c << 16));
+    for (const ushort *next = n + 16; next <= e; n = next, next += 16) {
+        __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(n));
+        __m256i result = _mm256_cmpeq_epi16(data, mch256);
+        uint mask = uint(_mm256_movemask_epi8(result));
+        if (mask) {
+            uint idx = qCountTrailingZeroBits(mask);
+            return n + idx / 2;
+        }
+    }
+    loops = false;
+    __m128i mch = _mm256_castsi256_si128(mch256);
+#  else
+    __m128i mch = _mm_set1_epi32(c | (c << 16));
+#  endif
+
+    auto hasMatch = [mch, &n](__m128i data, ushort validityMask) {
+        __m128i result = _mm_cmpeq_epi16(data, mch);
+        uint mask = uint(_mm_movemask_epi8(result));
+        if ((mask & validityMask) == 0)
+            return false;
+        uint idx = qCountTrailingZeroBits(mask);
+        n += idx / 2;
+        return true;
+    };
+
+    // we're going to read n[0..7] (16 bytes)
+    for (const ushort *next = n + 8; next <= e; n = next, next += 8) {
+        __m128i data = _mm_loadu_si128(reinterpret_cast<const __m128i *>(n));
+        if (hasMatch(data, 0xffff))
+            return n;
+
+        if (!loops) {
+            n += 8;
+            break;
+        }
+    }
+
+#  if !defined(__OPTIMIZE_SIZE__)
+    // we're going to read n[0..3] (8 bytes)
+    if (e - n > 3) {
+        __m128i data = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(n));
+        if (hasMatch(data, 0xff))
+            return n;
+
+        n += 4;
+    }
+
+    return UnrollTailLoop<3>::exec(e - n, e,
+                                   [=](int i) { return n[i] == c; },
+                                   [=](int i) { return n + i; });
+#  endif
+#elif defined(__ARM_NEON__) && defined(Q_PROCESSOR_ARM_64) // vaddv is only available on Aarch64
+    const uint16x8_t vmask = { 1, 1 << 1, 1 << 2, 1 << 3, 1 << 4, 1 << 5, 1 << 6, 1 << 7 };
+    const uint16x8_t ch_vec = vdupq_n_u16(c);
+    for (const ushort *next = n + 8; next <= e; n = next, next += 8) {
+        uint16x8_t data = vld1q_u16(n);
+        uint mask = vaddvq_u16(vandq_u16(vceqq_u16(data, ch_vec), vmask));
+        if (ushort(mask)) {
+            // found a match
+            return n + qCountTrailingZeroBits(mask);
+        }
+    }
+#endif // aarch64
+
+    --n;
+    while (++n != e)
+        if (*n == c)
+            return n;
+
+    return n;
+}
+
+#ifdef __SSE2__
+// Scans from \a ptr to \a end until \a maskval is non-zero. Returns true if
+// the no non-zero was found. Returns false and updates \a ptr to point to the
+// first 16-bit word that has any bit set (note: if the input is 8-bit, \a ptr
+// may be updated to one byte short).
 static bool simdTestMask(const char *&ptr, const char *end, quint32 maskval)
 {
-#  if defined(__AVX2__)
+    auto updatePtr = [&](uint result) {
+        // found a character matching the mask
+        uint idx = qCountTrailingZeroBits(~result);
+        ptr += idx;
+        return false;
+    };
+
+#  if defined(__SSE4_1__)
+    __m128i mask;
+    auto updatePtrSimd = [&](__m128i data) {
+        __m128i masked = _mm_and_si128(mask, data);
+        __m128i comparison = _mm_cmpeq_epi16(masked, _mm_setzero_si128());
+        uint result = _mm_movemask_epi8(comparison);
+        return updatePtr(result);
+    };
+
+#    if defined(__AVX2__)
     // AVX2 implementation: test 32 bytes at a time
     const __m256i mask256 = _mm256_broadcastd_epi32(_mm_cvtsi32_si128(maskval));
     while (ptr + 32 <= end) {
         __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(ptr));
-        if (!_mm256_testz_si256(mask256, data))
-            return false;
+        if (!_mm256_testz_si256(mask256, data)) {
+            // found a character matching the mask
+            __m256i masked256 = _mm256_and_si256(mask256, data);
+            __m256i comparison256 = _mm256_cmpeq_epi16(masked256, _mm256_setzero_si256());
+            return updatePtr(_mm256_movemask_epi8(comparison256));
+        }
         ptr += 32;
     }
 
-    const __m128i mask = _mm256_castsi256_si128(mask256);
-#  elif defined(__SSE4_1__)
+    mask = _mm256_castsi256_si128(mask256);
+#    else
     // SSE 4.1 implementation: test 32 bytes at a time (two 16-byte
     // comparisons, unrolled)
-    const __m128i mask = _mm_set1_epi32(maskval);
+    mask = _mm_set1_epi32(maskval);
     while (ptr + 32 <= end) {
         __m128i data1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(ptr));
         __m128i data2 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(ptr + 16));
         if (!_mm_testz_si128(mask, data1))
-            return false;
+            return updatePtrSimd(data1);
+
+        ptr += 16;
         if (!_mm_testz_si128(mask, data2))
-            return false;
-        ptr += 32;
+            return updatePtrSimd(data2);
+        ptr += 16;
     }
-#  endif
-#  if defined(__SSE4_1__)
+#    endif
+
     // AVX2 and SSE4.1: final 16-byte comparison
     if (ptr + 16 <= end) {
         __m128i data1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(ptr));
         if (!_mm_testz_si128(mask, data1))
-            return false;
+            return updatePtrSimd(data1);
         ptr += 16;
     }
+
+    // and final 8-byte comparison
+    if (ptr + 8 <= end) {
+        __m128i data1 = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(ptr));
+        if (!_mm_testz_si128(mask, data1))
+            return updatePtrSimd(data1);
+        ptr += 8;
+    }
+
 #  else
     // SSE2 implementation: test 16 bytes at a time.
     const __m128i mask = _mm_set1_epi32(maskval);
-    while (ptr + 16 < end) {
+    while (ptr + 16 <= end) {
         __m128i data = _mm_loadu_si128(reinterpret_cast<const __m128i *>(ptr));
-        __m128i masked = _mm_andnot_si128(mask, data);
+        __m128i masked = _mm_and_si128(mask, data);
         __m128i comparison = _mm_cmpeq_epi16(masked, _mm_setzero_si128());
-        if (quint16(_mm_movemask_epi8(comparison)) != 0xffff)
-            return false;
+        quint16 result = _mm_movemask_epi8(comparison);
+        if (result != 0xffff)
+            return updatePtr(result);
         ptr += 16;
+    }
+
+    // and one 8-byte comparison
+    if (ptr + 8 <= end) {
+        __m128i data = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(ptr));
+        __m128i masked = _mm_and_si128(mask, data);
+        __m128i comparison = _mm_cmpeq_epi16(masked, _mm_setzero_si128());
+        quint8 result = _mm_movemask_epi8(comparison);
+        if (result != 0xff)
+            return updatePtr(result);
+        ptr += 8;
     }
 #  endif
 
     return true;
 }
+
+static Q_ALWAYS_INLINE __m128i mm_load8_zero_extend(const void *ptr)
+{
+    const __m128i *dataptr = static_cast<const __m128i *>(ptr);
+#if defined(__SSE4_1__)
+    // use a MOVQ followed by PMOVZXBW
+    // if AVX2 is present, these should combine into a single VPMOVZXBW instruction
+    __m128i data = _mm_loadl_epi64(dataptr);
+    return _mm_cvtepu8_epi16(data);
+#  else
+    // use MOVQ followed by PUNPCKLBW
+    __m128i data = _mm_loadl_epi64(dataptr);
+    return _mm_unpacklo_epi8(data, _mm_setzero_si128());
+#  endif
+}
 #endif
 
-bool QtPrivate::isAscii(QLatin1String s) Q_DECL_NOTHROW
+// Note: ptr on output may be off by one and point to a preceding US-ASCII
+// character. Usually harmless.
+bool qt_is_ascii(const char *&ptr, const char *end) Q_DECL_NOTHROW
 {
-    const char *ptr = s.begin();
-    const char *end = s.end();
-
 #if defined(__SSE2__)
     // Testing for the high bit can be done efficiently with just PMOVMSKB
 #  if defined(__AVX2__)
     while (ptr + 32 <= end) {
         __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(ptr));
         quint32 mask = _mm256_movemask_epi8(data);
-        if (mask)
+        if (mask) {
+            uint idx = qCountTrailingZeroBits(mask);
+            ptr += idx;
             return false;
+        }
         ptr += 32;
     }
 #  endif
-
     while (ptr + 16 <= end) {
         __m128i data = _mm_loadu_si128(reinterpret_cast<const __m128i *>(ptr));
         quint32 mask = _mm_movemask_epi8(data);
-        if (mask)
+        if (mask) {
+            uint idx = qCountTrailingZeroBits(mask);
+            ptr += idx;
             return false;
+        }
         ptr += 16;
+    }
+    if (ptr + 8 <= end) {
+        __m128i data = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(ptr));
+        quint8 mask = _mm_movemask_epi8(data);
+        if (mask) {
+            uint idx = qCountTrailingZeroBits(mask);
+            ptr += idx;
+            return false;
+        }
+        ptr += 8;
     }
 #endif
 
     while (ptr + 4 <= end) {
         quint32 data = qFromUnaligned<quint32>(ptr);
-        if (data & 0x80808080U)
+        if (data &= 0x80808080U) {
+#if Q_BYTE_ORDER == Q_BIG_ENDIAN
+            uint idx = qCountLeadingZeroBits(data);
+#else
+            uint idx = qCountTrailingZeroBits(data);
+#endif
+            ptr += idx / 8;
             return false;
+        }
         ptr += 4;
     }
 
     while (ptr != end) {
-        if (quint8(*ptr++) & 0x80)
+        if (quint8(*ptr) & 0x80)
             return false;
+        ++ptr;
+    }
+    return true;
+}
+
+bool QtPrivate::isAscii(QLatin1String s) Q_DECL_NOTHROW
+{
+    const char *ptr = s.begin();
+    const char *end = s.end();
+
+    return qt_is_ascii(ptr, end);
+}
+
+static bool isAscii(const QChar *&ptr, const QChar *end)
+{
+#ifdef __SSE2__
+    const char *ptr8 = reinterpret_cast<const char *>(ptr);
+    const char *end8 = reinterpret_cast<const char *>(end);
+    bool ok = simdTestMask(ptr8, end8, 0xff80ff80);
+    ptr = reinterpret_cast<const QChar *>(ptr8);
+    if (!ok)
+        return false;
+#endif
+
+    while (ptr != end) {
+        if (ptr->unicode() & 0xff80)
+            return false;
+        ++ptr;
     }
     return true;
 }
@@ -351,19 +552,7 @@ bool QtPrivate::isAscii(QStringView s) Q_DECL_NOTHROW
     const QChar *ptr = s.begin();
     const QChar *end = s.end();
 
-#ifdef __SSE2__
-    const char *ptr8 = reinterpret_cast<const char *>(ptr);
-    const char *end8 = reinterpret_cast<const char *>(end);
-    if (!simdTestMask(ptr8, end8, 0xff80ff80))
-        return false;
-    ptr = reinterpret_cast<const QChar *>(ptr8);
-#endif
-
-    while (ptr != end) {
-        if ((*ptr++).unicode() & 0xff80)
-            return false;
-    }
-    return true;
+    return isAscii(ptr, end);
 }
 
 bool QtPrivate::isLatin1(QStringView s) Q_DECL_NOTHROW
@@ -439,11 +628,18 @@ void qt_from_latin1(ushort *dst, const char *str, size_t size) Q_DECL_NOTHROW
 #endif
     }
 
-    size = size % 16;
+    // we're going to read str[offset..offset+7] (8 bytes)
+    if (str + offset + 7 < e) {
+        const __m128i unpacked = mm_load8_zero_extend(str + offset);
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + offset), unpacked);
+        offset += 8;
+    }
+
+    size = size % 8;
     dst += offset;
     str += offset;
 #  if defined(Q_COMPILER_LAMBDA) && !defined(__OPTIMIZE_SIZE__)
-    return UnrollTailLoop<15>::exec(int(size), [=](int i) { dst[i] = (uchar)str[i]; });
+    return UnrollTailLoop<7>::exec(int(size), [=](int i) { dst[i] = (uchar)str[i]; });
 #  endif
 #endif
 #if defined(__mips_dsp)
@@ -457,86 +653,123 @@ void qt_from_latin1(ushort *dst, const char *str, size_t size) Q_DECL_NOTHROW
 #endif
 }
 
-#if defined(__SSE2__)
-static inline __m128i mergeQuestionMarks(__m128i chunk)
-{
-    const __m128i questionMark = _mm_set1_epi16('?');
-
-# ifdef __SSE4_2__
-    // compare the unsigned shorts for the range 0x0100-0xFFFF
-    // note on the use of _mm_cmpestrm:
-    //  The MSDN documentation online (http://technet.microsoft.com/en-us/library/bb514080.aspx)
-    //  says for range search the following:
-    //    For each character c in a, determine whether b0 <= c <= b1 or b2 <= c <= b3
-    //
-    //  However, all examples on the Internet, including from Intel
-    //  (see http://software.intel.com/en-us/articles/xml-parsing-accelerator-with-intel-streaming-simd-extensions-4-intel-sse4/)
-    //  put the range to be searched first
-    //
-    //  Disassembly and instruction-level debugging with GCC and ICC show
-    //  that they are doing the right thing. Inverting the arguments in the
-    //  instruction does cause a bunch of test failures.
-
-    const __m128i rangeMatch = _mm_cvtsi32_si128(0xffff0100);
-    const __m128i offLimitMask = _mm_cmpestrm(rangeMatch, 2, chunk, 8,
-            _SIDD_UWORD_OPS | _SIDD_CMP_RANGES | _SIDD_UNIT_MASK);
-
-    // replace the non-Latin 1 characters in the chunk with question marks
-    chunk = _mm_blendv_epi8(chunk, questionMark, offLimitMask);
-# else
-    // SSE has no compare instruction for unsigned comparison.
-    // The variables must be shiffted + 0x8000 to be compared
-    const __m128i signedBitOffset = _mm_set1_epi16(short(0x8000));
-    const __m128i thresholdMask = _mm_set1_epi16(short(0xff + 0x8000));
-
-    const __m128i signedChunk = _mm_add_epi16(chunk, signedBitOffset);
-    const __m128i offLimitMask = _mm_cmpgt_epi16(signedChunk, thresholdMask);
-
-#  ifdef __SSE4_1__
-    // replace the non-Latin 1 characters in the chunk with question marks
-    chunk = _mm_blendv_epi8(chunk, questionMark, offLimitMask);
-#  else
-    // offLimitQuestionMark contains '?' for each 16 bits that was off-limit
-    // the 16 bits that were correct contains zeros
-    const __m128i offLimitQuestionMark = _mm_and_si128(offLimitMask, questionMark);
-
-    // correctBytes contains the bytes that were in limit
-    // the 16 bits that were off limits contains zeros
-    const __m128i correctBytes = _mm_andnot_si128(offLimitMask, chunk);
-
-    // merge offLimitQuestionMark and correctBytes to have the result
-    chunk = _mm_or_si128(correctBytes, offLimitQuestionMark);
-#  endif
-# endif
-    return chunk;
-}
-#endif
-
-static void qt_to_latin1(uchar *dst, const ushort *src, int length)
+template <bool Checked>
+static void qt_to_latin1_internal(uchar *dst, const ushort *src, qsizetype length)
 {
 #if defined(__SSE2__)
     uchar *e = dst + length;
     qptrdiff offset = 0;
 
+#  ifdef __AVX2__
+    const __m256i questionMark256 = _mm256_broadcastw_epi16(_mm_cvtsi32_si128('?'));
+    const __m256i outOfRange256 = _mm256_broadcastw_epi16(_mm_cvtsi32_si128(0x100));
+    const __m128i questionMark = _mm256_castsi256_si128(questionMark256);
+    const __m128i outOfRange = _mm256_castsi256_si128(outOfRange256);
+#  else
+    const __m128i questionMark = _mm_set1_epi16('?');
+    const __m128i outOfRange = _mm_set1_epi16(0x100);
+#  endif
+
+    auto mergeQuestionMarks = [=](__m128i chunk) {
+        // SSE has no compare instruction for unsigned comparison.
+# ifdef __SSE4_1__
+        // We use an unsigned uc = qMin(uc, 0x100) and then compare for equality.
+        chunk = _mm_min_epu16(chunk, outOfRange);
+        const __m128i offLimitMask = _mm_cmpeq_epi16(chunk, outOfRange);
+        chunk = _mm_blendv_epi8(chunk, questionMark, offLimitMask);
+# else
+        // The variables must be shiffted + 0x8000 to be compared
+        const __m128i signedBitOffset = _mm_set1_epi16(short(0x8000));
+        const __m128i thresholdMask = _mm_set1_epi16(short(0xff + 0x8000));
+
+        const __m128i signedChunk = _mm_add_epi16(chunk, signedBitOffset);
+        const __m128i offLimitMask = _mm_cmpgt_epi16(signedChunk, thresholdMask);
+
+        // offLimitQuestionMark contains '?' for each 16 bits that was off-limit
+        // the 16 bits that were correct contains zeros
+        const __m128i offLimitQuestionMark = _mm_and_si128(offLimitMask, questionMark);
+
+        // correctBytes contains the bytes that were in limit
+        // the 16 bits that were off limits contains zeros
+        const __m128i correctBytes = _mm_andnot_si128(offLimitMask, chunk);
+
+        // merge offLimitQuestionMark and correctBytes to have the result
+        chunk = _mm_or_si128(correctBytes, offLimitQuestionMark);
+
+        Q_UNUSED(outOfRange);
+# endif
+        return chunk;
+    };
+
     // we're going to write to dst[offset..offset+15] (16 bytes)
     for ( ; dst + offset + 15 < e; offset += 16) {
+#  if defined(__AVX2__)
+        __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src + offset));
+        if (Checked) {
+            // See mergeQuestionMarks lambda above for details
+            chunk = _mm256_min_epu16(chunk, outOfRange256);
+            const __m256i offLimitMask = _mm256_cmpeq_epi16(chunk, outOfRange256);
+            chunk = _mm256_blendv_epi8(chunk, questionMark256, offLimitMask);
+        }
+
+        const __m128i chunk2 = _mm256_extracti128_si256(chunk, 1);
+        const __m128i chunk1 = _mm256_castsi256_si128(chunk);
+#  else
         __m128i chunk1 = _mm_loadu_si128((const __m128i*)(src + offset)); // load
-        chunk1 = mergeQuestionMarks(chunk1);
+        if (Checked)
+            chunk1 = mergeQuestionMarks(chunk1);
 
         __m128i chunk2 = _mm_loadu_si128((const __m128i*)(src + offset + 8)); // load
-        chunk2 = mergeQuestionMarks(chunk2);
+        if (Checked)
+            chunk2 = mergeQuestionMarks(chunk2);
+#  endif
 
         // pack the two vector to 16 x 8bits elements
         const __m128i result = _mm_packus_epi16(chunk1, chunk2);
         _mm_storeu_si128((__m128i*)(dst + offset), result); // store
     }
 
+#  if !defined(__OPTIMIZE_SIZE__)
+    // we're going to write to dst[offset..offset+7] (8 bytes)
+    if (dst + offset + 7 < e) {
+        __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src + offset));
+        if (Checked)
+            chunk = mergeQuestionMarks(chunk);
+
+        // pack, where the upper half is ignored
+        const __m128i result = _mm_packus_epi16(chunk, chunk);
+        _mm_storel_epi64(reinterpret_cast<__m128i *>(dst + offset), result);
+        offset += 8;
+    }
+
+    // we're going to write to dst[offset..offset+3] (4 bytes)
+    if (dst + offset + 3 < e) {
+        __m128i chunk = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(src + offset));
+        if (Checked)
+            chunk = mergeQuestionMarks(chunk);
+
+        // pack, we'll the upper three quarters
+        const __m128i result = _mm_packus_epi16(chunk, chunk);
+        qToUnaligned(_mm_cvtsi128_si32(result), dst + offset);
+        offset += 4;
+    }
+
+    length = length % 4;
+#  else
     length = length % 16;
+#  endif // optimize size
+
+    // advance dst, src for tail processing
     dst += offset;
     src += offset;
 
-#  if defined(Q_COMPILER_LAMBDA) && !defined(__OPTIMIZE_SIZE__)
-    return UnrollTailLoop<15>::exec(length, [=](int i) { dst[i] = (src[i]>0xff) ? '?' : (uchar) src[i]; });
+#  if !defined(__OPTIMIZE_SIZE__)
+    return UnrollTailLoop<3>::exec(length, [=](int i) {
+        if (Checked)
+            dst[i] = (src[i]>0xff) ? '?' : (uchar) src[i];
+        else
+            dst[i] = src[i];
+    });
 #  endif
 #elif defined(__ARM_NEON__)
     // Refer to the documentation of the SSE2 implementation
@@ -551,10 +784,12 @@ static void qt_to_latin1(uchar *dst, const ushort *src, int length)
             uint16x8_t chunk = vld1q_u16((uint16_t *)src); // load
             src += 8;
 
-            const uint16x8_t offLimitMask = vcgtq_u16(chunk, thresholdMask); // chunk > thresholdMask
-            const uint16x8_t offLimitQuestionMark = vandq_u16(offLimitMask, questionMark); // offLimitMask & questionMark
-            const uint16x8_t correctBytes = vbicq_u16(chunk, offLimitMask); // !offLimitMask & chunk
-            chunk = vorrq_u16(correctBytes, offLimitQuestionMark); // correctBytes | offLimitQuestionMark
+            if (Checked) {
+                const uint16x8_t offLimitMask = vcgtq_u16(chunk, thresholdMask); // chunk > thresholdMask
+                const uint16x8_t offLimitQuestionMark = vandq_u16(offLimitMask, questionMark); // offLimitMask & questionMark
+                const uint16x8_t correctBytes = vbicq_u16(chunk, offLimitMask); // !offLimitMask & chunk
+                chunk = vorrq_u16(correctBytes, offLimitQuestionMark); // correctBytes | offLimitQuestionMark
+            }
             const uint8x8_t result = vmovn_u16(chunk); // narrowing move->packing
             vst1_u8(dst, result); // store
             dst += 8;
@@ -566,10 +801,23 @@ static void qt_to_latin1(uchar *dst, const ushort *src, int length)
     qt_toLatin1_mips_dsp_asm(dst, src, length);
 #else
     while (length--) {
-        *dst++ = (*src>0xff) ? '?' : (uchar) *src;
+        if (Checked)
+            *dst++ = (*src>0xff) ? '?' : (uchar) *src;
+        else
+            *dst++ = *src;
         ++src;
     }
 #endif
+}
+
+static void qt_to_latin1(uchar *dst, const ushort *src, qsizetype length)
+{
+    qt_to_latin1_internal<true>(dst, src, length);
+}
+
+void qt_to_latin1_unchecked(uchar *dst, const ushort *src, qsizetype length)
+{
+    qt_to_latin1_internal<false>(dst, src, length);
 }
 
 // Unicode case-insensitive comparison
@@ -656,6 +904,19 @@ static int ucstrncmp(const QChar *a, const QChar *b, size_t l)
     const QChar *end = a + l;
     qptrdiff offset = 0;
 
+    // Using the PMOVMSKB instruction, we get two bits for each character
+    // we compare.
+    int retval;
+    auto isDifferent = [a, b, &offset, &retval](__m128i a_data, __m128i b_data) {
+        __m128i result = _mm_cmpeq_epi16(a_data, b_data);
+        uint mask = ~uint(_mm_movemask_epi8(result));
+        if (ushort(mask) == 0)
+            return false;
+        uint idx = qCountTrailingZeroBits(mask);
+        retval = a[offset + idx / 2].unicode() - b[offset + idx / 2].unicode();
+        return true;
+    };
+
     // we're going to read a[0..15] and b[0..15] (32 bytes)
     for ( ; a + offset + 16 <= end; offset += 16) {
 #ifdef __AVX2__
@@ -684,13 +945,8 @@ static int ucstrncmp(const QChar *a, const QChar *b, size_t l)
     if (a + offset + 8 <= end) {
         __m128i a_data = _mm_loadu_si128(reinterpret_cast<const __m128i *>(a + offset));
         __m128i b_data = _mm_loadu_si128(reinterpret_cast<const __m128i *>(b + offset));
-        __m128i result = _mm_cmpeq_epi16(a_data, b_data);
-        uint mask = ~_mm_movemask_epi8(result);
-        if (ushort(mask)) {
-            // found a different character
-            uint idx = qCountTrailingZeroBits(mask);
-            return a[offset + idx / 2].unicode() - b[offset + idx / 2].unicode();
-        }
+        if (isDifferent(a_data, b_data))
+            return retval;
 
         offset += 8;
     }
@@ -699,13 +955,8 @@ static int ucstrncmp(const QChar *a, const QChar *b, size_t l)
     if (a + offset + 4 <= end) {
         __m128i a_data = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(a + offset));
         __m128i b_data = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(b + offset));
-        __m128i result = _mm_cmpeq_epi16(a_data, b_data);
-        uint mask = ~_mm_movemask_epi8(result);
-        if (uchar(mask)) {
-            // found a different character
-            uint idx = qCountTrailingZeroBits(mask);
-            return a[offset + idx / 2].unicode() - b[offset + idx / 2].unicode();
-        }
+        if (isDifferent(a_data, b_data))
+            return retval;
 
         offset += 4;
     }
@@ -800,6 +1051,21 @@ static int ucstrncmp(const QChar *a, const uchar *c, size_t l)
     __m128i nullmask = _mm_setzero_si128();
     qptrdiff offset = 0;
 
+#  if !defined(__OPTIMIZE_SIZE__)
+    // Using the PMOVMSKB instruction, we get two bits for each character
+    // we compare.
+    int retval;
+    auto isDifferent = [uc, c, &offset, &retval](__m128i a_data, __m128i b_data) {
+        __m128i result = _mm_cmpeq_epi16(a_data, b_data);
+        uint mask = ~uint(_mm_movemask_epi8(result));
+        if (ushort(mask) == 0)
+            return false;
+        uint idx = qCountTrailingZeroBits(mask);
+        retval = uc[offset + idx / 2] - c[offset + idx / 2];
+        return true;
+    };
+#  endif
+
     // we're going to read uc[offset..offset+15] (32 bytes)
     // and c[offset..offset+15] (16 bytes)
     for ( ; uc + offset + 15 < e; offset += 16) {
@@ -836,31 +1102,34 @@ static int ucstrncmp(const QChar *a, const uchar *c, size_t l)
         }
     }
 
-#  ifdef Q_PROCESSOR_X86_64
-    enum { MaxTailLength = 7 };
+#  if !defined(__OPTIMIZE_SIZE__)
     // we'll read uc[offset..offset+7] (16 bytes) and c[offset..offset+7] (8 bytes)
     if (uc + offset + 7 < e) {
         // same, but we're using an 8-byte load
-        __m128i chunk = _mm_cvtsi64_si128(qFromUnaligned<long long>(c + offset));
-        __m128i secondHalf = _mm_unpacklo_epi8(chunk, nullmask);
+        __m128i secondHalf = mm_load8_zero_extend(c + offset);
 
         __m128i ucdata = _mm_loadu_si128((const __m128i*)(uc + offset));
-        __m128i result = _mm_cmpeq_epi16(secondHalf, ucdata);
-        uint mask = ~_mm_movemask_epi8(result);
-        if (ushort(mask)) {
-            // found a different character
-            uint idx = qCountTrailingZeroBits(mask);
-            return uc[offset + idx / 2] - c[offset + idx / 2];
-        }
+        if (isDifferent(ucdata, secondHalf))
+            return retval;
 
         // still matched
         offset += 8;
     }
-#  else
-    // 32-bit, we can't do MOVQ to load 8 bytes
-    Q_UNUSED(nullmask);
-    enum { MaxTailLength = 15 };
-#  endif
+
+    enum { MaxTailLength = 3 };
+    // we'll read uc[offset..offset+3] (8 bytes) and c[offset..offset+3] (4 bytes)
+    if (uc + offset + 3 < e) {
+        __m128i chunk = _mm_cvtsi32_si128(qFromUnaligned<int>(c + offset));
+        __m128i secondHalf = _mm_unpacklo_epi8(chunk, nullmask);
+
+        __m128i ucdata = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(uc + offset));
+        if (isDifferent(ucdata, secondHalf))
+            return retval;
+
+        // still matched
+        offset += 4;
+    }
+#  endif // optimize size
 
     // reset uc and c
     uc += offset;
@@ -930,14 +1199,12 @@ static int qt_compare_strings(QLatin1String lhs, QStringView rhs, Qt::CaseSensit
 
 static int qt_compare_strings(QLatin1String lhs, QLatin1String rhs, Qt::CaseSensitivity cs) Q_DECL_NOTHROW
 {
+    if (cs == Qt::CaseInsensitive)
+        return qstrnicmp(lhs.data(), lhs.size(), rhs.data(), rhs.size());
     if (lhs.isEmpty())
         return lencmp(0, rhs.size());
     const auto l = std::min(lhs.size(), rhs.size());
-    int r;
-    if (cs == Qt::CaseSensitive)
-        r = qstrncmp(lhs.data(), rhs.data(), l);
-    else
-        r = qstrnicmp(lhs.data(), rhs.data(), l);
+    int r = qstrncmp(lhs.data(), rhs.data(), l);
     return r ? r : lencmp(lhs.size(), rhs.size());
 }
 
@@ -1039,44 +1306,9 @@ static int findChar(const QChar *str, int len, QChar ch, int from,
         const ushort *n = s + from;
         const ushort *e = s + len;
         if (cs == Qt::CaseSensitive) {
-#ifdef __SSE2__
-            __m128i mch = _mm_set1_epi32(c | (c << 16));
-
-            // we're going to read n[0..7] (16 bytes)
-            for (const ushort *next = n + 8; next <= e; n = next, next += 8) {
-                __m128i data = _mm_loadu_si128((const __m128i*)n);
-                __m128i result = _mm_cmpeq_epi16(data, mch);
-                uint mask = _mm_movemask_epi8(result);
-                if (ushort(mask)) {
-                    // found a match
-                    // same as: return n - s + _bit_scan_forward(mask) / 2
-                    return (reinterpret_cast<const char *>(n) - reinterpret_cast<const char *>(s)
-                            + qCountTrailingZeroBits(mask)) >> 1;
-                }
-            }
-
-#  if defined(Q_COMPILER_LAMBDA) && !defined(__OPTIMIZE_SIZE__)
-            return UnrollTailLoop<7>::exec(e - n, -1,
-                                           [=](int i) { return n[i] == c; },
-                                           [=](int i) { return n - s + i; });
-#  endif
-#endif
-#if defined(__ARM_NEON__) && defined(Q_PROCESSOR_ARM_64) // vaddv is only available on Aarch64
-            const uint16x8_t vmask = { 1, 1 << 1, 1 << 2, 1 << 3, 1 << 4, 1 << 5, 1 << 6, 1 << 7 };
-            const uint16x8_t ch_vec = vdupq_n_u16(c);
-            for (const ushort *next = n + 8; next <= e; n = next, next += 8) {
-                uint16x8_t data = vld1q_u16(n);
-                uint mask = vaddvq_u16(vandq_u16(vceqq_u16(data, ch_vec), vmask));
-                if (ushort(mask)) {
-                    // found a match
-                    return n - s + qCountTrailingZeroBits(mask);
-                }
-            }
-#endif // aarch64
-            --n;
-            while (++n != e)
-                if (*n == c)
-                    return  n - s;
+            n = QtPrivate::qustrchr(QStringView(n, e), c);
+            if (n != e)
+                return n - s;
         } else {
             c = foldCase(c);
             --n;
@@ -1124,7 +1356,7 @@ const QString::Null QString::null = { };
   literals and 8-bit data to unicode QStrings, but allows the use of
   the \c{QChar(char)} and \c{QString(const char (&ch)[N]} constructors,
   and the \c{QString::operator=(const char (&ch)[N])} assignment operator
-  giving most of the type-safety benefits of QT_NO_CAST_FROM_ASCII
+  giving most of the type-safety benefits of \c QT_NO_CAST_FROM_ASCII
   but does not require user code to wrap character and string literals
   with QLatin1Char, QLatin1String or similar.
 
@@ -1779,13 +2011,13 @@ const QString::Null QString::null = { };
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
 
-    \note Defining QT_RESTRICTED_CAST_FROM_ASCII also disables
+    \note Defining \c QT_RESTRICTED_CAST_FROM_ASCII also disables
     this constructor, but enables a \c{QString(const char (&ch)[N])}
     constructor instead. Using non-literal input, or input with
     embedded NUL characters, or non-7-bit characters is undefined
     in this case.
 
-    \sa fromLatin1(), fromLocal8Bit(), fromUtf8()
+    \sa fromLatin1(), fromLocal8Bit(), fromUtf8(), QT_NO_CAST_FROM_ASCII, QT_RESTRICTED_CAST_FROM_ASCII
 */
 
 /*! \fn QString QString::fromStdString(const std::string &str)
@@ -1978,7 +2210,7 @@ QString::QString(QChar ch)
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
 
-    \sa fromLatin1(), fromLocal8Bit(), fromUtf8()
+    \sa fromLatin1(), fromLocal8Bit(), fromUtf8(), QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn QString::QString(const Null &)
@@ -2226,6 +2458,8 @@ QString &QString::operator=(QLatin1String other)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn QString &QString::operator=(const char *str)
@@ -2240,6 +2474,7 @@ QString &QString::operator=(QLatin1String other)
     This can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
 
+    \sa QT_NO_CAST_FROM_ASCII, QT_RESTRICTED_CAST_FROM_ASCII
 */
 
 /*! \fn QString &QString::operator=(char ch)
@@ -2254,6 +2489,8 @@ QString &QString::operator=(QLatin1String other)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -2316,8 +2553,10 @@ QString &QString::operator=(QChar ch)
     If the given \a position is greater than size(), the array is
     first extended using resize().
 
-    This function is not available when QT_NO_CAST_FROM_ASCII is
+    This function is not available when \c QT_NO_CAST_FROM_ASCII is
     defined.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 
@@ -2332,8 +2571,10 @@ QString &QString::operator=(QChar ch)
     If the given \a position is greater than size(), the array is
     first extended using resize().
 
-    This function is not available when QT_NO_CAST_FROM_ASCII is
+    This function is not available when \c QT_NO_CAST_FROM_ASCII is
     defined.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 
@@ -2498,6 +2739,8 @@ QString &QString::append(QLatin1String str)
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn QString &QString::append(const char *str)
@@ -2511,6 +2754,8 @@ QString &QString::append(QLatin1String str)
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -2573,6 +2818,8 @@ QString &QString::append(QChar ch)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn QString &QString::prepend(const char *str)
@@ -2586,6 +2833,8 @@ QString &QString::append(QChar ch)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn QString &QString::prepend(QChar ch)
@@ -3184,6 +3433,8 @@ bool QString::operator==(QLatin1String other) const Q_DECL_NOTHROW
 
     Returns \c true if this string is lexically equal to the parameter
     string \a other. Otherwise returns \c false.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool QString::operator==(const char *other) const
@@ -3197,6 +3448,8 @@ bool QString::operator==(QLatin1String other) const Q_DECL_NOTHROW
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -3237,6 +3490,8 @@ bool QString::operator<(QLatin1String other) const Q_DECL_NOTHROW
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool QString::operator<(const char *other) const
@@ -3253,6 +3508,8 @@ bool QString::operator<(QLatin1String other) const Q_DECL_NOTHROW
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool operator<=(const QString &s1, const QString &s2)
@@ -3288,6 +3545,8 @@ bool QString::operator<(QLatin1String other) const Q_DECL_NOTHROW
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool QString::operator<=(const char *other) const
@@ -3301,6 +3560,8 @@ bool QString::operator<(QLatin1String other) const Q_DECL_NOTHROW
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool operator>(const QString &s1, const QString &s2)
@@ -3338,6 +3599,8 @@ bool QString::operator>(QLatin1String other) const Q_DECL_NOTHROW
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool QString::operator>(const char *other) const
@@ -3351,6 +3614,8 @@ bool QString::operator>(QLatin1String other) const Q_DECL_NOTHROW
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool operator>=(const QString &s1, const QString &s2)
@@ -3385,6 +3650,8 @@ bool QString::operator>(QLatin1String other) const Q_DECL_NOTHROW
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool QString::operator>=(const char *other) const
@@ -3398,6 +3665,8 @@ bool QString::operator>(QLatin1String other) const Q_DECL_NOTHROW
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool operator!=(const QString &s1, const QString &s2)
@@ -3432,6 +3701,8 @@ bool QString::operator>(QLatin1String other) const Q_DECL_NOTHROW
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool QString::operator!=(const char *other) const
@@ -3445,6 +3716,8 @@ bool QString::operator>(QLatin1String other) const Q_DECL_NOTHROW
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -4930,16 +5203,55 @@ bool QString::endsWith(QChar c, Qt::CaseSensitivity cs) const
     return qt_ends_with(*this, c, cs);
 }
 
+/*!
+    Returns \c true if the string only contains uppercase letters,
+    otherwise returns \c false.
+    \since 5.12
+
+    \sa QChar::isUpper(), isLower()
+*/
+bool QString::isUpper() const
+{
+    if (isEmpty())
+        return false;
+
+    const QChar *d = data();
+
+    for (int i = 0, max = size(); i < max; ++i) {
+        if (!d[i].isUpper())
+            return false;
+    }
+
+    return true;
+}
+
+/*!
+    Returns \c true if the string only contains lowercase letters,
+    otherwise returns \c false.
+    \since 5.12
+
+    \sa QChar::isLower(), isUpper()
+ */
+bool QString::isLower() const
+{
+    if (isEmpty())
+        return false;
+
+    const QChar *d = data();
+
+    for (int i = 0, max = size(); i < max; ++i) {
+        if (!d[i].isLower())
+            return false;
+    }
+
+    return true;
+}
+
 static QByteArray qt_convert_to_latin1(QStringView string);
 
 QByteArray QString::toLatin1_helper(const QString &string)
 {
     return qt_convert_to_latin1(string);
-}
-
-QByteArray QString::toLatin1_helper(const QChar *data, int length)
-{
-    return qt_convert_to_latin1(QStringView(data, length));
 }
 
 /*!
@@ -5799,6 +6111,8 @@ QString& QString::fill(QChar ch, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn QString &QString::operator+=(const char *str)
@@ -5812,6 +6126,8 @@ QString& QString::fill(QChar ch, int size)
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn QString &QString::operator+=(const QStringRef &str)
@@ -5833,6 +6149,8 @@ QString& QString::fill(QChar ch, int size)
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn QString &QString::operator+=(QChar ch)
@@ -6013,7 +6331,17 @@ QString& QString::fill(QChar ch, int size)
     sensitivity setting \a cs.
 */
 
+/*!
+    \fn int QString::compare(QStringView s, Qt::CaseSensitivity cs = Qt::CaseSensitive) const
 
+    \since 5.12
+    \overload compare()
+
+    Performs a comparison of this with \a s, using the case
+    sensitivity setting \a cs.
+*/
+
+#if QT_STRINGVIEW_LEVEL < 2
 /*!
     \overload compare()
     \since 4.2
@@ -6029,6 +6357,7 @@ int QString::compare(const QString &other, Qt::CaseSensitivity cs) const Q_DECL_
 {
     return qt_compare_strings(*this, other, cs);
 }
+#endif
 
 /*!
     \internal
@@ -6055,6 +6384,7 @@ int QString::compare(QLatin1String other, Qt::CaseSensitivity cs) const Q_DECL_N
     return qt_compare_strings(*this, other, cs);
 }
 
+#if QT_STRINGVIEW_LEVEL < 2
 /*!
   \fn int QString::compare(const QStringRef &ref, Qt::CaseSensitivity cs = Qt::CaseSensitive) const
   \overload compare()
@@ -6063,6 +6393,7 @@ int QString::compare(QLatin1String other, Qt::CaseSensitivity cs) const Q_DECL_N
   an integer less than, equal to, or greater than zero if the string
   is less than, equal to, or greater than \a ref.
 */
+#endif
 
 /*!
     \internal
@@ -6173,7 +6504,7 @@ int QString::localeAwareCompare(const QString &other) const
     return localeAwareCompare_helper(constData(), length(), other.constData(), other.length());
 }
 
-#if QT_CONFIG(icu) && !defined(Q_OS_WIN32) && !defined(Q_OS_DARWIN)
+#if QT_CONFIG(icu)
 Q_GLOBAL_STATIC(QThreadStorage<QCollator>, defaultCollator)
 #endif
 
@@ -6194,12 +6525,15 @@ int QString::localeAwareCompare_helper(const QChar *data1, int length1,
         return qt_compare_strings(QStringView(data1, length1), QStringView(data2, length2),
                                Qt::CaseSensitive);
 
-#if defined(Q_OS_WIN)
-#  ifndef Q_OS_WINRT
-    int res = CompareString(GetUserDefaultLCID(), 0, (wchar_t*)data1, length1, (wchar_t*)data2, length2);
-#  else
-    int res = CompareStringEx(LOCALE_NAME_USER_DEFAULT, 0, (LPCWSTR)data1, length1, (LPCWSTR)data2, length2, NULL, NULL, 0);
-#  endif
+#if QT_CONFIG(icu)
+    if (!defaultCollator()->hasLocalData())
+        defaultCollator()->setLocalData(QCollator());
+    return defaultCollator()->localData().compare(data1, length1, data2, length2);
+#else
+    const QString lhs = QString::fromRawData(data1, length1).normalized(QString::NormalizationForm_C);
+    const QString rhs = QString::fromRawData(data2, length2).normalized(QString::NormalizationForm_C);
+#  if defined(Q_OS_WIN)
+    int res = CompareStringEx(LOCALE_NAME_USER_DEFAULT, 0, (LPWSTR)lhs.constData(), lhs.length(), (LPWSTR)rhs.constData(), rhs.length(), NULL, NULL, 0);
 
     switch (res) {
     case CSTR_LESS_THAN:
@@ -6209,37 +6543,33 @@ int QString::localeAwareCompare_helper(const QChar *data1, int length1,
     default:
         return 0;
     }
-#elif defined (Q_OS_MAC)
+#  elif defined (Q_OS_DARWIN)
     // Use CFStringCompare for comparing strings on Mac. This makes Qt order
     // strings the same way as native applications do, and also respects
     // the "Order for sorted lists" setting in the International preferences
     // panel.
     const CFStringRef thisString =
         CFStringCreateWithCharactersNoCopy(kCFAllocatorDefault,
-            reinterpret_cast<const UniChar *>(data1), length1, kCFAllocatorNull);
+            reinterpret_cast<const UniChar *>(lhs.constData()), lhs.length(), kCFAllocatorNull);
     const CFStringRef otherString =
         CFStringCreateWithCharactersNoCopy(kCFAllocatorDefault,
-            reinterpret_cast<const UniChar *>(data2), length2, kCFAllocatorNull);
+            reinterpret_cast<const UniChar *>(rhs.constData()), rhs.length(), kCFAllocatorNull);
 
     const int result = CFStringCompare(thisString, otherString, kCFCompareLocalized);
     CFRelease(thisString);
     CFRelease(otherString);
     return result;
-#elif QT_CONFIG(icu)
-    if (!defaultCollator()->hasLocalData())
-        defaultCollator()->setLocalData(QCollator());
-    return defaultCollator()->localData().compare(data1, length1, data2, length2);
-#elif defined(Q_OS_UNIX)
+#  elif defined(Q_OS_UNIX)
     // declared in <string.h>
-    int delta = strcoll(toLocal8Bit_helper(data1, length1).constData(), toLocal8Bit_helper(data2, length2).constData());
+    int delta = strcoll(lhs.toLocal8Bit().constData(), rhs.toLocal8Bit().constData());
     if (delta == 0)
-        delta = qt_compare_strings(QStringView(data1, length1), QStringView(data2, length2),
-                                Qt::CaseSensitive);
+        delta = qt_compare_strings(lhs, rhs, Qt::CaseSensitive);
     return delta;
-#else
-    return qt_compare_strings(QStringView(data1, length1), QStringView(data2, length2),
-                           Qt::CaseSensitive);
-#endif
+#  else
+#     error "This case shouldn't happen"
+    return qt_compare_strings(lhs, rhs, Qt::CaseSensitive);
+#  endif
+#endif // !QT_CONFIG(icu)
 }
 
 
@@ -7169,7 +7499,8 @@ ushort QString::toUShort(bool *ok, int base) const
 /*!
     Returns the string converted to a \c double value.
 
-    Returns 0.0 if the conversion fails.
+    Returns an infinity if the conversion overflows or 0.0 if the
+    conversion fails for other reasons (e.g. underflow).
 
     If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
     to \c false, and success by setting *\a{ok} to \c true.
@@ -7207,7 +7538,8 @@ double QString::toDouble(bool *ok) const
 /*!
     Returns the string converted to a \c float value.
 
-    Returns 0.0 if the conversion fails.
+    Returns an infinity if the conversion overflows or 0.0 if the
+    conversion fails for other reasons (e.g. underflow).
 
     If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
     to \c false, and success by setting *\a{ok} to \c true.
@@ -7742,10 +8074,7 @@ QVector<QStringRef> QString::splitRef(const QRegularExpression &re, SplitBehavio
 
     Example:
 
-    \code
-        QString str("ab");
-        str.repeated(4);            // returns "abababab"
-    \endcode
+    \snippet code/src_corelib_tools_qstring.cpp 8
 */
 QString QString::repeated(int times) const
 {
@@ -7784,19 +8113,11 @@ QString QString::repeated(int times) const
 
 void qt_string_normalize(QString *data, QString::NormalizationForm mode, QChar::UnicodeVersion version, int from)
 {
-    bool simple = true;
-    const QChar *p = data->constData();
-    int len = data->length();
-    for (int i = from; i < len; ++i) {
-        if (p[i].unicode() >= 0x80) {
-            simple = false;
-            if (i > from)
-                from = i - 1;
-            break;
-        }
-    }
-    if (simple)
+    const QChar *p = data->constData() + from;
+    if (isAscii(p, p + data->length() - from))
         return;
+    if (p > data->constData() + from)
+        from = p - data->constData() - 1;   // need one before the non-ASCII to perform NFC
 
     if (version == QChar::Unicode_Unassigned) {
         version = QChar::currentUnicodeVersion();
@@ -9007,7 +9328,7 @@ QString &QString::setRawData(const QChar *unicode, int size)
     in the first place. In those cases, using QStringLiteral may be
     the better option.
 
-    \sa QString, QLatin1Char, {QStringLiteral()}{QStringLiteral}
+    \sa QString, QLatin1Char, {QStringLiteral()}{QStringLiteral}, QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9484,6 +9805,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9498,6 +9821,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool QLatin1String::operator!=(const QString &other) const
@@ -9523,6 +9848,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9537,6 +9864,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9563,6 +9892,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9577,6 +9908,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     when you compile your applications. This can be useful if you want
     to ensure that all user-visible strings go through QObject::tr(),
     for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9603,6 +9936,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9617,6 +9952,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9643,6 +9980,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9657,6 +9996,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*! \fn bool QLatin1String::operator<=(const QString &other) const
@@ -9682,6 +10023,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -9696,6 +10039,8 @@ QString &QString::setRawData(const QChar *unicode, int size)
     QT_NO_CAST_FROM_ASCII when you compile your applications. This
     can be useful if you want to ensure that all user-visible strings
     go through QObject::tr(), for example.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 
@@ -9757,11 +10102,7 @@ QDataStream &operator<<(QDataStream &out, const QString &str)
                 out.writeBytes(reinterpret_cast<const char *>(str.unicode()), sizeof(QChar) * str.length());
             } else {
                 QVarLengthArray<ushort> buffer(str.length());
-                const ushort *data = reinterpret_cast<const ushort *>(str.constData());
-                for (int i = 0; i < str.length(); i++) {
-                    buffer[i] = qbswap(*data);
-                    ++data;
-                }
+                qbswap<sizeof(ushort)>(str.constData(), str.length(), buffer.data());
                 out.writeBytes(reinterpret_cast<const char *>(buffer.data()), sizeof(ushort) * buffer.size());
             }
         } else {
@@ -9818,10 +10159,7 @@ QDataStream &operator>>(QDataStream &in, QString &str)
             if ((in.byteOrder() == QDataStream::BigEndian)
                     != (QSysInfo::ByteOrder == QSysInfo::BigEndian)) {
                 ushort *data = reinterpret_cast<ushort *>(str.data());
-                while (len--) {
-                    *data = qbswap(*data);
-                    ++data;
-                }
+                qbswap<sizeof(*data)>(data, len, data);
             }
         } else {
             str = QString(QLatin1String(""));
@@ -10331,6 +10669,7 @@ bool operator<(const QStringRef &s1,const QStringRef &s2) Q_DECL_NOTHROW
     Returns \c true if this string is lexically equal to the parameter
     string \a s. Otherwise returns \c false.
 
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -10348,6 +10687,8 @@ bool operator<(const QStringRef &s1,const QStringRef &s2) Q_DECL_NOTHROW
 
     Returns \c true if this string is not lexically equal to the parameter
     string \a s. Otherwise returns \c false.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -10365,6 +10706,8 @@ bool operator<(const QStringRef &s1,const QStringRef &s2) Q_DECL_NOTHROW
 
     Returns \c true if this string is lexically smaller than the parameter
     string \a s. Otherwise returns \c false.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -10382,6 +10725,8 @@ bool operator<(const QStringRef &s1,const QStringRef &s2) Q_DECL_NOTHROW
 
     Returns \c true if this string is lexically smaller than or equal to the parameter
     string \a s. Otherwise returns \c false.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -10400,6 +10745,8 @@ bool operator<(const QStringRef &s1,const QStringRef &s2) Q_DECL_NOTHROW
 
     Returns \c true if this string is lexically greater than the parameter
     string \a s. Otherwise returns \c false.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 
 /*!
@@ -10417,6 +10764,8 @@ bool operator<(const QStringRef &s1,const QStringRef &s2) Q_DECL_NOTHROW
 
     Returns \c true if this string is lexically greater than or equal to the
     parameter string \a s. Otherwise returns \c false.
+
+    \sa QT_NO_CAST_FROM_ASCII
 */
 /*!
     \typedef QString::Data
@@ -11794,7 +12143,8 @@ ushort QStringRef::toUShort(bool *ok, int base) const
 /*!
     Returns the string converted to a \c double value.
 
-    Returns 0.0 if the conversion fails.
+    Returns an infinity if the conversion overflows or 0.0 if the
+    conversion fails for other reasons (e.g. underflow).
 
     If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
     to \c false, and success by setting *\a{ok} to \c true.
@@ -11819,7 +12169,8 @@ double QStringRef::toDouble(bool *ok) const
 /*!
     Returns the string converted to a \c float value.
 
-    Returns 0.0 if the conversion fails.
+    Returns an infinity if the conversion overflows or 0.0 if the
+    conversion fails for other reasons (e.g. underflow).
 
     If \a ok is not \c nullptr, failure is reported by setting *\a{ok}
     to \c false, and success by setting *\a{ok} to \c true.
@@ -11887,10 +12238,7 @@ QString QString::toHtmlEscaped() const
 
   If you have code that looks like this:
 
-  \code
-  // hasAttribute takes a QString argument
-  if (node.hasAttribute("http-contents-length")) //...
-  \endcode
+  \snippet code/src_corelib_tools_qstring.cpp 9
 
   then a temporary QString will be created to be passed as the \c{hasAttribute}
   function parameter. This can be quite expensive, as it involves a memory
@@ -11899,9 +12247,7 @@ QString QString::toHtmlEscaped() const
 
   This cost can be avoided by using QStringLiteral instead:
 
-  \code
-  if (node.hasAttribute(QStringLiteral(u"http-contents-length"))) //...
-  \endcode
+  \snippet code/src_corelib_tools_qstring.cpp 10
 
   In this case, QString's internal data will be generated at compile time; no
   conversion or allocation will occur at runtime.
@@ -11916,9 +12262,7 @@ QString QString::toHtmlEscaped() const
   instance, QString::operator==() can compare to a QLatin1String
   directly:
 
-  \code
-  if (attribute.name() == QLatin1String("http-contents-length")) //...
-  \endcode
+  \snippet code/src_corelib_tools_qstring.cpp 11
 
   \note Some compilers have bugs encoding strings containing characters outside
   the US-ASCII character set. Make sure you prefix your string with \c{u} in

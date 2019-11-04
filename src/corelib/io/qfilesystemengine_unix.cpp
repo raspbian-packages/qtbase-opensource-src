@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2017 Intel Corporation.
+** Copyright (C) 2018 Intel Corporation.
 ** Copyright (C) 2016 The Qt Company Ltd.
 ** Copyright (C) 2013 Samuel Gaist <samuel.gaist@edeltech.ch>
 ** Contact: https://www.qt.io/licensing/
@@ -76,9 +76,7 @@
 #endif
 
 #if defined(Q_OS_DARWIN)
-# if QT_DARWIN_PLATFORM_SDK_EQUAL_OR_ABOVE(101200, 100000, 100000, 30000)
-#  include <sys/clonefile.h>
-# endif
+# include <sys/clonefile.h>
 # include <copyfile.h>
 // We cannot include <Foundation/Foundation.h> (it's an Objective-C header), but
 // we need these declarations:
@@ -88,7 +86,6 @@ extern "C" NSString *NSTemporaryDirectory();
 
 #if defined(Q_OS_LINUX)
 #  include <sys/ioctl.h>
-#  include <sys/syscall.h>
 #  include <sys/sendfile.h>
 #  include <linux/fs.h>
 
@@ -96,28 +93,6 @@ extern "C" NSString *NSTemporaryDirectory();
 #ifndef FICLONE
 #  define FICLONE       _IOW(0x94, 9, int)
 #endif
-
-#  if defined(Q_OS_ANDROID)
-// renameat2() and statx() are disabled on Android because quite a few systems
-// come with sandboxes that kill applications that make system calls outside a
-// whitelist and several Android vendors can't be bothered to update the list.
-#    undef SYS_renameat2
-#    undef SYS_statx
-#    undef STATX_BASIC_STATS
-#  else
-#    if !QT_CONFIG(renameat2) && defined(SYS_renameat2)
-static int renameat2(int oldfd, const char *oldpath, int newfd, const char *newpath, unsigned flags)
-{ return syscall(SYS_renameat2, oldfd, oldpath, newfd, newpath, flags); }
-#    endif
-
-#    if !QT_CONFIG(statx) && defined(SYS_statx)
-#      include <linux/stat.h>
-static int statx(int dirfd, const char *pathname, int flag, unsigned mask, struct statx *statxbuf)
-{ return syscall(SYS_statx, dirfd, pathname, flag, mask, statxbuf); }
-#    elif !QT_CONFIG(statx) && !defined(SYS_statx)
-#      undef STATX_BASIC_STATS
-#    endif
-#  endif // !Q_OS_ANDROID
 #endif
 
 #if defined(Q_OS_ANDROID)
@@ -338,22 +313,8 @@ mtime(const T &statBuffer, int)
 #ifdef STATX_BASIC_STATS
 static int qt_real_statx(int fd, const char *pathname, int flags, struct statx *statxBuffer)
 {
-#ifdef Q_ATOMIC_INT8_IS_SUPPORTED
-    static QBasicAtomicInteger<qint8> statxTested  = Q_BASIC_ATOMIC_INITIALIZER(0);
-#else
-    static QBasicAtomicInt statxTested = Q_BASIC_ATOMIC_INITIALIZER(0);
-#endif
-
-    if (statxTested.load() == -1)
-        return -ENOSYS;
-
     unsigned mask = STATX_BASIC_STATS | STATX_BTIME;
     int ret = statx(fd, pathname, flags, mask, statxBuffer);
-    if (ret == -1 && errno == ENOSYS) {
-        statxTested.store(-1);
-        return -ENOSYS;
-    }
-    statxTested.store(1);
     return ret == -1 ? -errno : 0;
 }
 
@@ -781,7 +742,7 @@ QFileSystemEntry QFileSystemEngine::canonicalName(const QFileSystemEntry &entry,
         QString canonicalPath = QDir::cleanPath(QFile::decodeName(ret));
         free(ret);
         return QFileSystemEntry(canonicalPath);
-    } else if (errno == ENOENT) { // file doesn't exist
+    } else if (errno == ENOENT || errno == ENOTDIR) { // file doesn't exist
         data.knownFlagsMask |= QFileSystemMetaData::ExistsAttribute;
         data.entryFlags &= ~(QFileSystemMetaData::ExistsAttribute);
         return QFileSystemEntry();
@@ -844,11 +805,11 @@ QByteArray QFileSystemEngine::id(const QFileSystemEntry &entry)
 }
 
 //static
-QByteArray QFileSystemEngine::id(int id)
+QByteArray QFileSystemEngine::id(int fd)
 {
     QT_STATBUF statResult;
-    if (QT_FSTAT(id, &statResult)) {
-        qErrnoWarning("fstat() failed for fd %d", id);
+    if (QT_FSTAT(fd, &statResult)) {
+        qErrnoWarning("fstat() failed for fd %d", fd);
         return QByteArray();
     }
     QByteArray result = QByteArray::number(quint64(statResult.st_dev), 16);
@@ -860,16 +821,16 @@ QByteArray QFileSystemEngine::id(int id)
 //static
 QString QFileSystemEngine::resolveUserName(uint userId)
 {
-#if !defined(QT_NO_THREAD) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD)
+#if QT_CONFIG(thread) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD)
     int size_max = sysconf(_SC_GETPW_R_SIZE_MAX);
     if (size_max == -1)
         size_max = 1024;
     QVarLengthArray<char, 1024> buf(size_max);
 #endif
 
-#if !defined(Q_OS_INTEGRITY)
+#if !defined(Q_OS_INTEGRITY) && !defined(Q_OS_WASM)
     struct passwd *pw = 0;
-#if !defined(QT_NO_THREAD) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && !defined(Q_OS_VXWORKS)
+#if QT_CONFIG(thread) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && !defined(Q_OS_VXWORKS)
     struct passwd entry;
     getpwuid_r(userId, &entry, buf.data(), buf.size(), &pw);
 #else
@@ -884,16 +845,16 @@ QString QFileSystemEngine::resolveUserName(uint userId)
 //static
 QString QFileSystemEngine::resolveGroupName(uint groupId)
 {
-#if !defined(QT_NO_THREAD) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD)
+#if QT_CONFIG(thread) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD)
     int size_max = sysconf(_SC_GETPW_R_SIZE_MAX);
     if (size_max == -1)
         size_max = 1024;
     QVarLengthArray<char, 1024> buf(size_max);
 #endif
 
-#if !defined(Q_OS_INTEGRITY)
+#if !defined(Q_OS_INTEGRITY) && !defined(Q_OS_WASM)
     struct group *gr = 0;
-#if !defined(QT_NO_THREAD) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && !defined(Q_OS_VXWORKS) && (!defined(Q_OS_ANDROID) || defined(Q_OS_ANDROID) && (__ANDROID_API__ >= 24))
+#if QT_CONFIG(thread) && defined(_POSIX_THREAD_SAFE_FUNCTIONS) && !defined(Q_OS_OPENBSD) && !defined(Q_OS_VXWORKS) && (!defined(Q_OS_ANDROID) || defined(Q_OS_ANDROID) && (__ANDROID_API__ >= 24))
     size_max = sysconf(_SC_GETGR_R_SIZE_MAX);
     if (size_max == -1)
         size_max = 1024;
@@ -1265,20 +1226,18 @@ bool QFileSystemEngine::createLink(const QFileSystemEntry &source, const QFileSy
 //static
 bool QFileSystemEngine::copyFile(const QFileSystemEntry &source, const QFileSystemEntry &target, QSystemError &error)
 {
-#if QT_DARWIN_PLATFORM_SDK_EQUAL_OR_ABOVE(101200, 100000, 100000, 30000)
-    if (__builtin_available(macOS 10.12, iOS 10, tvOS 10, watchOS 3, *)) {
-        if (::clonefile(source.nativeFilePath().constData(),
-                        target.nativeFilePath().constData(), 0) == 0)
-            return true;
-        error = QSystemError(errno, QSystemError::StandardLibraryError);
-        return false;
-    }
+#if defined(Q_OS_DARWIN)
+    if (::clonefile(source.nativeFilePath().constData(),
+                    target.nativeFilePath().constData(), 0) == 0)
+        return true;
+    error = QSystemError(errno, QSystemError::StandardLibraryError);
+    return false;
 #else
     Q_UNUSED(source);
     Q_UNUSED(target);
-#endif
     error = QSystemError(ENOSYS, QSystemError::StandardLibraryError); //Function not implemented
     return false;
+#endif
 }
 
 //static
@@ -1289,26 +1248,22 @@ bool QFileSystemEngine::renameFile(const QFileSystemEntry &source, const QFileSy
     if (Q_UNLIKELY(srcPath.isEmpty() || tgtPath.isEmpty()))
         return emptyFileEntryWarning(), false;
 
-#if defined(RENAME_NOREPLACE) && (QT_CONFIG(renameat2) || defined(SYS_renameat2))
+#if defined(RENAME_NOREPLACE) && QT_CONFIG(renameat2)
     if (renameat2(AT_FDCWD, srcPath, AT_FDCWD, tgtPath, RENAME_NOREPLACE) == 0)
         return true;
 
-    // If we're using syscall(), check for ENOSYS;
-    // if renameat2 came from libc, we don't accept ENOSYS.
     // We can also get EINVAL for some non-local filesystems.
-    if ((QT_CONFIG(renameat2) || errno != ENOSYS) && errno != EINVAL) {
+    if (errno != EINVAL) {
         error = QSystemError(errno, QSystemError::StandardLibraryError);
         return false;
     }
 #endif
 #if defined(Q_OS_DARWIN) && defined(RENAME_EXCL)
-    if (__builtin_available(macOS 10.12, iOS 10, tvOS 10, watchOS 3, *)) {
-        if (renameatx_np(AT_FDCWD, srcPath, AT_FDCWD, tgtPath, RENAME_EXCL) == 0)
-            return true;
-        if (errno != ENOTSUP) {
-            error = QSystemError(errno, QSystemError::StandardLibraryError);
-            return false;
-        }
+    if (renameatx_np(AT_FDCWD, srcPath, AT_FDCWD, tgtPath, RENAME_EXCL) == 0)
+        return true;
+    if (errno != ENOTSUP) {
+        error = QSystemError(errno, QSystemError::StandardLibraryError);
+        return false;
     }
 #endif
 
@@ -1531,7 +1486,7 @@ QString QFileSystemEngine::tempPath()
             temp = QLatin1String(_PATH_TMP);
         }
     }
-    return QDir::cleanPath(temp);
+    return QDir(QDir::cleanPath(temp)).canonicalPath();
 #endif
 }
 

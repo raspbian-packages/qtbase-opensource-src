@@ -102,7 +102,9 @@
 #endif
 #include <qfileinfo.h>
 #include <qdir.h>
+#if QT_CONFIG(settings)
 #include <qsettings.h>
+#endif
 #include <qvariant.h>
 #include <qpixmapcache.h>
 #if QT_CONFIG(animation)
@@ -841,13 +843,14 @@ static void drawArrow(const QStyle *style, const QStyleOptionToolButton *toolbut
 }
 #endif // QT_CONFIG(toolbutton)
 
-#if QT_CONFIG(itemviews)
-
-static QSizeF viewItemTextLayout(QTextLayout &textLayout, int lineWidth)
+static QSizeF viewItemTextLayout(QTextLayout &textLayout, int lineWidth, int maxHeight = -1, int *lastVisibleLine = nullptr)
 {
+    if (lastVisibleLine)
+        *lastVisibleLine = -1;
     qreal height = 0;
     qreal widthUsed = 0;
     textLayout.beginLayout();
+    int i = 0;
     while (true) {
         QTextLine line = textLayout.createLine();
         if (!line.isValid())
@@ -856,10 +859,98 @@ static QSizeF viewItemTextLayout(QTextLayout &textLayout, int lineWidth)
         line.setPosition(QPointF(0, height));
         height += line.height();
         widthUsed = qMax(widthUsed, line.naturalTextWidth());
+        // we assume that the height of the next line is the same as the current one
+        if (maxHeight > 0 && lastVisibleLine && height + line.height() > maxHeight) {
+            const QTextLine nextLine = textLayout.createLine();
+            *lastVisibleLine = nextLine.isValid() ? i : -1;
+            break;
+        }
+        ++i;
     }
     textLayout.endLayout();
     return QSizeF(widthUsed, height);
 }
+
+QString QCommonStylePrivate::calculateElidedText(const QString &text, const QTextOption &textOption,
+                                                 const QFont &font, const QRect &textRect, const Qt::Alignment valign,
+                                                 Qt::TextElideMode textElideMode, int flags,
+                                                 bool lastVisibleLineShouldBeElided, QPointF *paintStartPosition) const
+{
+    QTextLayout textLayout(text, font);
+    textLayout.setTextOption(textOption);
+
+    // In AlignVCenter mode when more than one line is displayed and the height only allows
+    // some of the lines it makes no sense to display those. From a users perspective it makes
+    // more sense to see the start of the text instead something inbetween.
+    const bool vAlignmentOptimization = paintStartPosition && valign.testFlag(Qt::AlignVCenter);
+
+    int lastVisibleLine = -1;
+    viewItemTextLayout(textLayout, textRect.width(), vAlignmentOptimization ? textRect.height() : -1, &lastVisibleLine);
+
+    const QRectF boundingRect = textLayout.boundingRect();
+    // don't care about LTR/RTL here, only need the height
+    const QRect layoutRect = QStyle::alignedRect(Qt::LayoutDirectionAuto, valign,
+                                                 boundingRect.size().toSize(), textRect);
+
+    if (paintStartPosition)
+        *paintStartPosition = QPointF(textRect.x(), layoutRect.top());
+
+    QString ret;
+    qreal height = 0;
+    const int lineCount = textLayout.lineCount();
+    for (int i = 0; i < lineCount; ++i) {
+        const QTextLine line = textLayout.lineAt(i);
+        height += line.height();
+
+        // above visible rect
+        if (height + layoutRect.top() <= textRect.top()) {
+            if (paintStartPosition)
+                paintStartPosition->ry() += line.height();
+            continue;
+        }
+
+        const int start = line.textStart();
+        const int length = line.textLength();
+        const bool drawElided = line.naturalTextWidth() > textRect.width();
+        bool elideLastVisibleLine = lastVisibleLine == i;
+        if (!drawElided && i + 1 < lineCount && lastVisibleLineShouldBeElided) {
+            const QTextLine nextLine = textLayout.lineAt(i + 1);
+            const int nextHeight = height + nextLine.height() / 2;
+            // elide when less than the next half line is visible
+            if (nextHeight + layoutRect.top() > textRect.height() + textRect.top())
+                elideLastVisibleLine = true;
+        }
+
+        QString text = textLayout.text().mid(start, length);
+        if (drawElided || elideLastVisibleLine) {
+            if (elideLastVisibleLine) {
+                if (text.endsWith(QChar::LineSeparator))
+                    text.chop(1);
+                text += QChar(0x2026);
+            }
+            const QStackTextEngine engine(text, font);
+            ret += engine.elidedText(textElideMode, textRect.width(), flags);
+
+            // no newline for the last line (last visible or real)
+            // sometimes drawElided is true but no eliding is done so the text ends
+            // with QChar::LineSeparator - don't add another one. This happened with
+            // arabic text in the testcase for QTBUG-72805
+            if (i < lineCount - 1 &&
+                !ret.endsWith(QChar::LineSeparator))
+                ret += QChar::LineSeparator;
+        } else {
+            ret += text;
+        }
+
+        // below visible text, can stop
+        if ((height + layoutRect.top() >= textRect.bottom()) ||
+                (lastVisibleLine >= 0 && lastVisibleLine == i))
+            break;
+    }
+    return ret;
+}
+
+#if QT_CONFIG(itemviews)
 
 QSize QCommonStylePrivate::viewItemSize(const QStyleOptionViewItem *option, int role) const
 {
@@ -933,61 +1024,17 @@ void QCommonStylePrivate::viewItemDrawText(QPainter *p, const QStyleOptionViewIt
     textOption.setWrapMode(wrapText ? QTextOption::WordWrap : QTextOption::ManualWrap);
     textOption.setTextDirection(option->direction);
     textOption.setAlignment(QStyle::visualAlignment(option->direction, option->displayAlignment));
-    QTextLayout textLayout(option->text, option->font);
+
+    QPointF paintPosition;
+    const QString newText = calculateElidedText(option->text, textOption,
+                                                option->font, textRect, option->displayAlignment,
+                                                option->textElideMode, 0,
+                                                true, &paintPosition);
+
+    QTextLayout textLayout(newText, option->font);
     textLayout.setTextOption(textOption);
-
     viewItemTextLayout(textLayout, textRect.width());
-
-    QString elidedText;
-    qreal height = 0;
-    qreal width = 0;
-    int elidedIndex = -1;
-    const int lineCount = textLayout.lineCount();
-    for (int j = 0; j < lineCount; ++j) {
-        const QTextLine line = textLayout.lineAt(j);
-        if (j + 1 <= lineCount - 1) {
-            const QTextLine nextLine = textLayout.lineAt(j + 1);
-            if ((nextLine.y() + nextLine.height()) > textRect.height()) {
-                int start = line.textStart();
-                int length = line.textLength() + nextLine.textLength();
-                const QStackTextEngine engine(textLayout.text().mid(start, length), option->font);
-                elidedText = engine.elidedText(option->textElideMode, textRect.width());
-                height += line.height();
-                width = textRect.width();
-                elidedIndex = j;
-                break;
-            }
-        }
-        if (line.naturalTextWidth() > textRect.width()) {
-            int start = line.textStart();
-            int length = line.textLength();
-            const QStackTextEngine engine(textLayout.text().mid(start, length), option->font);
-            elidedText = engine.elidedText(option->textElideMode, textRect.width());
-            height += line.height();
-            width = textRect.width();
-            elidedIndex = j;
-            break;
-        }
-        width = qMax<qreal>(width, line.width());
-        height += line.height();
-    }
-
-    const QRect layoutRect = QStyle::alignedRect(option->direction, option->displayAlignment,
-                                                 QSize(int(width), int(height)), textRect);
-    const QPointF position = layoutRect.topLeft();
-    for (int i = 0; i < lineCount; ++i) {
-        const QTextLine line = textLayout.lineAt(i);
-        if (i == elidedIndex) {
-            qreal x = position.x() + line.x();
-            qreal y = position.y() + line.y() + line.ascent();
-            p->save();
-            p->setFont(option->font);
-            p->drawText(QPointF(x, y), elidedText);
-            p->restore();
-            break;
-        }
-        line.draw(p, position);
-    }
+    textLayout.draw(p, paintPosition);
 }
 
 /*! \internal
@@ -1127,6 +1174,25 @@ void QCommonStylePrivate::viewItemLayout(const QStyleOptionViewItem *opt,  QRect
 }
 #endif // QT_CONFIG(itemviews)
 
+#if QT_CONFIG(toolbutton)
+QString QCommonStylePrivate::toolButtonElideText(const QStyleOptionToolButton *option,
+                                                 const QRect &textRect, int flags) const
+{
+    if (option->fontMetrics.horizontalAdvance(option->text) <= textRect.width())
+        return option->text;
+
+    QString text = option->text;
+    text.replace('\n', QChar::LineSeparator);
+    QTextOption textOption;
+    textOption.setWrapMode(QTextOption::ManualWrap);
+    textOption.setTextDirection(option->direction);
+
+    return calculateElidedText(text, textOption,
+                               option->font, textRect, Qt::AlignTop,
+                               Qt::ElideMiddle, flags,
+                               false, nullptr);
+}
+#endif // QT_CONFIG(toolbutton)
 
 #if QT_CONFIG(tabbar)
 /*! \internal
@@ -1654,7 +1720,7 @@ void QCommonStyle::drawControl(ControlElement element, const QStyleOption *opt,
                         alignment |= Qt::TextHideMnemonic;
 
                     if (toolbutton->toolButtonStyle == Qt::ToolButtonTextUnderIcon) {
-                        pr.setHeight(pmSize.height() + 6);
+                        pr.setHeight(pmSize.height() + 4); //### 4 is currently hardcoded in QToolButton::sizeHint()
                         tr.adjust(0, pr.height() - 1, 0, -1);
                         pr.translate(shiftX, shiftY);
                         if (!hasArrow) {
@@ -1664,7 +1730,7 @@ void QCommonStyle::drawControl(ControlElement element, const QStyleOption *opt,
                         }
                         alignment |= Qt::AlignCenter;
                     } else {
-                        pr.setWidth(pmSize.width() + 8);
+                        pr.setWidth(pmSize.width() + 4); //### 4 is currently hardcoded in QToolButton::sizeHint()
                         tr.adjust(pr.width(), 0, 0, 0);
                         pr.translate(shiftX, shiftY);
                         if (!hasArrow) {
@@ -1675,8 +1741,9 @@ void QCommonStyle::drawControl(ControlElement element, const QStyleOption *opt,
                         alignment |= Qt::AlignLeft | Qt::AlignVCenter;
                     }
                     tr.translate(shiftX, shiftY);
+                    const QString text = d->toolButtonElideText(toolbutton, tr, alignment);
                     proxy()->drawItemText(p, QStyle::visualRect(opt->direction, rect, tr), alignment, toolbutton->palette,
-                                 toolbutton->state & State_Enabled, toolbutton->text,
+                                 toolbutton->state & State_Enabled, text,
                                  QPalette::ButtonText);
                 } else {
                     rect.translate(shiftX, shiftY);
@@ -2863,8 +2930,8 @@ QRect QCommonStyle::subElementRect(SubElement sr, const QStyleOption *opt,
     case SE_TabBarScrollLeftButton: {
         const bool vertical = opt->rect.width() < opt->rect.height();
         const Qt::LayoutDirection ld = widget->layoutDirection();
-        const int buttonWidth = qMax(pixelMetric(QStyle::PM_TabBarScrollButtonWidth, 0, widget), QApplication::globalStrut().width());
-        const int buttonOverlap = pixelMetric(QStyle::PM_TabBar_ScrollButtonOverlap, 0, widget);
+        const int buttonWidth = qMax(proxy()->pixelMetric(QStyle::PM_TabBarScrollButtonWidth, 0, widget), QApplication::globalStrut().width());
+        const int buttonOverlap = proxy()->pixelMetric(QStyle::PM_TabBar_ScrollButtonOverlap, 0, widget);
 
         r = vertical ? QRect(0, opt->rect.height() - (buttonWidth * 2) + buttonOverlap, opt->rect.width(), buttonWidth)
             : QStyle::visualRect(ld, opt->rect, QRect(opt->rect.width() - (buttonWidth * 2) + buttonOverlap, 0, buttonWidth, opt->rect.height()));
@@ -2872,7 +2939,7 @@ QRect QCommonStyle::subElementRect(SubElement sr, const QStyleOption *opt,
     case SE_TabBarScrollRightButton: {
         const bool vertical = opt->rect.width() < opt->rect.height();
         const Qt::LayoutDirection ld = widget->layoutDirection();
-        const int buttonWidth = qMax(pixelMetric(QStyle::PM_TabBarScrollButtonWidth, 0, widget), QApplication::globalStrut().width());
+        const int buttonWidth = qMax(proxy()->pixelMetric(QStyle::PM_TabBarScrollButtonWidth, 0, widget), QApplication::globalStrut().width());
 
         r = vertical ? QRect(0, opt->rect.height() - buttonWidth, opt->rect.width(), buttonWidth)
             : QStyle::visualRect(ld, opt->rect, QRect(opt->rect.width() - buttonWidth, 0, buttonWidth, opt->rect.height()));
@@ -3087,7 +3154,7 @@ QRect QCommonStyle::subElementRect(SubElement sr, const QStyleOption *opt,
                 //have all the information we need (ie. the layout's margin)
                 const QToolBar *tb = qobject_cast<const QToolBar*>(widget);
                 const int margin = tb && tb->layout() ? tb->layout()->margin() : 2;
-                const int handleExtent = pixelMetric(QStyle::PM_ToolBarHandleExtent, opt, tb);
+                const int handleExtent = proxy()->pixelMetric(QStyle::PM_ToolBarHandleExtent, opt, tb);
                 if (tbopt->state & QStyle::State_Horizontal) {
                     r = QRect(margin, margin, handleExtent, tbopt->rect.height() - 2*margin);
                     r = QStyle::visualRect(tbopt->direction, tbopt->rect, r);
@@ -4942,8 +5009,8 @@ QSize QCommonStyle::sizeFromContents(ContentsType ct, const QStyleOption *opt,
     case CT_SpinBox:
         if (const QStyleOptionSpinBox *vopt = qstyleoption_cast<const QStyleOptionSpinBox *>(opt)) {
             // Add button + frame widths
-            int buttonWidth = 20;
-            int fw = vopt->frame ? proxy()->pixelMetric(PM_SpinBoxFrameWidth, vopt, widget) : 0;
+            const int buttonWidth = (vopt->subControls & (QStyle::SC_SpinBoxUp | QStyle::SC_SpinBoxDown)) != 0 ? 20 : 0;
+            const int fw = vopt->frame ? proxy()->pixelMetric(PM_SpinBoxFrameWidth, vopt, widget) : 0;
             sz += QSize(buttonWidth + 2*fw, 2*fw);
         }
         break;
@@ -5311,6 +5378,9 @@ int QCommonStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget
         break;
     case SH_SpinBox_ButtonsInsideFrame:
         ret = true;
+        break;
+    case SH_SpinBox_StepModifier:
+        ret = Qt::ControlModifier;
         break;
     default:
         ret = 0;
@@ -5724,14 +5794,14 @@ static inline QString iconPngSuffix() { return QStringLiteral(".png"); }
 
 static void addIconFiles(const QString &prefix, const int sizes[], size_t count, QIcon &icon)
 {
-    for (size_t i = 0; i < count; ++i) {
-        const int size = sizes[i];
-        icon.addFile(prefix + QString::number(size) + iconPngSuffix(), QSize(size, size));
-    }
+    for (size_t i = 0; i < count; ++i)
+        icon.addFile(prefix + QString::number(sizes[i]) + iconPngSuffix());
 }
 
 static const int dockTitleIconSizes[] = {10, 16, 20, 32, 48, 64};
-
+static const int titleBarSizes[] = {16, 32, 48};
+static const int toolBarExtHSizes[] = {8, 16, 32};
+static const int toolBarExtVSizes[] = {5, 10, 20};
 #endif // imageformat_png
 
 /*!
@@ -6046,6 +6116,27 @@ QIcon QCommonStyle::standardIcon(StandardPixmap standardIcon, const QStyleOption
 
     switch (standardIcon) {
 #ifndef QT_NO_IMAGEFORMAT_PNG
+    case SP_TitleBarMinButton:
+        addIconFiles(iconResourcePrefix() + QStringLiteral("titlebar-min-"),
+                     titleBarSizes, sizeof(titleBarSizes)/sizeof(titleBarSizes[0]), icon);
+        break;
+    case SP_TitleBarMaxButton:
+        addIconFiles(iconResourcePrefix() + QStringLiteral("titlebar-max-"),
+                     titleBarSizes, sizeof(titleBarSizes)/sizeof(titleBarSizes[0]), icon);
+        break;
+    case SP_TitleBarShadeButton:
+        addIconFiles(iconResourcePrefix() + QStringLiteral("titlebar-shade-"),
+                     titleBarSizes, sizeof(titleBarSizes)/sizeof(titleBarSizes[0]), icon);
+
+        break;
+    case SP_TitleBarUnshadeButton:
+        addIconFiles(iconResourcePrefix() + QStringLiteral("titlebar-unshade-"),
+                     titleBarSizes, sizeof(titleBarSizes)/sizeof(titleBarSizes[0]), icon);
+        break;
+    case SP_TitleBarContextHelpButton:
+        addIconFiles(iconResourcePrefix() + QStringLiteral("titlebar-contexthelp-"),
+                     titleBarSizes, sizeof(titleBarSizes)/sizeof(titleBarSizes[0]), icon);
+        break;
      case SP_FileDialogNewFolder:
         icon.addFile(QLatin1String(":/qt-project.org/styles/commonstyle/images/newdirectory-16.png"), QSize(16, 16));
         icon.addFile(QLatin1String(":/qt-project.org/styles/commonstyle/images/newdirectory-32.png"), QSize(32, 32));
@@ -6253,6 +6344,17 @@ QIcon QCommonStyle::standardIcon(StandardPixmap standardIcon, const QStyleOption
     case SP_TitleBarNormalButton:
         addIconFiles(iconResourcePrefix() + QStringLiteral("normalizedockup-"),
                      dockTitleIconSizes, sizeof(dockTitleIconSizes)/sizeof(dockTitleIconSizes[0]), icon);
+        break;
+    case SP_ToolBarHorizontalExtensionButton: {
+        QString prefix = iconResourcePrefix() + QStringLiteral("toolbar-ext-h-");
+        if (rtl)
+            prefix += QStringLiteral("rtl-");
+        addIconFiles(prefix, toolBarExtHSizes, sizeof(toolBarExtHSizes)/sizeof(toolBarExtHSizes[0]), icon);
+    }
+        break;
+    case SP_ToolBarVerticalExtensionButton:
+        addIconFiles(iconResourcePrefix() + QStringLiteral("toolbar-ext-v-"),
+                     toolBarExtVSizes, sizeof(toolBarExtVSizes)/sizeof(toolBarExtVSizes[0]), icon);
         break;
 #endif // QT_NO_IMAGEFORMAT_PNG
     default:

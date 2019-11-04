@@ -149,7 +149,6 @@ Q_FORWARD_DECLARE_MUTABLE_CG_TYPE(CGContext);
 
 Q_FORWARD_DECLARE_OBJC_CLASS(NSView);
 Q_FORWARD_DECLARE_OBJC_CLASS(NSCell);
-Q_FORWARD_DECLARE_OBJC_CLASS(QT_MANGLE_NAMESPACE(NotificationReceiver));
 
 QT_BEGIN_NAMESPACE
 
@@ -187,6 +186,7 @@ public:
     enum CocoaControlType {
         NoControl,    // For when there's no such a control in Cocoa
         Box,          // QGroupBox
+        Box_Dark,     // FIXME See render code in drawPrimitive(PE_FrameTabWidget)
         Button_CheckBox,
         Button_Disclosure,  // Disclosure triangle, like in QTreeView
         Button_PopupButton,  // Non-editable QComboBox
@@ -287,13 +287,14 @@ public:
     static  QVector<QPointer<QObject> > scrollBars;
 
     mutable QPointer<QFocusFrame> focusWidget;
-    QT_MANGLE_NAMESPACE(NotificationReceiver) *receiver;
     mutable NSView *backingStoreNSView;
     mutable QHash<CocoaControl, NSView *> cocoaControls;
     mutable QHash<CocoaControl, NSCell *> cocoaCells;
 
     QFont smallSystemFont;
     QFont miniSystemFont;
+
+    QMacKeyValueObserver appearanceObserver;
 };
 
 QT_END_NAMESPACE

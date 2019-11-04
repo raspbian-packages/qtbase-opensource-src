@@ -69,15 +69,14 @@ namespace {
 
     class GeometrySink: public IDWriteGeometrySink
     {
+        Q_DISABLE_COPY(GeometrySink)
     public:
         GeometrySink(QPainterPath *path)
             : m_refCount(0), m_path(path)
         {
             Q_ASSERT(m_path != 0);
         }
-        virtual ~GeometrySink()
-        {
-        }
+        virtual ~GeometrySink() = default;
 
         IFACEMETHOD_(void, AddBeziers)(const D2D1_BEZIER_SEGMENT *beziers, UINT bezierCount);
         IFACEMETHOD_(void, AddLines)(const D2D1_POINT_2F *points, UINT pointCount);
@@ -651,7 +650,8 @@ bool QWindowsFontEngineDirectWrite::supportsSubPixelPositions() const
 QImage QWindowsFontEngineDirectWrite::imageForGlyph(glyph_t t,
                                              QFixed subPixelPosition,
                                              int margin,
-                                             const QTransform &originalTransform)
+                                             const QTransform &originalTransform,
+                                             const QColor &color)
 {
     UINT16 glyphIndex = t;
     FLOAT glyphAdvance = 0;
@@ -736,6 +736,7 @@ QImage QWindowsFontEngineDirectWrite::imageForGlyph(glyph_t t,
 
 #if defined(QT_USE_DIRECTWRITE2)
         BOOL ok = true;
+
         if (SUCCEEDED(hr)) {
             while (SUCCEEDED(hr) && ok) {
                 const DWRITE_COLOR_GLYPH_RUN *colorGlyphRun = 0;
@@ -760,10 +761,18 @@ QImage QWindowsFontEngineDirectWrite::imageForGlyph(glyph_t t,
                     break;
                 }
 
-                float r = qBound(0.0f, colorGlyphRun->runColor.r, 1.0f);
-                float g = qBound(0.0f, colorGlyphRun->runColor.g, 1.0f);
-                float b = qBound(0.0f, colorGlyphRun->runColor.b, 1.0f);
-                float a = qBound(0.0f, colorGlyphRun->runColor.a, 1.0f);
+                float r, g, b, a;
+                if (colorGlyphRun->paletteIndex == 0xFFFF) {
+                    r = float(color.redF());
+                    g = float(color.greenF());
+                    b = float(color.blueF());
+                    a = float(color.alphaF());
+                } else {
+                    r = qBound(0.0f, colorGlyphRun->runColor.r, 1.0f);
+                    g = qBound(0.0f, colorGlyphRun->runColor.g, 1.0f);
+                    b = qBound(0.0f, colorGlyphRun->runColor.b, 1.0f);
+                    a = qBound(0.0f, colorGlyphRun->runColor.a, 1.0f);
+                }
 
                 if (!qFuzzyIsNull(a)) {
                     renderGlyphRun(&image,
@@ -785,11 +794,21 @@ QImage QWindowsFontEngineDirectWrite::imageForGlyph(glyph_t t,
         } else
 #endif
         {
+            float r, g, b, a;
+            if (glyphFormat == QFontEngine::Format_ARGB) {
+                r = float(color.redF());
+                g = float(color.greenF());
+                b = float(color.blueF());
+                a = float(color.alphaF());
+            } else {
+                r = g = b = a = 0.0;
+            }
+
             renderGlyphRun(&image,
-                           0.0,
-                           0.0,
-                           0.0,
-                           1.0,
+                           r,
+                           g,
+                           b,
+                           a,
                            glyphAnalysis,
                            boundingRect);
         }
@@ -1002,9 +1021,9 @@ glyph_metrics_t QWindowsFontEngineDirectWrite::alphaMapBoundingBox(glyph_t glyph
     }
 }
 
-QImage QWindowsFontEngineDirectWrite::bitmapForGlyph(glyph_t glyph, QFixed subPixelPosition, const QTransform &t)
+QImage QWindowsFontEngineDirectWrite::bitmapForGlyph(glyph_t glyph, QFixed subPixelPosition, const QTransform &t, const QColor &color)
 {
-    return imageForGlyph(glyph, subPixelPosition, glyphMargin(QFontEngine::Format_A32), t);
+    return imageForGlyph(glyph, subPixelPosition, glyphMargin(QFontEngine::Format_A32), t, color);
 }
 
 QT_END_NAMESPACE

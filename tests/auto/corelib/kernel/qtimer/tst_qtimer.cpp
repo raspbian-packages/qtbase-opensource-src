@@ -75,6 +75,7 @@ private slots:
 
     void dontBlockEvents();
     void postedEventsShouldNotStarveTimers();
+    void callOnTimeout();
 };
 
 void tst_QTimer::zeroTimer()
@@ -455,8 +456,7 @@ void tst_QTimer::moveToThread()
 #if defined(Q_OS_WIN32)
     QSKIP("Does not work reliably on Windows :(");
 #elif defined(Q_OS_MACOS)
-    if (__builtin_available(macOS 10.12, *))
-        QSKIP("Does not work reliably on macOS 10.12 (QTBUG-59679)");
+    QSKIP("Does not work reliably on macOS 10.12+ (QTBUG-59679)");
 #endif
     QTimer ti1;
     QTimer ti2;
@@ -977,6 +977,31 @@ void tst_QTimer::crossThreadSingleShotToFunctor()
     t.quit();
     t.wait();
     delete o;
+}
+
+void tst_QTimer::callOnTimeout()
+{
+    QTimer timer;
+    QSignalSpy timeoutSpy(&timer, &QTimer::timeout);
+    timer.setInterval(0);
+    timer.start();
+
+    auto context = new QObject();
+
+    int count = 0;
+    timer.callOnTimeout([&count] { count++; });
+    QMetaObject::Connection connection = timer.callOnTimeout(context, [&count] { count++; });
+    timer.callOnTimeout(&timer, &QTimer::stop);
+
+
+    QTest::qWait(100);
+    QCOMPARE(count, 2);
+    QCOMPARE(timeoutSpy.count(), 1);
+
+    // Test that connection is bound to context lifetime
+    QVERIFY(connection);
+    delete context;
+    QVERIFY(!connection);
 }
 
 QTEST_MAIN(tst_QTimer)

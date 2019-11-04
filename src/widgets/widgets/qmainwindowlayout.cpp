@@ -426,7 +426,8 @@ void QDockWidgetGroupWindow::destroyOrHideIfEmpty()
     }
 
     // Make sure to reparent the possibly floating or hidden QDockWidgets to the parent
-    foreach (QDockWidget *dw, findChildren<QDockWidget *>(QString(), Qt::FindDirectChildrenOnly)) {
+    const auto dockWidgets = findChildren<QDockWidget *>(QString(), Qt::FindDirectChildrenOnly);
+    for (QDockWidget *dw : dockWidgets) {
         bool wasFloating = dw->isFloating();
         bool wasHidden = dw->isHidden();
         dw->setParent(parentWidget());
@@ -445,7 +446,8 @@ void QDockWidgetGroupWindow::destroyOrHideIfEmpty()
             dw->show();
     }
 #if QT_CONFIG(tabbar)
-    foreach (QTabBar *tb, findChildren<QTabBar *>(QString(), Qt::FindDirectChildrenOnly))
+    const auto tabBars = findChildren<QTabBar *>(QString(), Qt::FindDirectChildrenOnly);
+    for (QTabBar *tb : tabBars)
         tb->setParent(parentWidget());
 #endif
     deleteLater();
@@ -1037,10 +1039,10 @@ void QMainWindowLayoutState::saveState(QDataStream &stream) const
 #if QT_CONFIG(dockwidget)
     dockAreaLayout.saveState(stream);
 #if QT_CONFIG(tabbar)
-    QList<QDockWidgetGroupWindow *> floatingTabs =
+    const QList<QDockWidgetGroupWindow *> floatingTabs =
         mainWindow->findChildren<QDockWidgetGroupWindow *>(QString(), Qt::FindDirectChildrenOnly);
 
-    foreach (QDockWidgetGroupWindow *floating, floatingTabs) {
+    for (QDockWidgetGroupWindow *floating : floatingTabs) {
         if (floating->layoutInfo()->isEmpty())
             continue;
         stream << uchar(QDockAreaLayout::FloatingDockWidgetTabMarker) << floating->geometry();
@@ -1528,9 +1530,9 @@ void QMainWindowLayout::setDocumentMode(bool enabled)
     _documentMode = enabled;
 
     // Update the document mode for all tab bars
-    foreach (QTabBar *bar, usedTabBars)
+    for (QTabBar *bar : qAsConst(usedTabBars))
         bar->setDocumentMode(_documentMode);
-    foreach (QTabBar *bar, unusedTabBars)
+    for (QTabBar *bar : qAsConst(unusedTabBars))
         bar->setDocumentMode(_documentMode);
 }
 #endif // QT_CONFIG(tabbar)
@@ -1809,8 +1811,9 @@ QDockAreaLayoutInfo *QMainWindowLayout::dockInfo(QWidget *widget)
     QDockAreaLayoutInfo *info = layoutState.dockAreaLayout.info(widget);
     if (info)
         return info;
-    foreach (QDockWidgetGroupWindow *dwgw,
-             parent()->findChildren<QDockWidgetGroupWindow*>(QString(), Qt::FindDirectChildrenOnly)) {
+    const auto groups =
+            parent()->findChildren<QDockWidgetGroupWindow*>(QString(), Qt::FindDirectChildrenOnly);
+    for (QDockWidgetGroupWindow *dwgw : groups) {
         info = dwgw->layoutInfo()->info(widget);
         if (info)
             return info;
@@ -2077,8 +2080,9 @@ bool QMainWindowLayout::plug(QLayoutItem *widgetItem)
             layoutState.remove(previousPath);
         previousPath = currentHoveredFloat->layoutInfo()->indexOf(widget);
         // Let's remove the widget from any possible group window
-        foreach (QDockWidgetGroupWindow *dwgw,
-                parent()->findChildren<QDockWidgetGroupWindow*>(QString(), Qt::FindDirectChildrenOnly)) {
+        const auto groups =
+                parent()->findChildren<QDockWidgetGroupWindow*>(QString(), Qt::FindDirectChildrenOnly);
+        for (QDockWidgetGroupWindow *dwgw : groups) {
             if (dwgw == currentHoveredFloat)
                 continue;
             QList<int> path = dwgw->layoutInfo()->indexOf(widget);
@@ -2106,8 +2110,9 @@ bool QMainWindowLayout::plug(QLayoutItem *widgetItem)
 
 #if QT_CONFIG(dockwidget)
     // Let's remove the widget from any possible group window
-    foreach (QDockWidgetGroupWindow *dwgw,
-            parent()->findChildren<QDockWidgetGroupWindow*>(QString(), Qt::FindDirectChildrenOnly)) {
+    const auto groups =
+            parent()->findChildren<QDockWidgetGroupWindow*>(QString(), Qt::FindDirectChildrenOnly);
+    for (QDockWidgetGroupWindow *dwgw : groups) {
         QList<int> path = dwgw->layoutInfo()->indexOf(widget);
         if (!path.isEmpty())
             dwgw->layoutInfo()->remove(path);
@@ -2249,7 +2254,8 @@ void QMainWindowLayout::animationFinished(QWidget *widget)
 #if QT_CONFIG(dockwidget)
         parentWidget()->update(layoutState.dockAreaLayout.separatorRegion());
 #if QT_CONFIG(tabbar)
-        foreach (QTabBar *tab_bar, usedTabBars)
+        const auto usedTabBarsCopy = usedTabBars; // list potentially modified by animations
+        for (QTabBar *tab_bar : usedTabBarsCopy)
             tab_bar->show();
 #endif // QT_CONFIG(tabbar)
 #endif // QT_CONFIG(dockwidget)
@@ -2533,7 +2539,8 @@ void QMainWindowLayout::hover(QLayoutItem *widgetItem, const QPoint &mousePos)
 
         // Check if we are over another floating dock widget
         QVarLengthArray<QWidget *, 10> candidates;
-        foreach (QObject *c, parentWidget()->children()) {
+        const auto siblings = parentWidget()->children();
+        for (QObject *c : siblings) {
             QWidget *w = qobject_cast<QWidget*>(c);
             if (!w)
                 continue;
@@ -2543,7 +2550,8 @@ void QMainWindowLayout::hover(QLayoutItem *widgetItem, const QPoint &mousePos)
                 candidates << w;
             if (QDockWidgetGroupWindow *group = qobject_cast<QDockWidgetGroupWindow *>(w)) {
                 // Sometimes, there are floating QDockWidget that have a QDockWidgetGroupWindow as a parent.
-                foreach (QObject *c, group->children()) {
+                const auto groupChildren = group->children();
+                for (QObject *c : groupChildren) {
                     if (QDockWidget *dw = qobject_cast<QDockWidget*>(c)) {
                         if (dw != widget && dw->isFloating() && dw->isVisible() && !dw->isMinimized())
                             candidates << dw;
@@ -2671,14 +2679,14 @@ void QMainWindowLayout::applyState(QMainWindowLayoutState &newState, bool animat
 {
 #if QT_CONFIG(dockwidget) && QT_CONFIG(tabwidget)
     QSet<QTabBar*> used = newState.dockAreaLayout.usedTabBars();
-    foreach (QDockWidgetGroupWindow *dwgw,
-             parent()->findChildren<QDockWidgetGroupWindow*>(QString(), Qt::FindDirectChildrenOnly)) {
+    const auto groups =
+            parent()->findChildren<QDockWidgetGroupWindow*>(QString(), Qt::FindDirectChildrenOnly);
+    for (QDockWidgetGroupWindow *dwgw : groups)
         used += dwgw->layoutInfo()->usedTabBars();
-    }
 
-    QSet<QTabBar*> retired = usedTabBars - used;
+    const QSet<QTabBar*> retired = usedTabBars - used;
     usedTabBars = used;
-    foreach (QTabBar *tab_bar, retired) {
+    for (QTabBar *tab_bar : retired) {
         tab_bar->hide();
         while (tab_bar->count() > 0)
             tab_bar->removeTab(0);
@@ -2686,10 +2694,10 @@ void QMainWindowLayout::applyState(QMainWindowLayoutState &newState, bool animat
     }
 
     if (sep == 1) {
-        QSet<QWidget*> usedSeps = newState.dockAreaLayout.usedSeparatorWidgets();
-        QSet<QWidget*> retiredSeps = usedSeparatorWidgets - usedSeps;
+        const QSet<QWidget*> usedSeps = newState.dockAreaLayout.usedSeparatorWidgets();
+        const QSet<QWidget*> retiredSeps = usedSeparatorWidgets - usedSeps;
         usedSeparatorWidgets = usedSeps;
-        foreach (QWidget *sepWidget, retiredSeps) {
+        for (QWidget *sepWidget : retiredSeps) {
             unusedSeparatorWidgets.append(sepWidget);
         }
     }
@@ -2731,7 +2739,7 @@ bool QMainWindowLayout::restoreState(QDataStream &stream)
 #if QT_CONFIG(dockwidget)
     if (parentWidget()->isVisible()) {
 #if QT_CONFIG(tabbar)
-        foreach (QTabBar *tab_bar, usedTabBars)
+        for (QTabBar *tab_bar : qAsConst(usedTabBars))
             tab_bar->show();
 
 #endif

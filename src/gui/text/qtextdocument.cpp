@@ -77,6 +77,18 @@ QT_BEGIN_NAMESPACE
 
 Q_CORE_EXPORT Q_DECL_CONST_FUNCTION unsigned int qt_int_sqrt(unsigned int n);
 
+
+/*!
+    Returns \c true if the string \a text is likely to be rich text;
+    otherwise returns \c false.
+
+    This function uses a fast and therefore simple heuristic. It
+    mainly checks whether there is something that looks like a tag
+    before the first line break. Although the result may be correct
+    for common cases, there is no guarantee.
+
+    This function is defined in the \c <QTextDocument> header file.
+*/
 bool Qt::mightBeRichText(const QString& text)
 {
     if (text.isEmpty())
@@ -135,6 +147,16 @@ bool Qt::mightBeRichText(const QString& text)
     return false;
 }
 
+/*!
+    Converts the plain text string \a plain to an HTML-formatted
+    paragraph while preserving most of its look.
+
+    \a mode defines how whitespace is handled.
+
+    This function is defined in the \c <QTextDocument> header file.
+
+    \sa QString::toHtmlEscaped(), mightBeRichText()
+*/
 QString Qt::convertFromPlainText(const QString &plain, Qt::WhiteSpaceMode mode)
 {
     int col = 0;
@@ -183,6 +205,12 @@ QString Qt::convertFromPlainText(const QString &plain, Qt::WhiteSpaceMode mode)
     return rich;
 }
 
+/*!
+    \fn QTextCodec *Qt::codecForHtml(const QByteArray &ba)
+    \internal
+
+    This function is defined in the \c <QTextDocument> header file.
+*/
 #if QT_CONFIG(textcodec)
 QTextCodec *Qt::codecForHtml(const QByteArray &ba)
 {
@@ -1330,6 +1358,8 @@ QTextCursor QTextDocument::find(const QString &subString, int from, FindFlags op
             blockOffset = 0;
         }
     } else {
+        if (blockOffset == block.length() - 1)
+            --blockOffset;  // make sure to skip end-of-paragraph character
         while (block.isValid()) {
             if (findInBlock(block, subString, blockOffset, options, &cursor))
                 return cursor;
@@ -1884,7 +1914,7 @@ static void printPage(int index, QPainter *painter, const QTextDocument *doc, co
 }
 
 /*!
-    Prints the document to the given \a printer. The QPageablePaintDevice must be
+    Prints the document to the given \a printer. The QPagedPaintDevice must be
     set up before being used with this function.
 
     This is only a convenience method to print the whole document to the printer.
@@ -1991,7 +2021,6 @@ void QTextDocument::print(QPagedPaintDevice *printer) const
 
     int fromPage = pd->fromPage;
     int toPage = pd->toPage;
-    bool ascending = true;
 
     if (fromPage == 0 && toPage == 0) {
         fromPage = 1;
@@ -2007,6 +2036,7 @@ void QTextDocument::print(QPagedPaintDevice *printer) const
         return;
     }
 
+//    bool ascending = true;
 //    if (printer->pageOrder() == QPrinter::LastPageFirst) {
 //        int tmp = fromPage;
 //        fromPage = toPage;
@@ -2020,12 +2050,7 @@ void QTextDocument::print(QPagedPaintDevice *printer) const
 
         if (page == toPage)
             break;
-
-        if (ascending)
-            ++page;
-        else
-            --page;
-
+        ++page;
         if (!printer->newPage())
             return;
     }
@@ -2910,7 +2935,11 @@ void QTextHtmlExporter::emitBlock(const QTextBlock &block)
             html += QLatin1Char('>');
         html += QLatin1String("<pre");
     } else if (!list) {
-        html += QLatin1String("<p");
+        int headingLevel = blockFormat.headingLevel();
+        if (headingLevel > 0 && headingLevel <= 6)
+            html += QLatin1String("<h") + QString::number(headingLevel);
+        else
+            html += QLatin1String("<p");
     }
 
     emitBlockAttributes(block);
@@ -2933,8 +2962,13 @@ void QTextHtmlExporter::emitBlock(const QTextBlock &block)
         html += QLatin1String("</pre>");
     else if (list)
         html += QLatin1String("</li>");
-    else
-        html += QLatin1String("</p>");
+    else {
+        int headingLevel = blockFormat.headingLevel();
+        if (headingLevel > 0 && headingLevel <= 6)
+            html += QLatin1String("</h") + QString::number(headingLevel) + QLatin1Char('>');
+        else
+            html += QLatin1String("</p>");
+    }
 
     if (list) {
         if (list->itemNumber(block) == list->count() - 1) { // last item? close list

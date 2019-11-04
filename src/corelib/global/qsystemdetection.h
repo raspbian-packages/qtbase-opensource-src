@@ -137,6 +137,8 @@
 #  define Q_OS_HPUX
 #elif defined(__native_client__)
 #  define Q_OS_NACL
+#elif defined(__EMSCRIPTEN__)
+#  define Q_OS_WASM
 #elif defined(__linux__) || defined(__linux)
 #  define Q_OS_LINUX
 #elif defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__)
@@ -174,6 +176,7 @@
 #endif
 
 #if defined(Q_OS_WIN32) || defined(Q_OS_WIN64) || defined(Q_OS_WINRT)
+#  define Q_OS_WINDOWS
 #  define Q_OS_WIN
 #endif
 
@@ -228,17 +231,23 @@
 #  if !defined(__MAC_10_14)
 #       define __MAC_10_14 101400
 #  endif
+#  if !defined(__MAC_10_15)
+#       define __MAC_10_15 101500
+#  endif
 #  if !defined(MAC_OS_X_VERSION_10_11)
-#       define MAC_OS_X_VERSION_10_11 101100
+#       define MAC_OS_X_VERSION_10_11 __MAC_10_11
 #  endif
 #  if !defined(MAC_OS_X_VERSION_10_12)
-#       define MAC_OS_X_VERSION_10_12 101200
+#       define MAC_OS_X_VERSION_10_12 __MAC_10_12
 #  endif
 #  if !defined(MAC_OS_X_VERSION_10_13)
-#       define MAC_OS_X_VERSION_10_13 101300
+#       define MAC_OS_X_VERSION_10_13 __MAC_10_13
 #  endif
 #  if !defined(MAC_OS_X_VERSION_10_14)
-#       define MAC_OS_X_VERSION_10_14 101400
+#       define MAC_OS_X_VERSION_10_14 __MAC_10_14
+#  endif
+#  if !defined(MAC_OS_X_VERSION_10_15)
+#       define MAC_OS_X_VERSION_10_15 __MAC_10_15
 #  endif
 #
 #  if !defined(__IPHONE_10_0)

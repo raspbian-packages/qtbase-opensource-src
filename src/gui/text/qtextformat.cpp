@@ -514,7 +514,7 @@ Q_GUI_EXPORT QDataStream &operator>>(QDataStream &stream, QTextFormat &fmt)
     \value BlockFormat The object formats a text block
     \value CharFormat The object formats a single character
     \value ListFormat The object formats a list
-    \omitvalue TableFormat Unused Value, a table's FormatType is FrameFormat.
+    \omitvalue TableFormat \omit Unused Value, a table's FormatType is FrameFormat. \endomit
     \value FrameFormat The object formats a frame
 
     \value UserFormat
@@ -556,6 +556,8 @@ Q_GUI_EXPORT QDataStream &operator>>(QDataStream &stream, QTextFormat &fmt)
     \value LineHeightType
     \value BlockNonBreakableLines
     \value BlockTrailingHorizontalRulerWidth The width of a horizontal ruler element.
+    \value HeadingLevel     The level of a heading, for example 1 corresponds to an HTML H1 tag; otherwise 0.
+                            This enum value has been added in Qt 5.12.
 
     Character properties
 
@@ -643,6 +645,7 @@ Q_GUI_EXPORT QDataStream &operator>>(QDataStream &stream, QTextFormat &fmt)
     \value ImageName
     \value ImageWidth
     \value ImageHeight
+    \value ImageQuality
 
     Selection properties
 
@@ -2246,6 +2249,34 @@ QList<QTextOption::Tab> QTextBlockFormat::tabPositions() const
 
 
 /*!
+    \fn void QTextBlockFormat::setHeadingLevel(int level)
+    \since 5.12
+
+    Sets the paragraph's heading \a level, where 1 is the highest-level heading
+    type (usually with the largest possible heading font size), and increasing
+    values are progressively deeper into the document (and usually with smaller
+    font sizes). For example when reading an HTML H1 tag, the heading level is
+    set to 1. Setting the heading level does not automatically change the font
+    size; however QTextDocumentFragment::fromHtml() sets both the heading level
+    and the font size simultaneously.
+
+    If the paragraph is not a heading, the level should be set to 0 (the default).
+
+    \sa headingLevel()
+*/
+
+
+/*!
+    \fn int QTextBlockFormat::headingLevel() const
+    \since 5.12
+
+    Returns the paragraph's heading level if it is a heading, or 0 if not.
+
+    \sa setHeadingLevel()
+*/
+
+
+/*!
     \fn void QTextBlockFormat::setLineHeight(qreal height, int heightType)
     \since 4.8
 
@@ -3047,7 +3078,8 @@ QTextTableFormat::QTextTableFormat(const QTextFormat &fmt)
     REPLACEMENT CHARACTER) which has an associated QTextImageFormat. The
     image format specifies a name with setName() that is used to
     locate the image. The size of the rectangle that the image will
-    occupy is specified using setWidth() and setHeight().
+    occupy is specified in pixels using setWidth() and setHeight().
+    The desired image quality may be set with setQuality().
 
     Images can be supplied in any format for which Qt has an image
     reader, so SVG drawings can be included alongside PNG, TIFF and
@@ -3134,6 +3166,28 @@ QTextImageFormat::QTextImageFormat(const QTextFormat &fmt)
     Returns the height of the rectangle occupied by the image.
 
     \sa width(), setHeight()
+*/
+
+/*!
+    \fn void QTextImageFormat::setQuality(int quality = 100)
+    \since 5.12
+
+    Sets the quality that should be used by exporters when exporting the image. QTextDocumentWriter
+    will export jpg images with the \a quality set here when exporting to ODF files if \a quality is
+    set to a value between 0 and 100. Or it will export png images if \a quality is set to 100
+    (default) or greater.
+
+    \sa quality()
+*/
+
+
+/*!
+    \fn qreal QTextImageFormat::quality() const
+    \since 5.12
+
+    Returns the value set by setQuality().
+
+    \sa setQuality()
 */
 
 /*!

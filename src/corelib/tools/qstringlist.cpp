@@ -323,6 +323,7 @@ static bool stringList_contains(const QStringList &stringList, const T &str, Qt:
 }
 
 
+#if QT_STRINGVIEW_LEVEL < 2
 /*!
     \fn bool QStringList::contains(const QString &str, Qt::CaseSensitivity cs) const
 
@@ -332,7 +333,27 @@ static bool stringList_contains(const QStringList &stringList, const T &str, Qt:
 
     \sa indexOf(), lastIndexOf(), QString::contains()
  */
+#endif
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+/// Not really needed anymore, but kept for binary compatibility
 bool QtPrivate::QStringList_contains(const QStringList *that, const QString &str,
+                                     Qt::CaseSensitivity cs)
+{
+    return stringList_contains(*that, str, cs);
+}
+#endif
+
+/*!
+    \fn bool QStringList::contains(QStringView str, Qt::CaseSensitivity cs) const
+    \overload
+    \since 5.12
+
+    Returns \c true if the list contains the string \a str; otherwise
+    returns \c false. The search is case insensitive if \a cs is
+    Qt::CaseInsensitive; the search is case sensitive by default.
+ */
+bool QtPrivate::QStringList_contains(const QStringList *that, QStringView str,
                                      Qt::CaseSensitivity cs)
 {
     return stringList_contains(*that, str, cs);
@@ -692,7 +713,7 @@ int QtPrivate::QStringList_indexOf(const QStringList *that, const QRegularExpres
     if (from < 0)
         from = qMax(from + that->size(), 0);
 
-    QString exactPattern = QLatin1String("\\A(?:") + re.pattern() + QLatin1String(")\\z");
+    QString exactPattern = QRegularExpression::anchoredPattern(re.pattern());
     QRegularExpression exactRe(exactPattern, re.patternOptions());
 
     for (int i = from; i < that->size(); ++i) {
@@ -722,7 +743,7 @@ int QtPrivate::QStringList_lastIndexOf(const QStringList *that, const QRegularEx
     else if (from >= that->size())
         from = that->size() - 1;
 
-    QString exactPattern = QLatin1String("\\A(?:") + re.pattern() + QLatin1String(")\\z");
+    QString exactPattern = QRegularExpression::anchoredPattern(re.pattern());
     QRegularExpression exactRe(exactPattern, re.patternOptions());
 
     for (int i = from; i >= 0; --i) {

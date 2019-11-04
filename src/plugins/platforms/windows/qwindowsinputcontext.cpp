@@ -43,16 +43,16 @@
 #include "qwindowsintegration.h"
 #include "qwindowsmousehandler.h"
 
-#include <QtCore/QDebug>
-#include <QtCore/QObject>
-#include <QtCore/QRect>
-#include <QtCore/QRectF>
-#include <QtCore/QTextBoundaryFinder>
+#include <QtCore/qdebug.h>
+#include <QtCore/qobject.h>
+#include <QtCore/qrect.h>
+#include <QtCore/qtextboundaryfinder.h>
+#include <QtCore/qoperatingsystemversion.h>
 
-#include <QtGui/QInputMethodEvent>
-#include <QtGui/QTextCharFormat>
-#include <QtGui/QPalette>
-#include <QtGui/QGuiApplication>
+#include <QtGui/qevent.h>
+#include <QtGui/qtextformat.h>
+#include <QtGui/qpalette.h>
+#include <QtGui/qguiapplication.h>
 
 #include <private/qhighdpiscaling_p.h>
 
@@ -243,7 +243,18 @@ QRectF QWindowsInputContext::keyboardRect() const
 bool QWindowsInputContext::isInputPanelVisible() const
 {
     HWND hwnd = getVirtualKeyboardWindowHandle();
-    return hwnd && ::IsWindowEnabled(hwnd) && ::IsWindowVisible(hwnd);
+    if (hwnd && ::IsWindowEnabled(hwnd) && ::IsWindowVisible(hwnd))
+        return true;
+    // check if the Input Method Editor is open
+    if (inputMethodAccepted()) {
+        if (QWindow *window = QGuiApplication::focusWindow()) {
+            if (QWindowsWindow *platformWindow = QWindowsWindow::windowsWindowOf(window)) {
+                if (HIMC himc = ImmGetContext(platformWindow->handle()))
+                    return ImmGetOpenStatus(himc);
+            }
+        }
+    }
+    return false;
 }
 
 void QWindowsInputContext::showInputPanel()
@@ -269,7 +280,13 @@ void QWindowsInputContext::showInputPanel()
     // with Windows 10 if the Windows IME is (re)enabled _after_ the caret is shown.
     if (m_caretCreated) {
         cursorRectChanged();
-        ShowCaret(platformWindow->handle());
+        // We only call ShowCaret() on Windows 10 as in earlier versions the caret
+        // would actually be visible (QTBUG-74492) and the workaround for the
+        // Surface seems unnecessary there anyway. But leave it hidden for IME.
+        if (QOperatingSystemVersion::current() >= QOperatingSystemVersion::Windows10)
+            ShowCaret(platformWindow->handle());
+        else
+            HideCaret(platformWindow->handle());
         setWindowsImeEnabled(platformWindow, false);
         setWindowsImeEnabled(platformWindow, true);
     }
@@ -301,10 +318,10 @@ void QWindowsInputContext::setWindowsImeEnabled(QWindowsWindow *platformWindow, 
         return;
     if (enabled) {
         // Re-enable Windows IME by associating default context.
-        ImmAssociateContextEx(platformWindow->handle(), 0, IACE_DEFAULT);
+        ImmAssociateContextEx(platformWindow->handle(), nullptr, IACE_DEFAULT);
     } else {
         // Disable Windows IME by associating 0 context.
-        ImmAssociateContext(platformWindow->handle(), 0);
+        ImmAssociateContext(platformWindow->handle(), nullptr);
     }
 }
 
@@ -529,7 +546,7 @@ bool QWindowsInputContext::composition(HWND hwnd, LPARAM lParamIn)
         // attribute sequence specifying the formatting of the converted part.
         int selStart, selLength;
         m_compositionContext.composition = getCompositionString(himc, GCS_COMPSTR);
-        m_compositionContext.position = ImmGetCompositionString(himc, GCS_CURSORPOS, 0, 0);
+        m_compositionContext.position = ImmGetCompositionString(himc, GCS_CURSORPOS, nullptr, 0);
         getCompositionStringConvertedRange(himc, &selStart, &selLength);
         if ((lParam & CS_INSERTCHAR) && (lParam & CS_NOMOVECARET)) {
             // make Korean work correctly. Hope this is correct for all IMEs
@@ -610,11 +627,11 @@ void QWindowsInputContext::doneContext()
 {
     if (!m_compositionContext.hwnd)
         return;
-    m_compositionContext.hwnd = 0;
+    m_compositionContext.hwnd = nullptr;
     m_compositionContext.composition.clear();
     m_compositionContext.position = 0;
     m_compositionContext.isComposing = false;
-    m_compositionContext.focusObject = 0;
+    m_compositionContext.focusObject = nullptr;
 }
 
 bool QWindowsInputContext::handleIME_Request(WPARAM wParam,

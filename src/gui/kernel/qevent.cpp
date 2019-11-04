@@ -97,35 +97,35 @@ QEnterEvent::~QEnterEvent()
 /*!
    \fn QPoint QEnterEvent::globalPos() const
 
-   Returns the global position of the widget \e{at the time of the event}.
+   Returns the global position of the mouse cursor \e{at the time of the event}.
 */
 /*!
    \fn int QEnterEvent::globalX() const
 
-   Returns the global position on the X-axis of the mouse cursor relative to the the widget.
+   Returns the global position on the X-axis of the mouse cursor \e{at the time of the event}.
 */
 /*!
    \fn int QEnterEvent::globalY() const
 
-   Returns the global position on the Y-axis of the mouse cursor relative to the the widget.
+   Returns the global position on the Y-axis of the mouse cursor \e{at the time of the event}.
 */
 /*!
-   \fn QPoint QEnterEvent::localPos() const
+   \fn QPointF QEnterEvent::localPos() const
 
    Returns the mouse cursor's position relative to the receiving widget.
 */
 /*!
    \fn QPoint QEnterEvent::pos() const
 
-   Returns the position of the mouse cursor in global screen coordinates.
+   Returns the position of the mouse cursor relative to the receiving widget.
 */
 /*!
-   \fn QPoint QEnterEvent::screenPos() const
+   \fn QPointF QEnterEvent::screenPos() const
 
    Returns the position of the mouse cursor relative to the receiving screen.
 */
 /*!
-   \fn QPoint QEnterEvent::windowPos() const
+   \fn QPointF QEnterEvent::windowPos() const
 
    Returns the position of the mouse cursor relative to the receiving window.
 */
@@ -783,7 +783,7 @@ QWheelEvent::QWheelEvent(const QPointF &pos, int delta,
                          Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers,
                          Qt::Orientation orient)
     : QInputEvent(Wheel, modifiers), p(pos), qt4D(delta), qt4O(orient), mouseState(buttons),
-      ph(Qt::NoScrollPhase), src(Qt::MouseEventNotSynthesized), invertedScrolling(false)
+      src(Qt::MouseEventNotSynthesized), invertedScrolling(false), ph(Qt::NoScrollPhase)
 {
     g = QCursor::pos();
     if (orient == Qt::Vertical)
@@ -818,7 +818,7 @@ QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos, int delta
                          Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers,
                          Qt::Orientation orient)
     : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), qt4D(delta), qt4O(orient), mouseState(buttons),
-      ph(Qt::NoScrollPhase), src(Qt::MouseEventNotSynthesized), invertedScrolling(false)
+      src(Qt::MouseEventNotSynthesized), invertedScrolling(false), ph(Qt::NoScrollPhase)
 {
     if (orient == Qt::Vertical)
         angleD = QPoint(0, delta);
@@ -959,9 +959,48 @@ QWheelEvent::QWheelEvent(const QPointF &pos, const QPointF& globalPos,
             QPoint pixelDelta, QPoint angleDelta, int qt4Delta, Qt::Orientation qt4Orientation,
             Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers, Qt::ScrollPhase phase, Qt::MouseEventSource source, bool inverted)
     : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), pixelD(pixelDelta),
-      angleD(angleDelta), qt4D(qt4Delta), qt4O(qt4Orientation), mouseState(buttons), ph(phase), src(source),
-      invertedScrolling(inverted)
+      angleD(angleDelta), qt4D(qt4Delta), qt4O(qt4Orientation), mouseState(buttons), src(source),
+      invertedScrolling(inverted), ph(phase)
 {}
+
+/*!
+    Constructs a wheel event object.
+
+    The \a pos provides the location of the mouse cursor
+    within the window. The position in global coordinates is specified
+    by \a globalPos.
+
+    \a pixelDelta contains the scrolling distance in pixels on screen, while
+    \a angleDelta contains the wheel rotation distance. \a pixelDelta is
+    optional and can be null.
+
+    The mouse and keyboard states at the time of the event are specified by
+    \a buttons and \a modifiers.
+
+    The scrolling phase of the event is specified by \a phase.
+
+    If the wheel event comes from a physical mouse wheel, \a source is set to
+    Qt::MouseEventNotSynthesized. If it comes from a gesture detected by the
+    operating system, or from a non-mouse hardware device, such that \a
+    pixelDelta is directly related to finger movement, \a source is set to
+    Qt::MouseEventSynthesizedBySystem. If it comes from Qt, source would be set
+    to Qt::MouseEventSynthesizedByQt.
+
+    If the system is configured to invert the delta values delivered with the
+    event (such as natural scrolling of the touchpad on macOS), \a inverted
+    should be \c true. Otherwise, \a inverted is \c false
+
+    \sa posF(), globalPosF(), angleDelta(), pixelDelta(), phase()
+*/
+QWheelEvent::QWheelEvent(QPointF pos, QPointF globalPos, QPoint pixelDelta, QPoint angleDelta,
+            Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers, Qt::ScrollPhase phase,
+            bool inverted, Qt::MouseEventSource source)
+    : QInputEvent(Wheel, modifiers), p(pos), g(globalPos), pixelD(pixelDelta), angleD(angleDelta),
+      qt4O(qAbs(angleDelta.x()) > qAbs(angleDelta.y()) ? Qt::Horizontal : Qt::Vertical),
+      mouseState(buttons), src(source), invertedScrolling(inverted), ph(phase)
+{
+    qt4D = (qt4O == Qt::Horizontal ? angleDelta.x() : angleDelta.y());
+}
 
 #endif // QT_CONFIG(wheelevent)
 
@@ -1536,8 +1575,8 @@ QMoveEvent::~QMoveEvent()
 
     \ingroup events
 
-    Expose events are sent to windows when an area of the window is invalidated
-    or window exposure in the windowing system changes.
+    Expose events are sent to windows when an area of the window is invalidated,
+    for example when window exposure in the windowing system changes.
 
     A Window with a client area that is completely covered by another window, or
     is otherwise not visible may be considered obscured by Qt and may in such
@@ -3033,7 +3072,7 @@ QDropEvent::~QDropEvent()
 /*!
     If the source of the drag operation is a widget in this
     application, this function returns that source; otherwise it
-    returns 0. The source of the operation is the first parameter to
+    returns \nullptr. The source of the operation is the first parameter to
     the QDrag object used instantiate the drag.
 
     This is useful if your widget needs special behavior when dragging
@@ -3475,7 +3514,7 @@ QActionEvent::~QActionEvent()
     \fn QAction *QActionEvent::before() const
 
     If type() is \l ActionAdded, returns the action that should
-    appear before action(). If this function returns 0, the action
+    appear before action(). If this function returns \nullptr, the action
     should be appended to already existing actions on the same
     widget.
 
@@ -4032,7 +4071,12 @@ QDebug operator<<(QDebug dbg, const QEvent *e)
 #  if QT_CONFIG(wheelevent)
     case QEvent::Wheel: {
         const QWheelEvent *we = static_cast<const QWheelEvent *>(e);
-        dbg << "QWheelEvent(" << "pixelDelta=" << we->pixelDelta() << ", angleDelta=" << we->angleDelta() << ')';
+        dbg << "QWheelEvent(" << we->phase();
+        if (!we->pixelDelta().isNull() || !we->angleDelta().isNull())
+            dbg << ", pixelDelta=" << we->pixelDelta() << ", angleDelta=" << we->angleDelta();
+        else if (int qt4Delta = we->delta())
+            dbg << ", delta=" << qt4Delta << ", orientation=" << we->orientation();
+        dbg << ')';
     }
         break;
 #  endif // QT_CONFIG(wheelevent)

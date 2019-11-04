@@ -65,7 +65,6 @@ QT_BEGIN_NAMESPACE
 class QPpdPrintDevice : public QPlatformPrintDevice
 {
 public:
-    QPpdPrintDevice();
     explicit QPpdPrintDevice(const QString &id);
     virtual ~QPpdPrintDevice();
 
@@ -105,7 +104,6 @@ protected:
 #endif
 
 private:
-    void loadPrinter();
     QString printerOption(const QString &key) const;
     cups_ptype_e printerTypeFlags() const;
 

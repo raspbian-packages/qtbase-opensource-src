@@ -249,18 +249,11 @@ private:
     scrolling speed and takes care of updates.
     QScroller can be triggered by a flick gesture
 
-    \code
-        QWidget *w = ...;
-        QScroller::grabGesture(w, QScroller::LeftMouseButtonGesture);
-    \endcode
+    \snippet code/src_widgets_util_qscroller.cpp 0
 
     or directly like this:
 
-    \code
-        QWidget *w = ...;
-        QScroller *scroller = QScroller::scroller(w);
-        scroller->scrollTo(QPointF(100, 100));
-    \endcode
+    \snippet code/src_widgets_util_qscroller.cpp 1
 
     The scrolled QObjects receive a QScrollPrepareEvent whenever the scroller needs to
     update its geometry information and a QScrollEvent whenever the content of the object should
@@ -495,6 +488,7 @@ QScroller::QScroller(QObject *target)
     : d_ptr(new QScrollerPrivate(this, target))
 {
     Q_ASSERT(target); // you can't create a scroller without a target in any normal way
+    setParent(target);
     Q_D(QScroller);
     d->init();
 }
@@ -1732,10 +1726,12 @@ void QScrollerPrivate::setState(QScroller::State newstate)
         sendEvent(target, &se);
         firstScroll = true;
     }
-    if (state == QScroller::Dragging || state == QScroller::Scrolling)
-        qt_activeScrollers()->push_back(q);
-    else
+    if (state == QScroller::Dragging || state == QScroller::Scrolling) {
+        if (!qt_activeScrollers()->contains(q))
+            qt_activeScrollers()->push_back(q);
+    } else {
         qt_activeScrollers()->removeOne(q);
+    }
     emit q->stateChanged(state);
 }
 
@@ -1894,7 +1890,7 @@ qreal QScrollerPrivate::nextSnapPos(qreal p, int dir, Qt::Orientation orientatio
 
     if (orientation == Qt::Horizontal) {
         // the snap points in the list
-        foreach (qreal snapPos, snapPositionsX) {
+        for (qreal snapPos : snapPositionsX) {
             qreal snapPosDist = snapPos - p;
             if ((dir > 0 && snapPosDist < 0) ||
                 (dir < 0 && snapPosDist > 0))
@@ -1941,7 +1937,7 @@ qreal QScrollerPrivate::nextSnapPos(qreal p, int dir, Qt::Orientation orientatio
 
     } else { // (orientation == Qt::Vertical)
         // the snap points in the list
-        foreach (qreal snapPos, snapPositionsY) {
+        for (qreal snapPos : snapPositionsY) {
             qreal snapPosDist = snapPos - p;
             if ((dir > 0 && snapPosDist < 0) ||
                 (dir < 0 && snapPosDist > 0))

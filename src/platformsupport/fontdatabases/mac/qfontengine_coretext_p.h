@@ -53,6 +53,7 @@
 
 #include <private/qfontengine_p.h>
 #include <private/qcore_mac_p.h>
+#include <QtCore/qloggingcategory.h>
 
 #ifdef Q_OS_OSX
 #include <ApplicationServices/ApplicationServices.h>
@@ -63,8 +64,12 @@
 
 QT_BEGIN_NAMESPACE
 
+Q_DECLARE_LOGGING_CATEGORY(lcQpaFonts)
+
 class QCoreTextFontEngine : public QFontEngine
 {
+    Q_GADGET
+
 public:
     QCoreTextFontEngine(CTFontRef font, const QFontDef &def);
     QCoreTextFontEngine(CGFontRef font, const QFontDef &def);
@@ -105,7 +110,7 @@ public:
     QImage alphaMapForGlyph(glyph_t glyph, QFixed subPixelPosition, const QTransform &t) override;
     QImage alphaRGBMapForGlyph(glyph_t, QFixed subPixelPosition, const QTransform &t) override;
     glyph_metrics_t alphaMapBoundingBox(glyph_t glyph, QFixed, const QTransform &matrix, GlyphFormat) override;
-    QImage bitmapForGlyph(glyph_t, QFixed subPixelPosition, const QTransform &t) override;
+    QImage bitmapForGlyph(glyph_t, QFixed subPixelPosition, const QTransform &t, const QColor &color) override;
     QFixed emSquareSize() const override;
     void doKerning(QGlyphLayout *g, ShaperFlags flags) const override;
 
@@ -118,18 +123,28 @@ public:
 
     QFontEngine::Properties properties() const override;
 
+    enum FontSmoothing { Disabled, Subpixel, Grayscale };
+    Q_ENUM(FontSmoothing);
+
+    static FontSmoothing fontSmoothing();
+    static qreal fontSmoothingGamma();
+
     static bool ct_getSfntTable(void *user_data, uint tag, uchar *buffer, uint *length);
     static QFont::Weight qtWeightFromCFWeight(float value);
 
-    static int antialiasingThreshold;
-    static QFontEngine::GlyphFormat defaultGlyphFormat;
-
     static QCoreTextFontEngine *create(const QByteArray &fontData, qreal pixelSize, QFont::HintingPreference hintingPreference);
+
 protected:
+    QCoreTextFontEngine(const QFontDef &def);
     void init();
-    QImage imageForGlyph(glyph_t glyph, QFixed subPixelPosition, bool colorful, const QTransform &m);
-    CTFontRef ctfont;
-    CGFontRef cgFont;
+    QImage imageForGlyph(glyph_t glyph, QFixed subPixelPosition, const QTransform &m, const QColor &color = QColor());
+    void loadAdvancesForGlyphs(QVarLengthArray<CGGlyph> &cgGlyphs, QGlyphLayout *glyphs) const;
+    bool hasColorGlyphs() const;
+    bool shouldAntialias() const;
+    bool shouldSmoothFont() const;
+
+    QCFType<CTFontRef> ctfont;
+    QCFType<CGFontRef> cgFont;
     int synthesisFlags;
     CGAffineTransform transform;
     QFixed avgCharWidth;

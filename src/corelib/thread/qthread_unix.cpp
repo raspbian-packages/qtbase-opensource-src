@@ -103,7 +103,7 @@
 
 QT_BEGIN_NAMESPACE
 
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
 
 Q_STATIC_ASSERT(sizeof(pthread_t) <= sizeof(Qt::HANDLE));
 
@@ -270,7 +270,7 @@ extern "C" {
 typedef void*(*QtThreadCallback)(void*);
 }
 
-#endif // QT_NO_THREAD
+#endif // QT_CONFIG(thread)
 
 QAbstractEventDispatcher *QThreadPrivate::createEventDispatcher(QThreadData *data)
 {
@@ -295,7 +295,7 @@ QAbstractEventDispatcher *QThreadPrivate::createEventDispatcher(QThreadData *dat
 #endif
 }
 
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
 
 #if (defined(Q_OS_LINUX) || defined(Q_OS_MAC) || defined(Q_OS_QNX))
 static void setCurrentThreadName(const char *name)
@@ -339,13 +339,7 @@ void *QThreadPrivate::start(void *arg)
             data->quitNow = thr->d_func()->exited;
         }
 
-        QAbstractEventDispatcher *eventDispatcher = data->eventDispatcher.load();
-        if (!eventDispatcher) {
-            eventDispatcher = createEventDispatcher(data);
-            data->eventDispatcher.storeRelease(eventDispatcher);
-        }
-
-        eventDispatcher->startingUp();
+        data->ensureEventDispatcher();
 
 #if (defined(Q_OS_LINUX) || defined(Q_OS_MAC) || defined(Q_OS_QNX))
         {
@@ -519,6 +513,8 @@ void QThread::yieldCurrentThread()
     sched_yield();
 }
 
+#endif // QT_CONFIG(thread)
+
 static timespec makeTimespec(time_t secs, long nsecs)
 {
     struct timespec ts;
@@ -541,6 +537,8 @@ void QThread::usleep(unsigned long usecs)
 {
     qt_nanosleep(makeTimespec(usecs / 1000 / 1000, usecs % (1000*1000) * 1000));
 }
+
+#if QT_CONFIG(thread)
 
 #ifdef QT_HAS_THREAD_PRIORITY_SCHEDULING
 #if defined(Q_OS_QNX)
@@ -722,6 +720,12 @@ void QThread::start(Priority priority)
         }
     }
 
+#ifdef Q_OS_INTEGRITY
+    if (Q_LIKELY(objectName().isEmpty()))
+        pthread_attr_setthreadname(&attr, metaObject()->className());
+    else
+        pthread_attr_setthreadname(&attr, objectName().toLocal8Bit());
+#endif
     pthread_t threadId;
     int code = pthread_create(&threadId, &attr, QThreadPrivate::start, this);
     if (code == EPERM) {
@@ -841,7 +845,7 @@ void QThreadPrivate::setPriority(QThread::Priority threadPriority)
 #endif
 }
 
-#endif // QT_NO_THREAD
+#endif // QT_CONFIG(thread)
 
 QT_END_NAMESPACE
 

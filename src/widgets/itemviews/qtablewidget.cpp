@@ -225,7 +225,7 @@ QTableWidgetItem *QTableModel::takeItem(int row, int column)
         itm->view = 0;
         itm->d->id = -1;
         tableItems[i] = 0;
-        QModelIndex ind = index(itm);
+        const QModelIndex ind = index(row, column);
         emit dataChanged(ind, ind);
     }
     return itm;
@@ -453,17 +453,20 @@ bool QTableModel::setItemData(const QModelIndex &index, const QMap<int, QVariant
     QTableWidget *view = qobject_cast<QTableWidget*>(QObject::parent());
     QTableWidgetItem *itm = item(index);
     if (itm) {
-        itm->view = 0; // prohibits item from calling itemChanged()
-        bool changed = false;
+        itm->view = nullptr; // prohibits item from calling itemChanged()
+        QVector<int> rolesVec;
         for (QMap<int, QVariant>::ConstIterator it = roles.constBegin(); it != roles.constEnd(); ++it) {
-            if (itm->data(it.key()) != it.value()) {
-                itm->setData(it.key(), it.value());
-                changed = true;
+            const int role = (it.key() == Qt::EditRole ? Qt::DisplayRole : it.key());
+            if (itm->data(role) != it.value()) {
+                itm->setData(role, it.value());
+                rolesVec += role;
+                if (role == Qt::DisplayRole)
+                    rolesVec += Qt::EditRole;
             }
         }
         itm->view = view;
-        if (changed)
-            itemChanged(itm);
+        if (!rolesVec.isEmpty())
+            itemChanged(itm, rolesVec);
         return true;
     }
 
@@ -506,7 +509,7 @@ void QTableModel::sort(int column, Qt::SortOrder order)
             unsortable.append(row);
     }
 
-    LessThan compare = (order == Qt::AscendingOrder ? &itemLessThan : &itemGreaterThan);
+    const auto compare = (order == Qt::AscendingOrder ? &itemLessThan : &itemGreaterThan);
     std::stable_sort(sortable.begin(), sortable.end(), compare);
 
     QVector<QTableWidgetItem*> sorted_table(tableItems.count());
@@ -558,7 +561,7 @@ void QTableModel::ensureSorted(int column, Qt::SortOrder order,
         sorting.append(QPair<QTableWidgetItem*,int>(itm, row));
     }
 
-    LessThan compare = (order == Qt::AscendingOrder ? &itemLessThan : &itemGreaterThan);
+    const auto compare = (order == Qt::AscendingOrder ? &itemLessThan : &itemGreaterThan);
     std::stable_sort(sorting.begin(), sorting.end(), compare);
     QModelIndexList oldPersistentIndexes, newPersistentIndexes;
     QVector<QTableWidgetItem*> newTable = tableItems;
@@ -771,7 +774,7 @@ void QTableModel::clearContents()
     endResetModel();
 }
 
-void QTableModel::itemChanged(QTableWidgetItem *item)
+void QTableModel::itemChanged(QTableWidgetItem *item, const QVector<int> &roles)
 {
     if (!item)
         return;
@@ -787,7 +790,7 @@ void QTableModel::itemChanged(QTableWidgetItem *item)
     } else {
         QModelIndex idx = index(item);
         if (idx.isValid())
-            emit dataChanged(idx, idx);
+            emit dataChanged(idx, idx, roles);
     }
 }
 
@@ -1386,8 +1389,13 @@ void QTableWidgetItem::setData(int role, const QVariant &value)
     }
     if (!found)
         values.append(QWidgetItemData(role, value));
-    if (QTableModel *model = (view ? qobject_cast<QTableModel*>(view->model()) : 0))
-        model->itemChanged(this);
+    if (QTableModel *model = (view ? qobject_cast<QTableModel*>(view->model()) : nullptr))
+    {
+        const QVector<int> roles((role == Qt::DisplayRole) ?
+                                    QVector<int>({Qt::DisplayRole, Qt::EditRole}) :
+                                    QVector<int>({role}));
+        model->itemChanged(this, roles);
+    }
 }
 
 /*!
@@ -1805,7 +1813,7 @@ void QTableWidgetPrivate::_q_dataChanged(const QModelIndex &topLeft,
     \fn QTableWidgetItem *QTableWidget::itemAt(int ax, int ay) const
 
     Returns the item at the position equivalent to QPoint(\a{ax}, \a{ay}) in
-    the table widget's coordinate system, or returns 0 if the specified point
+    the table widget's coordinate system, or returns \nullptr if the specified point
     is not covered by an item in the table widget.
 
     \sa item()
@@ -1928,7 +1936,7 @@ int QTableWidget::column(const QTableWidgetItem *item) const
 
 /*!
     Returns the item for the given \a row and \a column if one has been set; otherwise
-    returns 0.
+    returns \nullptr.
 
     \sa setItem()
 */
@@ -2021,7 +2029,7 @@ QTableWidgetItem *QTableWidget::takeVerticalHeaderItem(int row)
 
 /*!
     Returns the horizontal header item for column, \a column, if one has been
-    set; otherwise returns 0.
+    set; otherwise returns \nullptr.
 */
 QTableWidgetItem *QTableWidget::horizontalHeaderItem(int column) const
 {
@@ -2427,7 +2435,7 @@ int QTableWidget::visualColumn(int logicalColumn) const
 /*!
   \fn QTableWidgetItem *QTableWidget::itemAt(const QPoint &point) const
 
-  Returns a pointer to the item at the given \a point, or returns 0 if
+  Returns a pointer to the item at the given \a point, or returns \nullptr if
   \a point is not covered by an item in the table widget.
 
   \sa item()
@@ -2595,7 +2603,7 @@ QMimeData *QTableWidget::mimeData(const QList<QTableWidgetItem*> items) const
     // if non empty, it's called from the model's own mimeData
     if (cachedIndexes.isEmpty()) {
         cachedIndexes.reserve(items.count());
-        foreach (QTableWidgetItem *item, items)
+        for (QTableWidgetItem *item : items)
             cachedIndexes << indexFromItem(item);
 
         QMimeData *result = d->tableModel()->internalMimeData();

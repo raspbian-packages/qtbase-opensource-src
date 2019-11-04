@@ -41,7 +41,9 @@
 #include "qdir.h"
 #include "qstringlist.h"
 #include "qfile.h"
+#if QT_CONFIG(settings)
 #include "qsettings.h"
+#endif
 #include "qlibraryinfo.h"
 #include "qscopedpointer.h"
 
@@ -67,7 +69,7 @@ QT_BEGIN_NAMESPACE
 
 extern void qDumpCPUFeatures(); // in qsimd.cpp
 
-#ifndef QT_NO_SETTINGS
+#if QT_CONFIG(settings)
 
 struct QLibrarySettings
 {
@@ -204,7 +206,7 @@ QSettings *QLibraryInfoPrivate::findConfiguration()
     return 0;     //no luck
 }
 
-#endif // QT_NO_SETTINGS
+#endif // settings
 
 /*!
     \class QLibraryInfo
@@ -320,8 +322,10 @@ QLibraryInfo::buildDate()
 #elif defined(Q_CC_MSVC)
 #  if _MSC_VER < 1910
 #    define COMPILER_STRING "MSVC 2015"
-#  elif _MSC_VER < 2000
+#  elif _MSC_VER < 1917
 #    define COMPILER_STRING "MSVC 2017"
+#  elif _MSC_VER < 2000
+#    define COMPILER_STRING "MSVC 2019"
 #  else
 #    define COMPILER_STRING "MSVC _MSC_VER " QT_STRINGIFY(_MSC_VER)
 #  endif
@@ -430,7 +434,24 @@ void QLibraryInfo::reload()
 {
     QLibraryInfoPrivate::reload();
 }
-#endif
+
+void QLibraryInfo::sysrootify(QString *path)
+{
+    if (!QVariant::fromValue(rawLocation(SysrootifyPrefixPath, FinalPaths)).toBool())
+        return;
+
+    const QString sysroot = rawLocation(SysrootPath, FinalPaths);
+    if (sysroot.isEmpty())
+        return;
+
+    if (path->length() > 2 && path->at(1) == QLatin1Char(':')
+        && (path->at(2) == QLatin1Char('/') || path->at(2) == QLatin1Char('\\'))) {
+        path->replace(0, 2, sysroot); // Strip out the drive on Windows targets
+    } else {
+        path->prepend(sysroot);
+    }
+}
+#endif // QT_BUILD_QMAKE
 
 /*!
   Returns the location specified by \a loc.
@@ -442,18 +463,8 @@ QLibraryInfo::location(LibraryLocation loc)
     QString ret = rawLocation(loc, FinalPaths);
 
     // Automatically prepend the sysroot to target paths
-    if (loc < SysrootPath || loc > LastHostPath) {
-        QString sysroot = rawLocation(SysrootPath, FinalPaths);
-        if (!sysroot.isEmpty()
-                && QVariant::fromValue(rawLocation(SysrootifyPrefixPath, FinalPaths)).toBool()) {
-            if (ret.length() > 2 && ret.at(1) == QLatin1Char(':')
-                   && (ret.at(2) == QLatin1Char('/') || ret.at(2) == QLatin1Char('\\'))) {
-                ret.replace(0, 2, sysroot); // Strip out the drive on Windows targets
-            } else {
-                ret.prepend(sysroot);
-            }
-        }
-    }
+    if (loc < SysrootPath || loc > LastHostPath)
+        sysrootify(&ret);
 
     return ret;
 }
@@ -464,7 +475,7 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
 #endif // QT_BUILD_QMAKE, started inside location !
     QString ret;
     bool fromConf = false;
-#ifndef QT_NO_SETTINGS
+#if QT_CONFIG(settings)
 #ifdef QT_BUILD_QMAKE
     // Logic for choosing the right data source: if EffectivePaths are requested
     // and qt.conf with that section is present, use it, otherwise fall back to
@@ -547,7 +558,7 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
             ret = QDir::fromNativeSeparators(ret);
         }
     }
-#endif // QT_NO_SETTINGS
+#endif // settings
 
 #ifndef QT_BUILD_QMAKE_BOOTSTRAP
     if (!fromConf) {
@@ -596,6 +607,8 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
         } else {
             // we make any other path absolute to the prefix directory
             baseDir = rawLocation(PrefixPath, group);
+            if (group == EffectivePaths)
+                sysrootify(&baseDir);
         }
 #else
         if (loc == PrefixPath) {
@@ -646,7 +659,7 @@ QLibraryInfo::rawLocation(LibraryLocation loc, PathGroup group)
 
 QStringList QLibraryInfo::platformPluginArguments(const QString &platformName)
 {
-#if !defined(QT_BUILD_QMAKE) && !defined(QT_NO_SETTINGS)
+#if !defined(QT_BUILD_QMAKE) && QT_CONFIG(settings)
     QScopedPointer<const QSettings> settings(QLibraryInfoPrivate::findConfiguration());
     if (!settings.isNull()) {
         const QString key = QLatin1String(platformsSection)
@@ -657,7 +670,7 @@ QStringList QLibraryInfo::platformPluginArguments(const QString &platformName)
     }
 #else
     Q_UNUSED(platformName);
-#endif // !QT_BUILD_QMAKE && !QT_NO_SETTINGS
+#endif // !QT_BUILD_QMAKE && settings
     return QStringList();
 }
 

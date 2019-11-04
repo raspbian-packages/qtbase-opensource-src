@@ -268,7 +268,7 @@ static bool findPatternUnloaded(const QString &library, QLibraryPrivate *lib)
     */
     bool hasMetaData = false;
     qsizetype pos = 0;
-    char pattern[] = "qTMETADATA  ";
+    char pattern[] = "qTMETADATA ";
     pattern[0] = 'Q'; // Ensure the pattern "QTMETADATA" is not found in this library should QPluginLoader ever encounter it.
     const ulong plen = qstrlen(pattern);
 #if defined (Q_OF_ELF) && defined(Q_CC_GNU)
@@ -314,10 +314,14 @@ static bool findPatternUnloaded(const QString &library, QLibraryPrivate *lib)
 
     bool ret = false;
 
-    if (pos >= 0) {
-        if (hasMetaData) {
-            const char *data = filedata + pos;
-            QJsonDocument doc = qJsonFromRawLibraryMetaData(data, qsizetype(fdlen));
+    if (pos >= 0 && hasMetaData) {
+        const char *data = filedata + pos;
+        QString errMsg;
+        QJsonDocument doc = qJsonFromRawLibraryMetaData(data, fdlen, &errMsg);
+        if (doc.isNull()) {
+            qWarning("Found invalid metadata in lib %s: %s",
+                     qPrintable(library), qPrintable(errMsg));
+        } else {
             lib->metaData = doc.object();
             if (qt_debug_component())
                 qWarning("Found metadata in lib %s, metadata=\n%s\n",
@@ -544,7 +548,7 @@ bool QLibraryPrivate::load()
     if (fileName.isEmpty())
         return false;
 
-    Q_TRACE(qlibraryprivate_load_entry, fileName);
+    Q_TRACE(QLibraryPrivate_load_entry, fileName);
 
     bool ret = load_sys();
     if (qt_debug_component()) {
@@ -562,7 +566,7 @@ bool QLibraryPrivate::load()
         installCoverageTool(this);
     }
 
-    Q_TRACE(qlibraryprivate_load_exit, ret);
+    Q_TRACE(QLibraryPrivate_load_exit, ret);
 
     return ret;
 }
@@ -679,20 +683,26 @@ bool QLibrary::isLibrary(const QString &fileName)
 #endif
 }
 
-typedef const char * (*QtPluginQueryVerificationDataFunction)();
-
-static bool qt_get_metadata(QtPluginQueryVerificationDataFunction pfn, QLibraryPrivate *priv)
+static bool qt_get_metadata(QLibraryPrivate *priv, QString *errMsg)
 {
-    const char *szData = 0;
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    auto getMetaData = [](QFunctionPointer fptr) {
+        auto f = reinterpret_cast<const char * (*)()>(fptr);
+        return qMakePair<const char *, size_t>(f(), INT_MAX);
+    };
+#else
+    auto getMetaData = [](QFunctionPointer fptr) {
+        auto f = reinterpret_cast<QPair<const char *, size_t> (*)()>(fptr);
+        return f();
+    };
+#endif
+
+    QFunctionPointer pfn = priv->resolve("qt_plugin_query_metadata");
     if (!pfn)
         return false;
 
-    szData = pfn();
-    if (!szData)
-        return false;
-
-    // the data is already loaded, so the size doesn't matter
-    QJsonDocument doc = qJsonFromRawLibraryMetaData(szData, INT_MAX);
+    auto metaData = getMetaData(pfn);
+    QJsonDocument doc = qJsonFromRawLibraryMetaData(metaData.first, metaData.second, errMsg);
     if (doc.isNull())
         return false;
     priv->metaData = doc.object();
@@ -735,9 +745,7 @@ void QLibraryPrivate::updatePluginState()
     } else {
         // library is already loaded (probably via QLibrary)
         // simply get the target function and call it.
-        QtPluginQueryVerificationDataFunction getMetaData = NULL;
-        getMetaData = (QtPluginQueryVerificationDataFunction) resolve("qt_plugin_query_metadata");
-        success = qt_get_metadata(getMetaData, this);
+        success = qt_get_metadata(this, &errorString);
     }
 
     if (!success) {
@@ -991,7 +999,7 @@ void QLibrary::setFileNameAndVersion(const QString &fileName, const QString &ver
 
 /*!
     Returns the address of the exported symbol \a symbol. The library is
-    loaded if necessary. The function returns 0 if the symbol could
+    loaded if necessary. The function returns \nullptr if the symbol could
     not be resolved or if the library could not be loaded.
 
     Example:
@@ -1024,7 +1032,7 @@ QFunctionPointer QLibrary::resolve(const char *symbol)
     include the platform-specific file suffix; (see \l{fileName}). The
     library remains loaded until the application exits.
 
-    The function returns 0 if the symbol could not be resolved or if
+    The function returns \nullptr if the symbol could not be resolved or if
     the library could not be loaded.
 
     \sa resolve()
@@ -1044,7 +1052,7 @@ QFunctionPointer QLibrary::resolve(const QString &fileName, const char *symbol)
     (see \l{fileName}). The library remains loaded until the application exits.
     \a verNum is ignored on Windows.
 
-    The function returns 0 if the symbol could not be resolved or if
+    The function returns \nullptr if the symbol could not be resolved or if
     the library could not be loaded.
 
     \sa resolve()
@@ -1065,7 +1073,7 @@ QFunctionPointer QLibrary::resolve(const QString &fileName, int verNum, const ch
     (see \l{fileName}). The library remains loaded until the application exits.
     \a version is ignored on Windows.
 
-    The function returns 0 if the symbol could not be resolved or if
+    The function returns \nullptr if the symbol could not be resolved or if
     the library could not be loaded.
 
     \sa resolve()

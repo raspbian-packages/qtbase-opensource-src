@@ -34,6 +34,11 @@
 #include "qbytearraylist.h"
 #include "qbytearraymatcher.h"
 #include "qcache.h"
+#include "qcborarray.h"
+#include "qcborcommon.h"
+#include "qcbormap.h"
+#include "qcborstream.h"
+#include "qcborvalue.h"
 #include "qchar.h"
 #include "qcollator.h"
 #if QT_CONFIG(commandlineparser)
@@ -173,12 +178,17 @@
 #include "qsavefile.h"
 #include "qscopedpointer.h"
 #include "qscopedvaluerollback.h"
+#include "qscopeguard.h"
+#if QT_CONFIG(thread)
 #include "qsemaphore.h"
+#endif
 #if QT_CONFIG(animation)
 #include "qsequentialanimationgroup.h"
 #endif
 #include "qset.h"
+#if QT_CONFIG(settings)
 #include "qsettings.h"
+#endif
 #include "qshareddata.h"
 #include "qsharedmemory.h"
 #include "qsharedpointer.h"
@@ -221,7 +231,9 @@
 #endif
 #include "qtextstream.h"
 #include "qthread.h"
+#if QT_CONFIG(thread)
 #include "qthreadpool.h"
+#endif
 #include "qthreadstorage.h"
 #include "qtimeline.h"
 #include "qtimer.h"

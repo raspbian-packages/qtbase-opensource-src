@@ -167,6 +167,7 @@ private:
 
     static Qt::Alignment resolveAlignment(Qt::LayoutDirection, Qt::Alignment);
     static bool isNaturalChild(const QObject *obj);
+    static QPixmap loadPixmap(const QString &fileName, const QObject *context);
     bool initObject(const QObject *obj) const;
 public:
     static int numinstances;
@@ -214,6 +215,13 @@ public:
 template <typename T>
 class QTypeInfo<QStyleSheetStyleCaches::Tampered<T>>
     : QTypeInfoMerger<QStyleSheetStyleCaches::Tampered<T>, T> {};
+
+
+// Returns a QStyleSheet from the given style.
+inline QStyleSheetStyle* qt_styleSheet(QStyle *style)
+{
+    return qobject_cast<QStyleSheetStyle *>(style);
+}
 
 QT_END_NAMESPACE
 #endif // QT_NO_STYLE_STYLESHEET

@@ -1264,19 +1264,47 @@ void tst_QTableView::moveCursorStrikesBack_data()
     for (int i = 0; i < 7; ++i)
         fullList << i;
 
-    QTest::newRow("All disabled, wrap forward. Timeout => FAIL") << -1 << -1
+    QTest::newRow("All disabled, wrap forward. => invalid index") << -1 << -1
             << fullList
             << fullList
             << QRect()
             << 1 << 0 << (IntList() << int(QtTestTableView::MoveNext))
-            << 1 << 0;
+            << -1 << -1;
 
-    QTest::newRow("All disabled, wrap backwards. Timeout => FAIL") << -1 << -1
+    QTest::newRow("All disabled, wrap backwards. => invalid index") << -1 << -1
             << fullList
             << fullList
             << QRect()
             << 1 << 0 << (IntList() << int(QtTestTableView::MovePrevious))
+            << -1 << -1;
+
+    QTest::newRow("Last column disabled, MoveEnd. QTBUG-72400") << -1 << -1
+            << IntList()
+            << (IntList() << 6)
+            << QRect()
+            << 0 << 0 << (IntList() << int(QtTestTableView::MoveEnd))
+            << 0 << 5;
+
+    QTest::newRow("First column disabled, MoveHome. QTBUG-72400") << -1 << -1
+            << IntList()
+            << (IntList() << 0)
+            << QRect()
+            << 0 << 6 << (IntList() << int(QtTestTableView::MoveHome))
+            << 0 << 1;
+
+    QTest::newRow("First row disabled, MovePageUp. QTBUG-72400") << -1 << -1
+            << (IntList() << 0)
+            << IntList()
+            << QRect()
+            << 2 << 0 << (IntList() << int(QtTestTableView::MovePageUp))
             << 1 << 0;
+
+    QTest::newRow("Last row disabled, MovePageDown. QTBUG-72400") << -1 << -1
+            << (IntList() << 6)
+            << IntList()
+            << QRect()
+            << 4 << 0 << (IntList() << int(QtTestTableView::MovePageDown))
+            << 5 << 0;
 }
 
 void tst_QTableView::moveCursorStrikesBack()
@@ -1302,6 +1330,9 @@ void tst_QTableView::moveCursorStrikesBack()
     if (span.height() && span.width())
         view.setSpan(span.top(), span.left(), span.height(), span.width());
     view.show();
+    QVERIFY(QTest::qWaitForWindowActive(&view));
+    // resize to make sure there are scrollbars
+    view.resize(view.columnWidth(0) * 7, view.rowHeight(0) * 7);
 
     QModelIndex index = model.index(startRow, startColumn);
     view.setCurrentIndex(index);
@@ -1320,9 +1351,6 @@ void tst_QTableView::moveCursorStrikesBack()
         newColumn = newIndex.column();
     }
 
-    // expected fails, task 119433
-    if(newRow == -1)
-        return;
     QCOMPARE(newRow, expectedRow);
     QCOMPARE(newColumn, expectedColumn);
 }
@@ -1353,6 +1381,11 @@ void tst_QTableView::moveCursorBiggerJump()
     QCOMPARE(view.indexAt(QPoint(0,0)), model.index(7,0));
     QTest::keyClick(&view, Qt::Key_PageUp);
     QCOMPARE(view.indexAt(QPoint(0,0)), model.index(0,0));
+
+    QTest::keyClick(&view, Qt::Key_PageDown);
+    view.verticalHeader()->hideSection(0);
+    QTest::keyClick(&view, Qt::Key_PageUp);
+    QTRY_COMPARE(view.currentIndex().row(), view.rowAt(0));
 }
 
 void tst_QTableView::hideRows_data()
@@ -2329,6 +2362,14 @@ void tst_QTableView::rowViewportPosition()
     view.setVerticalScrollMode((QAbstractItemView::ScrollMode)verticalScrollMode);
     view.verticalScrollBar()->setValue(verticalScrollValue);
 
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("row 1, scroll per item, 1", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 5, scroll per item, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 9, scroll per item, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 1, scroll per pixel, 1", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 5, scroll per pixel, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("row 9, scroll per pixel, 5", "Fails on WinRT - QTBUG-68297", Abort);
+#endif
     QCOMPARE(view.rowViewportPosition(row), rowViewportPosition);
 }
 
@@ -2492,6 +2533,14 @@ void tst_QTableView::columnViewportPosition()
     view.setHorizontalScrollMode((QAbstractItemView::ScrollMode)horizontalScrollMode);
     view.horizontalScrollBar()->setValue(horizontalScrollValue);
 
+#ifdef Q_OS_WINRT
+    QEXPECT_FAIL("column 1, scroll per item, 1", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 5, scroll per item, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 9, scroll per item, 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 1, scroll per pixel 1", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 5, scroll per pixel 5", "Fails on WinRT - QTBUG-68297", Abort);
+    QEXPECT_FAIL("column 9, scroll per pixel 5", "Fails on WinRT - QTBUG-68297", Abort);
+#endif
     QCOMPARE(view.columnViewportPosition(column), columnViewportPosition);
 }
 

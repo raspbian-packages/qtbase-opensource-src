@@ -43,12 +43,16 @@ SUBPROGRAMS = \
      sleep \
      strcmp \
      subtest \
+     tuplediagnostics \
      verbose1 \
      verbose2 \
      verifyexceptionthrown \
      warnings \
-     xunit \
-     mouse
+     xunit
+
+qtHaveModule(gui): SUBPROGRAMS += \
+    keyboard \
+    mouse
 
 INCLUDEPATH += ../../../../shared/
 HEADERS += ../../../../shared/emulationdetector.h

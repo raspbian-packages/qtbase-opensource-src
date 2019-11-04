@@ -116,7 +116,7 @@
 #define QT_FEATURE_systemsemaphore -1
 #define QT_FEATURE_temporaryfile 1
 #define QT_FEATURE_textdate 1
-#define QT_NO_THREAD
+#define QT_FEATURE_thread -1
 #define QT_FEATURE_timezone -1
 #define QT_FEATURE_topleveldomain -1
 #define QT_NO_TRANSLATION
@@ -126,11 +126,13 @@
 #define QT_FEATURE_commandlineparser -1
 #define QT_NO_COMPRESS
 #define QT_JSON_READONLY
+#define QT_FEATURE_settings 1
 #define QT_NO_STANDARDPATHS
 #define QT_FEATURE_textcodec -1
 #else
 #define QT_FEATURE_codecs -1
 #define QT_FEATURE_commandlineparser 1
+#define QT_FEATURE_settings -1
 #define QT_FEATURE_textcodec 1
 #endif
 

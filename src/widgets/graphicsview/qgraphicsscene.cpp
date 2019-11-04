@@ -297,6 +297,7 @@ QGraphicsScenePrivate::QGraphicsScenePrivate()
       painterStateProtection(true),
       sortCacheEnabled(false),
       allItemsIgnoreTouchEvents(true),
+      focusOnTouch(true),
       minimumRenderSize(0.0),
       selectionChanging(0),
       rectAdjust(2),
@@ -2393,6 +2394,7 @@ void QGraphicsScene::clear()
     d->allItemsIgnoreHoverEvents = true;
     d->allItemsUseDefaultCursor = true;
     d->allItemsIgnoreTouchEvents = true;
+    d->focusOnTouch = true;
 }
 
 /*!
@@ -3215,7 +3217,8 @@ void QGraphicsScene::update(const QRectF &rect)
                     view->d_func()->updateRectF(rect);
             }
         } else {
-            d->updatedRects << rect;
+            if (!d->updatedRects.contains(rect))
+                d->updatedRects << rect;
         }
     }
 
@@ -4331,7 +4334,8 @@ static void _q_paintIntoCache(QPixmap *pix, QGraphicsItem *item, const QRegion &
         pix->fill(Qt::transparent);
         pixmapPainter.begin(pix);
     } else {
-        subPix = QPixmap(br.size());
+        subPix = QPixmap(br.size() * pix->devicePixelRatio());
+        subPix.setDevicePixelRatio(pix->devicePixelRatio());
         subPix.fill(Qt::transparent);
         pixmapPainter.begin(&subPix);
         pixmapPainter.translate(-br.topLeft());
@@ -4409,6 +4413,7 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
         return;
     }
 
+    const qreal devicePixelRatio = painter->device()->devicePixelRatio();
     const qreal oldPainterOpacity = painter->opacity();
     qreal newPainterOpacity = oldPainterOpacity;
     QGraphicsProxyWidget *proxy = item->isWidget() ? qobject_cast<QGraphicsProxyWidget *>(static_cast<QGraphicsWidget *>(item)) : 0;
@@ -4428,6 +4433,7 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
     // Fetch the off-screen transparent buffer and exposed area info.
     QPixmapCache::Key pixmapKey;
     QPixmap pix;
+
     bool pixmapFound;
     QGraphicsItemCache *itemCache = itemd->extraItemCache();
     if (cacheMode == QGraphicsItem::ItemCoordinateCache) {
@@ -4442,18 +4448,20 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
     // Render using item coordinate cache mode.
     if (cacheMode == QGraphicsItem::ItemCoordinateCache) {
         QSize pixmapSize;
-        bool fixedCacheSize = false;
+        bool fixedCacheSize = itemCache->fixedSize.isValid();
         QRect br = brect.toAlignedRect();
-        if ((fixedCacheSize = itemCache->fixedSize.isValid())) {
+        if (fixedCacheSize) {
             pixmapSize = itemCache->fixedSize;
         } else {
             pixmapSize = br.size();
         }
 
+        pixmapSize *= devicePixelRatio;
+
         // Create or recreate the pixmap.
         int adjust = itemCache->fixedSize.isValid() ? 0 : 2;
         QSize adjustSize(adjust*2, adjust*2);
-        br.adjust(-adjust, -adjust, adjust, adjust);
+        br.adjust(-adjust / devicePixelRatio, -adjust / devicePixelRatio, adjust / devicePixelRatio, adjust / devicePixelRatio);
         if (pix.isNull() || (!fixedCacheSize && (pixmapSize + adjustSize) != pix.size())) {
             pix = QPixmap(pixmapSize + adjustSize);
             itemCache->boundingRect = br;
@@ -4476,7 +4484,8 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
             // Fit the item's bounding rect into the pixmap's coordinates.
             QTransform itemToPixmap;
             if (fixedCacheSize) {
-                const QPointF scale(pixmapSize.width() / brect.width(), pixmapSize.height() / brect.height());
+                const QPointF scale((pixmapSize.width() / devicePixelRatio) / brect.width(),
+                                    (pixmapSize.height() / devicePixelRatio) / brect.height());
                 itemToPixmap.scale(scale.x(), scale.y());
             }
             itemToPixmap.translate(-br.x(), -br.y());
@@ -4498,6 +4507,7 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
             styleOptionTmp.exposedRect = exposedRect;
 
             // Render.
+            pix.setDevicePixelRatio(devicePixelRatio);
             _q_paintIntoCache(&pix, item, pixmapExposed, itemToPixmap, painter->renderHints(),
                               &styleOptionTmp, painterStateProtection);
 
@@ -4595,21 +4605,22 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
 
             // Copy / "scroll" the old pixmap onto the new ole and calculate
             // scrolled exposure.
-            if (newCacheIndent != deviceData->cacheIndent || deviceRect.size() != pix.size()) {
+            if (newCacheIndent != deviceData->cacheIndent || deviceRect.size() != pix.size() / devicePixelRatio) {
                 QPoint diff = newCacheIndent - deviceData->cacheIndent;
-                QPixmap newPix(deviceRect.size());
+                QPixmap newPix(deviceRect.size() * devicePixelRatio);
                 // ### Investigate removing this fill (test with Plasma and
                 // graphicssystem raster).
                 newPix.fill(Qt::transparent);
                 if (!pix.isNull()) {
+                    newPix.setDevicePixelRatio(devicePixelRatio);
                     QPainter newPixPainter(&newPix);
                     newPixPainter.drawPixmap(-diff, pix);
                     newPixPainter.end();
                 }
                 QRegion exposed;
-                exposed += newPix.rect();
+                exposed += QRect(QPoint(0,0), newPix.size() / devicePixelRatio);
                 if (!pix.isNull())
-                    exposed -= QRect(-diff, pix.size());
+                    exposed -= QRect(-diff, pix.size() / devicePixelRatio);
                 scrollExposure = exposed;
 
                 pix = newPix;
@@ -4621,9 +4632,9 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
             deviceData->cacheIndent = QPoint();
 
             // Auto-adjust the pixmap size.
-            if (deviceRect.size() != pix.size()) {
+            if (deviceRect.size() != pix.size() / devicePixelRatio) {
                 // exposed needs to cover the whole pixmap
-                pix = QPixmap(deviceRect.size());
+                pix = QPixmap(deviceRect.size() * devicePixelRatio);
                 pixModified = true;
                 itemCache->allExposed = true;
                 itemCache->exposed.clear();
@@ -4667,6 +4678,7 @@ void QGraphicsScenePrivate::drawItemHelper(QGraphicsItem *item, QPainter *painte
             styleOptionTmp.exposedRect = br.adjusted(-1, -1, 1, 1);
 
             // Render the exposed areas.
+            pix.setDevicePixelRatio(devicePixelRatio);
             _q_paintIntoCache(&pix, item, pixmapExposed, itemToPixmap, painter->renderHints(),
                               &styleOptionTmp, painterStateProtection);
 
@@ -4835,7 +4847,7 @@ void QGraphicsScenePrivate::drawSubtreeRecursive(QGraphicsItem *item, QPainter *
                 && painter->worldTransform().type() <= QTransform::TxTranslate)
             {
                 QRectF sourceRect = sourced->boundingRect(Qt::DeviceCoordinates);
-                QRect effectRect = sourced->paddedEffectRect(Qt::DeviceCoordinates, sourced->currentCachedMode(), sourceRect);
+                QRect effectRect = sourced->paddedEffectRect(Qt::DeviceCoordinates, sourced->currentCachedMode(), sourceRect).toAlignedRect();
 
                 sourced->setCachedOffset(effectRect.topLeft());
             } else {
@@ -5844,6 +5856,41 @@ void QGraphicsScene::setMinimumRenderSize(qreal minSize)
     update();
 }
 
+/*!
+    \property QGraphicsScene::focusOnTouch
+    \since 5.12
+    \brief whether items gain focus when receiving a \e {touch begin} event.
+
+    The usual behavior is to transfer focus only when an item is clicked. Often
+    a tap on a touchpad is interpreted as equivalent to a mouse click by the
+    operating system, generating a synthesized click event in response. However,
+    at least on macOS you can configure this behavior.
+
+    By default, QGraphicsScene also transfers focus when you touch on a trackpad
+    or similar. If the operating system is configured to not generate a
+    synthetic mouse click on tapping the trackpad, this is surprising. If the
+    operating system does generate synthetic mouse clicks on tapping the
+    trackpad, the focus transfer on starting a touch gesture is unnecessary.
+
+    With focusOnTouch switched off, QGraphicsScene behaves as one would expect
+    on macOS.
+
+    The default value is \c true, ensuring that the default behavior is just as
+    in Qt versions prior to 5.12. Set to \c false to prevent touch events from
+    triggering focus changes.
+*/
+bool QGraphicsScene::focusOnTouch() const
+{
+    Q_D(const QGraphicsScene);
+    return d->focusOnTouch;
+}
+
+void QGraphicsScene::setFocusOnTouch(bool enabled)
+{
+    Q_D(QGraphicsScene);
+    d->focusOnTouch = enabled;
+}
+
 void QGraphicsScenePrivate::addView(QGraphicsView *view)
 {
     views << view;
@@ -6023,39 +6070,41 @@ bool QGraphicsScenePrivate::sendTouchBeginEvent(QGraphicsItem *origin, QTouchEve
 {
     Q_Q(QGraphicsScene);
 
-    if (cachedItemsUnderMouse.isEmpty() || cachedItemsUnderMouse.constFirst() != origin) {
-        const QTouchEvent::TouchPoint &firstTouchPoint = touchEvent->touchPoints().first();
-        cachedItemsUnderMouse = itemsAtPosition(firstTouchPoint.screenPos().toPoint(),
-                                                firstTouchPoint.scenePos(),
-                                                static_cast<QWidget *>(touchEvent->target()));
-    }
+    if (focusOnTouch) {
+        if (cachedItemsUnderMouse.isEmpty() || cachedItemsUnderMouse.constFirst() != origin) {
+            const QTouchEvent::TouchPoint &firstTouchPoint = touchEvent->touchPoints().first();
+            cachedItemsUnderMouse = itemsAtPosition(firstTouchPoint.screenPos().toPoint(),
+                                                    firstTouchPoint.scenePos(),
+                                                    static_cast<QWidget *>(touchEvent->target()));
+        }
 
-    // Set focus on the topmost enabled item that can take focus.
-    bool setFocus = false;
+        // Set focus on the topmost enabled item that can take focus.
+        bool setFocus = false;
 
-    foreach (QGraphicsItem *item, cachedItemsUnderMouse) {
-        if (item->isEnabled() && ((item->flags() & QGraphicsItem::ItemIsFocusable) && item->d_ptr->mouseSetsFocus)) {
-            if (!item->isWidget() || ((QGraphicsWidget *)item)->focusPolicy() & Qt::ClickFocus) {
+        foreach (QGraphicsItem *item, cachedItemsUnderMouse) {
+            if (item->isEnabled() && ((item->flags() & QGraphicsItem::ItemIsFocusable) && item->d_ptr->mouseSetsFocus)) {
+                if (!item->isWidget() || ((QGraphicsWidget *)item)->focusPolicy() & Qt::ClickFocus) {
+                    setFocus = true;
+                    if (item != q->focusItem())
+                        q->setFocusItem(item, Qt::MouseFocusReason);
+                    break;
+                }
+            }
+            if (item->isPanel())
+                break;
+            if (item->d_ptr->flags & QGraphicsItem::ItemStopsClickFocusPropagation)
+                break;
+            if (item->d_ptr->flags & QGraphicsItem::ItemStopsFocusHandling) {
+                // Make sure we don't clear focus.
                 setFocus = true;
-                if (item != q->focusItem())
-                    q->setFocusItem(item, Qt::MouseFocusReason);
                 break;
             }
         }
-        if (item->isPanel())
-            break;
-        if (item->d_ptr->flags & QGraphicsItem::ItemStopsClickFocusPropagation)
-            break;
-        if (item->d_ptr->flags & QGraphicsItem::ItemStopsFocusHandling) {
-            // Make sure we don't clear focus.
-            setFocus = true;
-            break;
-        }
-    }
 
-    // If nobody could take focus, clear it.
-    if (!stickyFocus && !setFocus)
-        q->setFocusItem(0, Qt::MouseFocusReason);
+        // If nobody could take focus, clear it.
+        if (!stickyFocus && !setFocus)
+            q->setFocusItem(0, Qt::MouseFocusReason);
+    }
 
     bool res = false;
     bool eventAccepted = touchEvent->isAccepted();
@@ -6391,7 +6440,7 @@ void QGraphicsScenePrivate::gestureEventHandler(QGestureEvent *event)
         ev.setWidget(event->widget());
         sendEvent(receiver.data(), &ev);
         QSet<QGesture *> ignoredGestures;
-        foreach (QGesture *g, gestures) {
+        for (QGesture *g : qAsConst(gestures)) {
             if (!ev.isAccepted() && !ev.isAccepted(g)) {
                 // if the gesture was ignored by its target, we will update the
                 // targetItems list with a possible target items (items that

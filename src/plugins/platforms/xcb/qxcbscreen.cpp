@@ -95,12 +95,6 @@ QXcbVirtualDesktop::QXcbVirtualDesktop(QXcbConnection *connection, xcb_screen_t 
             m_windowManagerName = QXcbWindow::windowTitle(connection, windowManager);
     }
 
-    const xcb_query_extension_reply_t *sync_reply = xcb_get_extension_data(xcb_connection(), &xcb_sync_id);
-    if (!sync_reply || !sync_reply->present)
-        m_syncRequestSupported = false;
-    else
-        m_syncRequestSupported = true;
-
     xcb_depth_iterator_t depth_iterator =
         xcb_screen_allowed_depths_iterator(screen);
 
@@ -664,16 +658,24 @@ QImage::Format QXcbScreen::format() const
     return format;
 }
 
-QDpi QXcbScreen::logicalDpi() const
+int QXcbScreen::forcedDpi() const
 {
     static const int overrideDpi = qEnvironmentVariableIntValue("QT_FONT_DPI");
     if (overrideDpi)
-        return QDpi(overrideDpi, overrideDpi);
+        return overrideDpi;
 
     const int forcedDpi = m_virtualDesktop->forcedDpi();
-    if (forcedDpi > 0) {
+    if (forcedDpi > 0)
+        return forcedDpi;
+    return 0;
+}
+
+QDpi QXcbScreen::logicalDpi() const
+{
+    const int forcedDpi = this->forcedDpi();
+    if (forcedDpi > 0)
         return QDpi(forcedDpi, forcedDpi);
-    }
+
     return m_virtualDesktop->dpi();
 }
 
@@ -745,7 +747,9 @@ void QXcbScreen::updateGeometry(const QRect &geometry, uint8_t rotation)
     if (m_sizeMillimeters.isEmpty())
         m_sizeMillimeters = sizeInMillimeters(geometry.size(), m_virtualDesktop->dpi());
 
-    qreal dpi = geometry.width() / physicalSize().width() * qreal(25.4);
+    qreal dpi = forcedDpi();
+    if (dpi <= 0)
+        dpi = geometry.width() / physicalSize().width() * qreal(25.4);
 
     // Use 128 as a reference DPI on small screens. This favors "small UI" over "large UI".
     qreal referenceDpi = physicalSize().width() <= 320 ? 128 : 96;
@@ -909,16 +913,12 @@ QByteArray QXcbScreen::getEdid() const
         return result;
 
     // Try a bunch of atoms
-    xcb_atom_t atom = connection()->internAtom("EDID");
-    result = getOutputProperty(atom);
-    if (result.isEmpty()) {
-        atom = connection()->internAtom("EDID_DATA");
-        result = getOutputProperty(atom);
-    }
-    if (result.isEmpty()) {
-        atom = connection()->internAtom("XFree86_DDC_EDID1_RAWDATA");
-        result = getOutputProperty(atom);
-    }
+    result = getOutputProperty(atom(QXcbAtom::EDID));
+    if (result.isEmpty())
+        result = getOutputProperty(atom(QXcbAtom::EDID_DATA));
+    if (result.isEmpty())
+        result = getOutputProperty(atom(QXcbAtom::XFree86_DDC_EDID1_RAWDATA));
+
     return result;
 }
 

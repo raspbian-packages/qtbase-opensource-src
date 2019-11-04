@@ -61,8 +61,11 @@ QPlatformScreen::~QPlatformScreen()
 {
     Q_D(QPlatformScreen);
     if (d->screen) {
-        qWarning("Manually deleting a QPlatformScreen. Call QPlatformIntegration::destroyScreen instead.");
+        qWarning("Manually deleting a QPlatformScreen. Call QWindowSystemInterface::handleScreenRemoved instead.");
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         QGuiApplicationPrivate::platformIntegration()->removeScreen(d->screen);
+QT_WARNING_POP
         delete d->screen;
     }
 }
@@ -72,7 +75,7 @@ QPlatformScreen::~QPlatformScreen()
 
     This function is called when Qt needs to be able to grab the content of a window.
 
-    Returnes the content of the window specified with the WId handle within the boundaries of
+    Returns the content of the window specified with the WId handle within the boundaries of
     QRect(x,y,width,height).
 */
 QPixmap QPlatformScreen::grabWindow(WId window, int x, int y, int width, int height) const
@@ -370,7 +373,7 @@ QString QPlatformScreen::serialNumber() const
 /*!
     Reimplement this function in subclass to return the cursor of the screen.
 
-    The default implementation returns 0.
+    The default implementation returns \nullptr.
 */
 QPlatformCursor *QPlatformScreen::cursor() const
 {

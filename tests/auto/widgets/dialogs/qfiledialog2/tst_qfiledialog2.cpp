@@ -601,6 +601,11 @@ void tst_QFileDialog2::task227930_correctNavigationKeyboardBehavior()
     fd.setDirectory(current.absolutePath());
     fd.show();
     QVERIFY(QTest::qWaitForWindowActive(&fd));
+
+    // Ensure LayoutRequest event is processed so that the list view
+    // is sorted correctly to have the directory entires at the top.
+    QCoreApplication::processEvents();
+
     QListView *list = fd.findChild<QListView*>("listView");
     QVERIFY(list);
     QTest::keyClick(list, Qt::Key_Down);
@@ -1176,7 +1181,7 @@ void tst_QFileDialog2::QTBUG4419_lineEditSelectAll()
     fd.setFileMode(QFileDialog::AnyFile);
 
     fd.show();
-    QApplication::setActiveWindow(&fd);
+    fd.activateWindow();
     QVERIFY(QTest::qWaitForWindowActive(&fd));
     QCOMPARE(fd.isVisible(), true);
     QCOMPARE(QApplication::activeWindow(), static_cast<QWidget*>(&fd));

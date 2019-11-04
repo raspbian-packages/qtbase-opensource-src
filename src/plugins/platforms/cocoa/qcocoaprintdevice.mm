@@ -69,17 +69,17 @@ static QPrint::DuplexMode macToDuplexMode(const PMDuplexMode &mode)
 
 QCocoaPrintDevice::QCocoaPrintDevice()
     : QPlatformPrintDevice(),
-      m_printer(0),
-      m_session(0),
-      m_ppd(0)
+      m_printer(nullptr),
+      m_session(nullptr),
+      m_ppd(nullptr)
 {
 }
 
 QCocoaPrintDevice::QCocoaPrintDevice(const QString &id)
     : QPlatformPrintDevice(id),
-      m_printer(0),
-      m_session(0),
-      m_ppd(0)
+      m_printer(nullptr),
+      m_session(nullptr),
+      m_ppd(nullptr)
 {
     if (!id.isEmpty()) {
         m_printer = PMPrinterCreateFromPrinterID(id.toCFString());
@@ -413,7 +413,7 @@ QPrint::ColorMode QCocoaPrintDevice::defaultColorMode() const
         ppd_option_t *colorModel = ppdFindOption(m_ppd, "DefaultColorModel");
         if (!colorModel)
             colorModel = ppdFindOption(m_ppd, "ColorModel");
-        if (!colorModel || (colorModel && !qstrcmp(colorModel->defchoice, "Gray")))
+        if (!colorModel || qstrcmp(colorModel->defchoice, "Gray") != 0)
             return QPrint::Color;
     }
     return QPrint::GrayScale;
@@ -447,11 +447,11 @@ bool QCocoaPrintDevice::openPpdFile()
 {
     if (m_ppd)
         ppdClose(m_ppd);
-    m_ppd = 0;
-    CFURLRef ppdURL = NULL;
+    m_ppd = nullptr;
+    CFURLRef ppdURL = nullptr;
     char ppdPath[MAXPATHLEN];
     if (PMPrinterCopyDescriptionURL(m_printer, kPMPPDDescriptionType, &ppdURL) == noErr
-        && ppdURL != NULL) {
+        && ppdURL) {
         if (CFURLGetFileSystemRepresentation(ppdURL, true, (UInt8*)ppdPath, sizeof(ppdPath)))
             m_ppd = ppdOpenFile(ppdPath);
         CFRelease(ppdURL);
@@ -474,7 +474,7 @@ PMPaper QCocoaPrintDevice::macPaper(const QPageSize &pageSize) const
     if (m_macPapers.contains(pageSize.key()))
         return m_macPapers.value(pageSize.key());
     // For any other page size, whether custom or just unsupported, needs to be a custom PMPaper
-    PMPaper paper = 0;
+    PMPaper paper = nullptr;
     PMPaperMargins paperMargins;
     paperMargins.left = m_customMargins.left();
     paperMargins.right = m_customMargins.right();

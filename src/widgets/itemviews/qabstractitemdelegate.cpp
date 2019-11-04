@@ -240,7 +240,7 @@ QAbstractItemDelegate::~QAbstractItemDelegate()
     model being used. The editor's parent widget is specified by \a parent,
     and the item options by \a option.
 
-    The base implementation returns 0. If you want custom editing you
+    The base implementation returns \nullptr. If you want custom editing you
     will need to reimplement this function.
 
     The returned editor widget should have Qt::StrongFocus;
@@ -386,6 +386,8 @@ bool QAbstractItemDelegate::helpEvent(QHelpEvent *event,
                                       const QModelIndex &index)
 {
     Q_D(QAbstractItemDelegate);
+    Q_UNUSED(d);
+    Q_UNUSED(index);
     Q_UNUSED(option);
 
     if (!event || !view)
@@ -599,18 +601,21 @@ QString QAbstractItemDelegatePrivate::textForRole(Qt::ItemDataRole role, const Q
     case QVariant::DateTime:
         text = locale.toString(value.toDateTime(), formatType);
         break;
-    default: {
-        if (value.canConvert<QJsonValue>()) {
-            const QJsonValue val = value.toJsonValue();
-            if (val.isBool())
-                text = QVariant(val.toBool()).toString();
-            else if (val.isDouble())
-                text = locale.toString(val.toDouble(), 'g', precision);
-            else if (val.isString())
-                text = val.toString();
-        } else {
-            text = value.toString();
+    case QVariant::Type(QMetaType::QJsonValue): {
+        const QJsonValue val = value.toJsonValue();
+        if (val.isBool()) {
+            text = QVariant(val.toBool()).toString();
+            break;
         }
+        if (val.isDouble()) {
+            text = locale.toString(val.toDouble(), 'g', precision);
+            break;
+        }
+        // val is a string (or null) here
+        Q_FALLTHROUGH();
+    }
+    default: {
+        text = value.toString();
         if (role == Qt::DisplayRole)
             text.replace(QLatin1Char('\n'), QChar::LineSeparator);
         break;

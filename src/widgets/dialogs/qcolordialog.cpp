@@ -57,7 +57,9 @@
 #include "qpainter.h"
 #include "qpixmap.h"
 #include "qpushbutton.h"
+#if QT_CONFIG(settings)
 #include "qsettings.h"
+#endif
 #include "qsharedpointer.h"
 #include "qstyle.h"
 #include "qstyleoption.h"
@@ -1737,7 +1739,7 @@ void QColorDialogPrivate::initWidgets()
         q->connect(custom, SIGNAL(selected(int,int)), SLOT(_q_newCustom(int,int)));
         q->connect(custom, SIGNAL(currentChanged(int,int)), SLOT(_q_nextCustom(int,int)));
 
-        q->connect(custom, &QWellArray::colorChanged, [=] (int index, QRgb color) {
+        q->connect(custom, &QWellArray::colorChanged, [this] (int index, QRgb color) {
             QColorDialogOptions::setCustomColor(index, color);
             if (custom)
                 custom->update();
@@ -1851,11 +1853,14 @@ void QColorDialogPrivate::_q_addCustom()
     QColorDialogOptions::setCustomColor(nextCust, cs->currentColor());
     if (custom)
         custom->update();
-    nextCust = (nextCust+1) % 16;
+    nextCust = (nextCust+1) % QColorDialogOptions::customColorCount();
 }
 
 void QColorDialogPrivate::retranslateStrings()
 {
+    if (nativeDialogInUse)
+        return;
+
     if (!smallDisplay) {
         lblBasicColors->setText(QColorDialog::tr("&Basic colors"));
         lblCustomColors->setText(QColorDialog::tr("&Custom colors"));
@@ -1885,7 +1890,7 @@ bool QColorDialogPrivate::canBeNativeDialog() const
 }
 
 static const Qt::WindowFlags DefaultWindowFlags =
-        Qt::Dialog | Qt::WindowTitleHint | Qt::MSWindowsFixedSizeDialogHint
+        Qt::Dialog | Qt::WindowTitleHint
         | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint;
 
 /*!
@@ -2123,7 +2128,6 @@ void QColorDialog::setVisible(bool visible)
 }
 
 /*!
-    \overload
     \since 4.5
 
     Opens the dialog and connects its colorSelected() signal to the slot specified
@@ -2162,6 +2166,7 @@ QColor QColorDialog::getColor(const QColor &initial, QWidget *parent, const QStr
     return dlg.selectedColor();
 }
 
+#if QT_DEPRECATED_SINCE(5, 12)
 /*!
     \obsolete
 
@@ -2169,7 +2174,7 @@ QColor QColorDialog::getColor(const QColor &initial, QWidget *parent, const QStr
     and an alpha channel (transparency) value. The color+alpha is
     initially set to \a initial. The dialog is a child of \a parent.
 
-    If \a ok is non-null, \e *\a ok is set to true if the user clicked
+    If \a ok is non-null, \e {*ok} is set to true if the user clicked
     \uicontrol{OK}, and to false if the user clicked Cancel.
 
     If the user clicks Cancel, the \a initial value is returned.
@@ -2187,6 +2192,7 @@ QRgb QColorDialog::getRgba(QRgb initial, bool *ok, QWidget *parent)
         *ok = color.isValid();
     return result;
 }
+#endif
 
 /*!
     Destroys the color dialog.

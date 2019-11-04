@@ -54,6 +54,7 @@ Build-Depends: debhelper (>= 11),
                libxcb-sync-dev,
                libxcb-xfixes0-dev,
                libxcb-xinerama0-dev,
+               libxcb-xinput-dev,
                libxcb-xkb-dev,
                libxcb1-dev,
                libxext-dev,
@@ -65,9 +66,11 @@ Build-Depends: debhelper (>= 11),
                publicsuffix,
                unixodbc-dev,
                zlib1g-dev
-Build-Depends-Indep: qttools5-dev-tools (>= 5.11.3-1~) <!nodoc>
-Standards-Version: 4.3.0
-Homepage: http://qt-project.org/
+Build-Depends-Indep: qdoc-qt5 (>= 5.12) <!nodoc>,
+                     qhelpgenerator-qt5 (>= 5.12.4~) <!nodoc>,
+                     qtattributionsscanner-qt5 <!nodoc>
+Standards-Version: 4.4.1
+Homepage: https://www.qt.io/developers/
 Vcs-Git: https://salsa.debian.org/qt-kde-team/qt/qtbase.git
 Vcs-Browser: https://salsa.debian.org/qt-kde-team/qt/qtbase
 
@@ -75,7 +78,7 @@ Package: libqt5core5a
 Architecture: any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Provides: qtbase-abi-5-11-3
+Provides: qtbase-abi-5-12-5
 Depends: ${misc:Depends}, ${shlibs:Depends}
 Recommends: qttranslations5-l10n
 Suggests: libthai0
@@ -107,7 +110,9 @@ Package: qt5-gtk-platformtheme
 Architecture: any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libqt5gui5 (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
+Depends: libqt5gui5 (= ${binary:Version}) | libqt5gui5-gles (>= ${source:Upstream-Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
 Description: Qt 5 GTK+ 3 platform theme
  Qt is a cross-platform C++ application framework. Qt's primary feature
  is its rich set of widgets that provide standard GUI functionality.
@@ -118,14 +123,28 @@ Description: Qt 5 GTK+ 3 platform theme
 Package: qt5-flatpak-platformtheme
 Architecture: any
 Multi-Arch: same
-Pre-Depends: ${misc:Pre-Depends}
-Depends: libqt5gui5 (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
-Description: Qt 5 Flatpak platform theme
+Section: oldlibs
+Depends: qt5-xdgdesktopportal-platformtheme (= ${binary:Version}),
+         ${misc:Depends}
+Description: Qt 5 Flatpak platform theme (transitional package)
  Qt is a cross-platform C++ application framework. Qt's primary feature
  is its rich set of widgets that provide standard GUI functionality.
  .
- This package provides the Flatpak platform theme, which makes Qt use
- native file dialogs on Flatpak-based environments.
+ This is a transitional package which can safely be removed.
+
+Package: qt5-xdgdesktopportal-platformtheme
+Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: libqt5gui5 (= ${binary:Version}) | libqt5gui5-gles (>= ${source:Upstream-Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: Qt 5 XDG Desktop Portal platform theme
+ Qt is a cross-platform C++ application framework. Qt's primary feature
+ is its rich set of widgets that provide standard GUI functionality.
+ .
+ This package provides the XDG Desktop portal platform theme, which makes
+ Qt use native file dialogs on Flatpak/Snap based environments.
 
 Package: libqt5network5
 Architecture: any

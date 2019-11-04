@@ -29,6 +29,7 @@
 #include <qrasterwindow.h>
 #include <qpa/qwindowsysteminterface.h>
 #include <qpa/qplatformintegration.h>
+#include <qpa/qplatformwindow.h>
 #include <private/qguiapplication_p.h>
 #include <private/qhighdpiscaling_p.h>
 #include <QtGui/QPainter>
@@ -44,9 +45,11 @@
 #  include <QtCore/qt_windows.h>
 #endif
 
-// For QSignalSpy slot connections.
-Q_DECLARE_METATYPE(Qt::ScreenOrientation)
-Q_DECLARE_METATYPE(QWindow::Visibility)
+static bool isPlatformWinRT()
+{
+    static const bool isWinRT = !QGuiApplication::platformName().compare(QLatin1String("winrt"), Qt::CaseInsensitive);
+    return isWinRT;
+}
 
 class tst_QWindow: public QObject
 {
@@ -97,6 +100,7 @@ private slots:
     void modalWindowPosition();
 #ifndef QT_NO_CURSOR
     void modalWindowEnterEventOnHide_QTBUG35109();
+    void spuriousMouseMove();
 #endif
     void windowsTransientChildren();
     void requestUpdate();
@@ -107,6 +111,7 @@ private slots:
     void cleanup();
     void testBlockingWindowShownAfterModalDialog();
     void generatedMouseMove();
+    void keepPendingUpdateRequests();
 
 private:
     QPoint m_availableTopLeft;
@@ -176,7 +181,7 @@ void tst_QWindow::setParent()
     QVERIFY2(c.children().contains(&d), "Parent should have child in list of children");
 
     a.create();
-    b.setParent(0);
+    b.setParent(nullptr);
     QVERIFY2(!b.handle(), "Making window top level shouild not automatically create it");
 
     QWindow e;
@@ -219,7 +224,7 @@ void tst_QWindow::setVisible()
     f.setVisible(true);
     QVERIFY(!f.handle());
     QVERIFY(!e.handle());
-    f.setParent(0);
+    f.setParent(nullptr);
     QVERIFY2(f.handle(), "Making a visible but not created child window top level should create it");
     QVERIFY(QTest::qWaitForWindowExposed(&f));
 
@@ -234,6 +239,8 @@ void tst_QWindow::setVisible()
     QVERIFY(h.handle());
     i.setParent(&h);
     QVERIFY2(i.handle(), "Making a visible but not created child window child of a created window should create it");
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "Child windows are unsupported on winrt", Continue);
     QVERIFY(QTest::qWaitForWindowExposed(&i));
 }
 
@@ -293,7 +300,7 @@ public:
         m_framePositionsOnMove.clear();
     }
 
-    bool event(QEvent *event)
+    bool event(QEvent *event) override
     {
         m_received[event->type()]++;
         m_order << event->type();
@@ -312,6 +319,7 @@ public:
 
         case QEvent::WindowStateChange:
             lastReceivedWindowState = windowState();
+            break;
 
         default:
             break;
@@ -352,7 +360,7 @@ private:
 
 class ColoredWindow : public QRasterWindow {
 public:
-    explicit ColoredWindow(const QColor &color, QWindow *parent = 0) : QRasterWindow(parent), m_color(color) {}
+    explicit ColoredWindow(const QColor &color, QWindow *parent = nullptr) : QRasterWindow(parent), m_color(color) {}
     void paintEvent(QPaintEvent *) override
     {
         QPainter p(this);
@@ -370,6 +378,7 @@ void tst_QWindow::eventOrderOnShow()
     QRect geometry(m_availableTopLeft + QPoint(80, 80), m_testWindowSize);
 
     Window window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.setGeometry(geometry);
     window.show();
     QCoreApplication::processEvents();
@@ -398,11 +407,15 @@ void tst_QWindow::resizeEventAfterResize()
     // Make sure we get a resizeEvent after calling resize
     window.resize(m_testWindowSize);
 
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "Winrt windows are fullscreen by default.", Continue);
     QTRY_COMPARE(window.received(QEvent::Resize), 2);
 }
 
 void tst_QWindow::exposeEventOnShrink_QTBUG54040()
 {
+    if (isPlatformWinRT())
+        QSKIP("", "WinRT does not support non-maximized/non-fullscreen top level windows. QTBUG-54528", Continue);
     Window window;
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
     window.setTitle(QTest::currentTestFunction());
@@ -425,12 +438,12 @@ void tst_QWindow::exposeEventOnShrink_QTBUG54040()
 
 void tst_QWindow::positioning_data()
 {
-    QTest::addColumn<int>("windowflags");
+    QTest::addColumn<Qt::WindowFlags>("windowflags");
 
-    QTest::newRow("default") << int(Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint | Qt::WindowFullscreenButtonHint);
+    QTest::newRow("default") << (Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint | Qt::WindowFullscreenButtonHint);
 
-#ifdef Q_OS_OSX
-    QTest::newRow("fake") << int(Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+#ifdef Q_OS_MACOS
+    QTest::newRow("fake") << (Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
 #endif
 }
 
@@ -479,14 +492,14 @@ void tst_QWindow::positioning()
     }
 
     if (isPlatformWayland())
-        QSKIP("Wayland: This fails. Figure out why.");
+        QSKIP("Wayland: This fails. See QTBUG-68660.");
 
     // Some platforms enforce minimum widths for windows, which can cause extra resize
     // events, so set the width to suitably large value to avoid those.
     const QRect geometry(m_availableTopLeft + QPoint(80, 80), m_testWindowSize);
 
-    QFETCH(int, windowflags);
-    Window window((Qt::WindowFlags)windowflags);
+    QFETCH(Qt::WindowFlags, windowflags);
+    Window window(windowflags);
     window.setGeometry(QRect(m_availableTopLeft + QPoint(20, 20), m_testWindowSize));
     window.setFramePosition(m_availableTopLeft + QPoint(40, 40)); // Move window around before show, size must not change.
     QCOMPARE(window.geometry().size(), m_testWindowSize);
@@ -590,6 +603,8 @@ void tst_QWindow::childWindowPositioning()
 {
     if (isPlatformWayland())
         QSKIP("Wayland: This is flaky (protocol errors for xdg-shell v6). See QTBUG-67648.");
+    else if (isPlatformWinRT())
+        QSKIP("WinRT does not support child windows.");
 
     const QPoint topLeftOrigin(0, 0);
 
@@ -611,14 +626,12 @@ void tst_QWindow::childWindowPositioning()
 
     QFETCH(bool, showInsteadOfCreate);
 
-    QWindow* windows[] = { &topLevelWindowFirst, &childWindowAfter, &childWindowFirst, &topLevelWindowAfter, 0 };
-    for (int i = 0; windows[i]; ++i) {
-        QWindow *window = windows[i];
-        if (showInsteadOfCreate) {
+    QWindow *windows[] = {&topLevelWindowFirst, &childWindowAfter, &childWindowFirst, &topLevelWindowAfter};
+    for (QWindow *window : windows) {
+        if (showInsteadOfCreate)
             window->showNormal();
-        } else {
+        else
             window->create();
-        }
     }
 
     if (showInsteadOfCreate) {
@@ -695,7 +708,7 @@ void tst_QWindow::stateChange()
     //  explicitly use non-fullscreen show. show() can be fullscreen on some platforms
     window.showNormal();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
-    foreach (Qt::WindowState state, stateSequence) {
+    for (Qt::WindowState state : qAsConst(stateSequence)) {
         window.setWindowState(state);
         QCoreApplication::processEvents();
     }
@@ -709,15 +722,9 @@ class PlatformWindowFilter : public QObject
 {
     Q_OBJECT
 public:
-    PlatformWindowFilter(QObject *parent = 0)
-        : QObject(parent)
-        , m_window(nullptr)
-        , m_alwaysExisted(true)
-    {}
+    explicit PlatformWindowFilter(Window *window) : m_window(window) {}
 
-    void setWindow(Window *window) { m_window = window; }
-
-    bool eventFilter(QObject *o, QEvent *e)
+    bool eventFilter(QObject *o, QEvent *e) override
     {
         // Check that the platform surface events are delivered synchronously.
         // If they are, the native platform surface should always exist when we
@@ -732,7 +739,7 @@ public:
 
 private:
     Window *m_window;
-    bool m_alwaysExisted;
+    bool m_alwaysExisted = true;
 };
 
 void tst_QWindow::platformSurface()
@@ -740,8 +747,7 @@ void tst_QWindow::platformSurface()
     QRect geometry(m_availableTopLeft + QPoint(80, 80), m_testWindowSize);
 
     Window window;
-    PlatformWindowFilter filter;
-    filter.setWindow(&window);
+    PlatformWindowFilter filter(&window);
     window.installEventFilter(&filter);
 
     window.setGeometry(geometry);
@@ -767,6 +773,7 @@ void tst_QWindow::isExposed()
     QRect geometry(m_availableTopLeft + QPoint(80, 80), m_testWindowSize);
 
     Window window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.setGeometry(geometry);
     QCOMPARE(window.geometry(), geometry);
     window.show();
@@ -787,11 +794,10 @@ void tst_QWindow::isExposed()
 
     window.hide();
 
-    if (isPlatformWayland())
-        QSKIP("Wayland: This is flaky. Figure out why.");
-
     QCoreApplication::processEvents();
     QTRY_VERIFY(window.received(QEvent::Expose) > 1);
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "WinRT does not destroy the window. Figure out why. QTBUG-68297", Continue);
     QTRY_VERIFY(!window.isExposed());
 }
 
@@ -802,6 +808,7 @@ void tst_QWindow::isActive()
         QSKIP("QWindow::requestActivate() is not supported.");
 
     Window window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     // Some platforms enforce minimum widths for windows, which can cause extra resize
     // events, so set the width to suitably large value to avoid those.
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
@@ -825,6 +832,8 @@ void tst_QWindow::isActive()
     child.setGeometry(10, 10, 20, 20);
     child.show();
 
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "WinRT does not support native child windows.", Abort);
     QTRY_VERIFY(child.isExposed());
 
     child.requestActivate();
@@ -895,16 +904,19 @@ void tst_QWindow::isActive()
     QVERIFY(child.isActive());
 }
 
-class InputTestWindow : public QWindow
+class InputTestWindow : public ColoredWindow
 {
 public:
-    void keyPressEvent(QKeyEvent *event) {
+    void keyPressEvent(QKeyEvent *event) override
+    {
         keyPressCode = event->key();
     }
-    void keyReleaseEvent(QKeyEvent *event) {
+    void keyReleaseEvent(QKeyEvent *event) override
+    {
         keyReleaseCode = event->key();
     }
-    void mousePressEvent(QMouseEvent *event) {
+    void mousePressEvent(QMouseEvent *event) override
+    {
         if (ignoreMouse) {
             event->ignore();
         } else {
@@ -917,7 +929,8 @@ public:
                 QCoreApplication::processEvents();
         }
     }
-    void mouseReleaseEvent(QMouseEvent *event) {
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
         if (ignoreMouse) {
             event->ignore();
         } else {
@@ -926,7 +939,8 @@ public:
             mouseReleaseButton = event->button();
         }
     }
-    void mouseMoveEvent(QMouseEvent *event) {
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
         buttonStateInGeneratedMove = event->buttons();
         if (ignoreMouse) {
             event->ignore();
@@ -936,7 +950,8 @@ public:
             mouseMoveScreenPos = event->screenPos();
         }
     }
-    void mouseDoubleClickEvent(QMouseEvent *event) {
+    void mouseDoubleClickEvent(QMouseEvent *event) override
+    {
         if (ignoreMouse) {
             event->ignore();
         } else {
@@ -944,7 +959,8 @@ public:
             mouseSequenceSignature += 'd';
         }
     }
-    void touchEvent(QTouchEvent *event) {
+    void touchEvent(QTouchEvent *event) override
+    {
         if (ignoreTouch) {
             event->ignore();
             return;
@@ -969,7 +985,8 @@ public:
             }
         }
     }
-    bool event(QEvent *e) {
+    bool event(QEvent *e) override
+    {
         switch (e->type()) {
         case QEvent::Enter:
             ++enterEventCount;
@@ -980,35 +997,31 @@ public:
         default:
             break;
         }
-        return QWindow::event(e);
+        return ColoredWindow::event(e);
     }
-    void resetCounters() {
+    void resetCounters()
+    {
         mousePressedCount = mouseReleasedCount = mouseMovedCount = mouseDoubleClickedCount = 0;
-        mouseSequenceSignature = QString();
+        mouseSequenceSignature.clear();
         touchPressedCount = touchReleasedCount = touchMovedCount = 0;
         enterEventCount = leaveEventCount = 0;
     }
 
-    InputTestWindow() {
-        keyPressCode = keyReleaseCode = 0;
-        mousePressButton = mouseReleaseButton = mouseMoveButton = 0;
-        ignoreMouse = ignoreTouch = false;
-        spinLoopWhenPressed = false;
-        resetCounters();
-    }
+    explicit InputTestWindow(const QColor &color = Qt::white, QWindow *parent = nullptr)
+        : ColoredWindow(color, parent) {}
 
-    int keyPressCode, keyReleaseCode;
-    int mousePressButton, mouseReleaseButton, mouseMoveButton;
-    int mousePressedCount, mouseReleasedCount, mouseMovedCount, mouseDoubleClickedCount;
+    int keyPressCode = 0, keyReleaseCode = 0;
+    int mousePressButton = 0, mouseReleaseButton = 0, mouseMoveButton = 0;
+    int mousePressedCount = 0, mouseReleasedCount = 0, mouseMovedCount = 0, mouseDoubleClickedCount = 0;
     QString mouseSequenceSignature;
     QPointF mousePressScreenPos, mouseMoveScreenPos, mousePressLocalPos;
-    int touchPressedCount, touchReleasedCount, touchMovedCount;
-    QEvent::Type touchEventType;
-    int enterEventCount, leaveEventCount;
+    int touchPressedCount = 0, touchReleasedCount = 0, touchMovedCount = 0;
+    QEvent::Type touchEventType = QEvent::None;
+    int enterEventCount = 0, leaveEventCount = 0;
 
-    bool ignoreMouse, ignoreTouch;
+    bool ignoreMouse = false, ignoreTouch = false;
 
-    bool spinLoopWhenPressed;
+    bool spinLoopWhenPressed = false;
     Qt::MouseButtons buttonStateInGeneratedMove;
 };
 
@@ -1053,15 +1066,15 @@ void tst_QWindow::testInputEvents()
     window.mousePressButton = window.mouseReleaseButton = 0;
     const QPointF nonWindowGlobal(window.geometry().topRight() + QPoint(200, 50)); // not inside the window
     const QPointF deviceNonWindowGlobal = QHighDpi::toNativePixels(nonWindowGlobal, window.screen());
-    QWindowSystemInterface::handleMouseEvent(0, deviceNonWindowGlobal, deviceNonWindowGlobal, Qt::LeftButton);
-    QWindowSystemInterface::handleMouseEvent(0, deviceNonWindowGlobal, deviceNonWindowGlobal, Qt::NoButton);
+    QWindowSystemInterface::handleMouseEvent(nullptr, deviceNonWindowGlobal, deviceNonWindowGlobal, Qt::LeftButton);
+    QWindowSystemInterface::handleMouseEvent(nullptr, deviceNonWindowGlobal, deviceNonWindowGlobal, Qt::NoButton);
     QCoreApplication::processEvents();
     QCOMPARE(window.mousePressButton, 0);
     QCOMPARE(window.mouseReleaseButton, 0);
     const QPointF windowGlobal = window.mapToGlobal(local.toPoint());
     const QPointF deviceWindowGlobal = QHighDpi::toNativePixels(windowGlobal, window.screen());
-    QWindowSystemInterface::handleMouseEvent(0, deviceWindowGlobal, deviceWindowGlobal, Qt::LeftButton);
-    QWindowSystemInterface::handleMouseEvent(0, deviceWindowGlobal, deviceWindowGlobal, Qt::NoButton);
+    QWindowSystemInterface::handleMouseEvent(nullptr, deviceWindowGlobal, deviceWindowGlobal, Qt::LeftButton);
+    QWindowSystemInterface::handleMouseEvent(nullptr, deviceWindowGlobal, deviceWindowGlobal, Qt::NoButton);
     QCoreApplication::processEvents();
     QCOMPARE(window.mousePressButton, int(Qt::LeftButton));
     QCOMPARE(window.mouseReleaseButton, int(Qt::LeftButton));
@@ -1072,6 +1085,7 @@ void tst_QWindow::testInputEvents()
 void tst_QWindow::touchToMouseTranslation()
 {
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.ignoreTouch = true;
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
     window.show();
@@ -1125,7 +1139,7 @@ void tst_QWindow::touchToMouseTranslation()
     QTRY_COMPARE(window.mousePressButton, 0);
     QTRY_COMPARE(window.mouseReleaseButton, 0);
 
-    qApp->setAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents, false);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents, false);
 
     window.ignoreTouch = true;
     points[0].state = Qt::TouchPointPressed;
@@ -1136,7 +1150,7 @@ void tst_QWindow::touchToMouseTranslation()
     QWindowSystemInterface::handleTouchEvent(&window, touchDevice, points);
     QCoreApplication::processEvents();
 
-    qApp->setAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents, true);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents, true);
 
     // mouse event synthesizing disabled
     QTRY_COMPARE(window.mousePressButton, 0);
@@ -1146,6 +1160,7 @@ void tst_QWindow::touchToMouseTranslation()
 void tst_QWindow::touchToMouseTranslationForDevices()
 {
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.ignoreTouch = true;
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
     window.show();
@@ -1174,9 +1189,10 @@ void tst_QWindow::touchToMouseTranslationForDevices()
 
 void tst_QWindow::mouseToTouchTranslation()
 {
-    qApp->setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
 
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.ignoreMouse = true;
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
     window.show();
@@ -1186,12 +1202,12 @@ void tst_QWindow::mouseToTouchTranslation()
     QWindowSystemInterface::handleMouseEvent(&window, QPoint(10, 10), window.mapToGlobal(QPoint(10, 10)), Qt::NoButton);
     QCoreApplication::processEvents();
 
-    qApp->setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, false);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, false);
 
     QTRY_COMPARE(window.touchPressedCount, 1);
     QTRY_COMPARE(window.touchReleasedCount, 1);
 
-    qApp->setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
 
     window.ignoreMouse = false;
 
@@ -1199,7 +1215,7 @@ void tst_QWindow::mouseToTouchTranslation()
     QWindowSystemInterface::handleMouseEvent(&window, QPoint(10, 10), window.mapToGlobal(QPoint(10, 10)), Qt::NoButton);
     QCoreApplication::processEvents();
 
-    qApp->setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, false);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, false);
 
     // no new touch events should be generated since the input window handles the mouse events
     QTRY_COMPARE(window.touchPressedCount, 1);
@@ -1221,10 +1237,12 @@ void tst_QWindow::mouseToTouchTranslation()
 void tst_QWindow::mouseToTouchLoop()
 {
     // make sure there's no infinite loop when synthesizing both ways
-    qApp->setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
-    qApp->setAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents, true);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents, true);
 
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
+
     window.ignoreMouse = true;
     window.ignoreTouch = true;
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
@@ -1235,13 +1253,14 @@ void tst_QWindow::mouseToTouchLoop()
     QWindowSystemInterface::handleMouseEvent(&window, QPoint(10, 10), window.mapToGlobal(QPoint(10, 10)), Qt::NoButton);
     QCoreApplication::processEvents();
 
-    qApp->setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, false);
-    qApp->setAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents, true);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, false);
+    QCoreApplication::setAttribute(Qt::AA_SynthesizeMouseForUnhandledTouchEvents, true);
 }
 
 void tst_QWindow::touchCancel()
 {
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -1301,6 +1320,7 @@ void tst_QWindow::touchCancel()
 void tst_QWindow::touchCancelWithTouchToMouse()
 {
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.ignoreTouch = true;
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
     window.show();
@@ -1323,7 +1343,7 @@ void tst_QWindow::touchCancelWithTouchToMouse()
 
     // Cancel the touch. Should result in a mouse release for windows that have
     // have an active touch-to-mouse sequence.
-    QWindowSystemInterface::handleTouchCancelEvent(0, touchDevice);
+    QWindowSystemInterface::handleTouchCancelEvent(nullptr, touchDevice);
     QCoreApplication::processEvents();
 
     QTRY_COMPARE(window.mouseReleaseButton, int(Qt::LeftButton));
@@ -1338,7 +1358,7 @@ void tst_QWindow::touchCancelWithTouchToMouse()
     QTRY_COMPARE(window.mousePressButton, 0);
 
     // Cancel the touch. It should not result in a mouse release with this window.
-    QWindowSystemInterface::handleTouchCancelEvent(0, touchDevice);
+    QWindowSystemInterface::handleTouchCancelEvent(nullptr, touchDevice);
     QCoreApplication::processEvents();
     QTRY_COMPARE(window.mouseReleaseButton, 0);
 }
@@ -1349,6 +1369,7 @@ void tst_QWindow::touchInterruptedByPopup()
         QSKIP("Wayland: This test crashes with xdg-shell unstable v6");
 
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -1469,6 +1490,7 @@ void tst_QWindow::sizes()
 void tst_QWindow::close()
 {
     QWindow a;
+    a.setTitle(QLatin1String(QTest::currentTestFunction()));
     QWindow b;
     QWindow c(&a);
 
@@ -1486,8 +1508,9 @@ void tst_QWindow::activateAndClose()
     if (!QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::WindowActivation))
         QSKIP("QWindow::requestActivate() is not supported.");
 
-    for (int i = 0; i < 10; ++i)  {
+    for (int i = 0; i < 10; ++i) {
        QWindow window;
+       window.setTitle(QLatin1String(QTest::currentTestFunction()) + QString::number(i));
 #if defined(Q_OS_QNX)
        window.setSurfaceType(QSurface::OpenGLSurface);
 #endif
@@ -1505,15 +1528,16 @@ void tst_QWindow::activateAndClose()
 #endif
        window.requestActivate();
        QVERIFY(QTest::qWaitForWindowActive(&window));
-       QCOMPARE(qGuiApp->focusWindow(), &window);
+       QCOMPARE(QGuiApplication::focusWindow(), &window);
     }
 }
 
 void tst_QWindow::mouseEventSequence()
 {
-    int doubleClickInterval = qGuiApp->styleHints()->mouseDoubleClickInterval();
+    const auto doubleClickInterval = ulong(QGuiApplication::styleHints()->mouseDoubleClickInterval());
 
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -1635,6 +1659,7 @@ void tst_QWindow::windowModality()
 void tst_QWindow::inputReentrancy()
 {
     InputTestWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.spinLoopWhenPressed = true;
 
     window.setGeometry(QRect(m_availableTopLeft + QPoint(80, 80), m_testWindowSize));
@@ -1680,17 +1705,20 @@ void tst_QWindow::inputReentrancy()
 class TabletTestWindow : public QWindow
 {
 public:
-    TabletTestWindow() : eventType(QEvent::None) { }
-    void tabletEvent(QTabletEvent *ev) {
+    void tabletEvent(QTabletEvent *ev) override
+    {
         eventType = ev->type();
         eventGlobal = ev->globalPosF();
         eventLocal = ev->posF();
         eventDevice = ev->device();
     }
-    QEvent::Type eventType;
+
+    QEvent::Type eventType = QEvent::None;
     QPointF eventGlobal, eventLocal;
-    int eventDevice;
-    bool eventFilter(QObject *obj, QEvent *ev) {
+    int eventDevice = -1;
+
+    bool eventFilter(QObject *obj, QEvent *ev) override
+    {
         if (ev->type() == QEvent::TabletEnterProximity
                 || ev->type() == QEvent::TabletLeaveProximity) {
             eventType = ev->type();
@@ -1738,6 +1766,7 @@ void tst_QWindow::tabletEvents()
 void tst_QWindow::windowModality_QTBUG27039()
 {
     QWindow parent;
+    parent.setTitle(QLatin1String(QTest::currentTestFunction()));
     parent.setGeometry(QRect(m_availableTopLeft + QPoint(10, 10), m_testWindowSize));
     parent.show();
 
@@ -1843,11 +1872,12 @@ void tst_QWindow::mask()
 void tst_QWindow::initialSize()
 {
     if (isPlatformWayland())
-        QSKIP("Wayland: This fails. Figure out why.");
+        QSKIP("Wayland: This fails. See QTBUG-66818.");
 
     QSize defaultSize(0,0);
     {
     Window w;
+    w.setTitle(QLatin1String(QTest::currentTestFunction()));
     w.showNormal();
     QTRY_VERIFY(w.width() > 0);
     QTRY_VERIFY(w.height() > 0);
@@ -1855,18 +1885,24 @@ void tst_QWindow::initialSize()
     }
     {
     Window w;
+    w.setTitle(QLatin1String(QTest::currentTestFunction()));
     w.setWidth(m_testWindowSize.width());
     w.showNormal();
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "WinRT shows windows as fullscreen by default.", Continue);
     QTRY_COMPARE(w.width(), m_testWindowSize.width());
     QTRY_VERIFY(w.height() > 0);
     }
     {
     Window w;
+    w.setTitle(QLatin1String(QTest::currentTestFunction()));
     const QSize testSize(m_testWindowSize.width(), 42);
     w.resize(testSize);
     w.showNormal();
 
     const QSize expectedSize = testSize;
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "WinRT shows windows as fullscreen by default.", Continue);
     QTRY_COMPARE(w.size(), expectedSize);
     }
 }
@@ -1886,6 +1922,7 @@ void tst_QWindow::modalDialog()
         QSKIP("Test fails due to QTBUG-61965, and is slow due to QTBUG-61964");
 
     QWindow normalWindow;
+    normalWindow.setTitle(QLatin1String(QTest::currentTestFunction()));
     normalWindow.setFramePosition(m_availableTopLeft + QPoint(80, 80));
     normalWindow.resize(m_testWindowSize);
     normalWindow.show();
@@ -1910,15 +1947,18 @@ void tst_QWindow::modalDialog()
         return;
     }
 
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "WinRT only support one native window.", Continue);
     QTRY_COMPARE(QGuiApplication::focusWindow(), &dialog);
 }
 
 void tst_QWindow::modalDialogClosingOneOfTwoModal()
 {
-    if (isPlatformWayland())
-        QSKIP("Wayland: This fails. Figure out why.");
+    if (!QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::WindowActivation))
+        QSKIP("QWindow::requestActivate() is not supported.");
 
     QWindow normalWindow;
+    normalWindow.setTitle(QLatin1String(QTest::currentTestFunction()));
     normalWindow.setFramePosition(m_availableTopLeft + QPoint(80, 80));
     normalWindow.resize(m_testWindowSize);
     normalWindow.show();
@@ -1955,6 +1995,8 @@ void tst_QWindow::modalDialogClosingOneOfTwoModal()
         return;
     }
 
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "WinRT only support one native window.", Continue);
     QTRY_COMPARE(QGuiApplication::focusWindow(), &first_dialog);
 }
 
@@ -1964,6 +2006,7 @@ void tst_QWindow::modalWithChildWindow()
         QSKIP("QWindow::requestActivate() is not supported.");
 
     QWindow normalWindow;
+    normalWindow.setTitle(QLatin1String(QTest::currentTestFunction()));
     normalWindow.setFramePosition(m_availableTopLeft + QPoint(80, 80));
     normalWindow.resize(m_testWindowSize);
     normalWindow.show();
@@ -1982,6 +2025,8 @@ void tst_QWindow::modalWithChildWindow()
 
     tlw_dialog.show();
     QVERIFY(QTest::qWaitForWindowExposed(&tlw_dialog));
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "WinRT only support one native window.", Abort);
     QVERIFY(QTest::qWaitForWindowExposed(&sub_window));
 
     QTRY_COMPARE(QGuiApplication::focusWindow(), &tlw_dialog);
@@ -1998,6 +2043,7 @@ void tst_QWindow::modalWindowModallity()
         QSKIP("QWindow::requestActivate() is not supported.");
 
     QWindow normal_window;
+    normal_window.setTitle(QLatin1String(QTest::currentTestFunction()));
     normal_window.setFramePosition(m_availableTopLeft + QPoint(80, 80));
     normal_window.resize(m_testWindowSize);
     normal_window.show();
@@ -2028,12 +2074,15 @@ void tst_QWindow::modalWindowModallity()
 void tst_QWindow::modalWindowPosition()
 {
     QWindow window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.setGeometry(QRect(m_availableTopLeft + QPoint(100, 100), m_testWindowSize));
     // Allow for any potential resizing due to constraints
     QRect origGeo = window.geometry();
     window.setModality(Qt::WindowModal);
     window.show();
     QVERIFY(QTest::qWaitForWindowExposed(&window));
+    if (isPlatformWinRT())
+        QEXPECT_FAIL("", "WinRT windows are fullscreen by default.", Continue);
     QCOMPARE(window.geometry(), origGeo);
 }
 
@@ -2094,6 +2143,9 @@ void tst_QWindow::modalWindowEnterEventOnHide_QTBUG35109()
         root.resetCounters();
         modal.close();
 
+        if (isPlatformWinRT())
+            QEXPECT_FAIL("", "WinRT does not trigger the enter event correctly"
+                         "- QTBUG-68297.", Abort);
         // Check for the enter event
         QTRY_COMPARE(root.enterEventCount, 1);
     }
@@ -2213,7 +2265,53 @@ void tst_QWindow::modalWindowEnterEventOnHide_QTBUG35109()
         QTRY_COMPARE(root.enterEventCount, 1);
     }
 }
-#endif
+
+// Verify that no spurious mouse move events are received. On Windows, there is
+// no enter event, the OS sends mouse move events instead. Test that the QPA
+// plugin properly suppresses those since they can interfere with tests.
+// Simulate a main window setup with a modal dialog on top, keep the cursor
+// in the center and check that no mouse events are recorded.
+void tst_QWindow::spuriousMouseMove()
+{
+    const QString &platformName = QGuiApplication::platformName();
+    if (platformName == QLatin1String("offscreen") || platformName == QLatin1String("cocoa"))
+        QSKIP("No enter events sent");
+    if (isPlatformWayland() || isPlatformWinRT())
+        QSKIP("QCursor::setPos() is not supported on this platform");
+    const QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
+    const QPoint center = screenGeometry.center();
+    QCursor::setPos(center);
+    QRect windowGeometry(QPoint(), 2 * m_testWindowSize);
+    windowGeometry.moveCenter(center);
+    QTRY_COMPARE(QCursor::pos(), center);
+    InputTestWindow topLevel;
+    topLevel.setTitle(QTest::currentTestFunction());
+    topLevel.setGeometry(windowGeometry);
+    topLevel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&topLevel));
+    QTRY_VERIFY(topLevel.enterEventCount > 0);
+    InputTestWindow dialog(Qt::yellow);
+    dialog.setTransientParent(&topLevel);
+    dialog.setTitle("Dialog " + topLevel.title());
+    dialog.setModality(Qt::ApplicationModal);
+    windowGeometry.setSize(m_testWindowSize);
+    windowGeometry.moveCenter(center);
+    dialog.setGeometry(windowGeometry);
+    dialog.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+    QTRY_VERIFY(dialog.enterEventCount > 0);
+    dialog.setVisible(false);
+    QCOMPARE(dialog.mousePressedCount, 0);
+    QCOMPARE(dialog.mouseReleasedCount, 0);
+    QCOMPARE(dialog.mouseMovedCount, 0);
+    QCOMPARE(dialog.mouseDoubleClickedCount, 0);
+    topLevel.setVisible(false);
+    QCOMPARE(topLevel.mousePressedCount, 0);
+    QCOMPARE(topLevel.mouseReleasedCount, 0);
+    QCOMPARE(topLevel.mouseMovedCount, 0);
+    QCOMPARE(topLevel.mouseDoubleClickedCount, 0);
+}
+#endif // !QT_NO_CURSOR
 
 static bool isNativeWindowVisible(const QWindow *window)
 {
@@ -2260,6 +2358,7 @@ void tst_QWindow::requestUpdate()
     QRect geometry(m_availableTopLeft + QPoint(80, 80), m_testWindowSize);
 
     Window window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
     window.setGeometry(geometry);
     window.show();
     QCoreApplication::processEvents();
@@ -2289,10 +2388,10 @@ void tst_QWindow::flags()
 class EventWindow : public QWindow
 {
 public:
-    EventWindow() : QWindow(), gotBlocked(false) {}
-    bool gotBlocked;
+    bool gotBlocked = false;
+
 protected:
-    bool event(QEvent *e)
+    bool event(QEvent *e) override
     {
         if (e->type() == QEvent::WindowBlocked)
             gotBlocked = true;
@@ -2303,6 +2402,7 @@ protected:
 void tst_QWindow::testBlockingWindowShownAfterModalDialog()
 {
     EventWindow normalWindow;
+    normalWindow.setTitle(QLatin1String(QTest::currentTestFunction()));
     normalWindow.setFramePosition(m_availableTopLeft + QPoint(80, 80));
     normalWindow.resize(m_testWindowSize);
     normalWindow.show();
@@ -2330,6 +2430,7 @@ void tst_QWindow::testBlockingWindowShownAfterModalDialog()
 void tst_QWindow::generatedMouseMove()
 {
     InputTestWindow w;
+    w.setTitle(QLatin1String(QTest::currentTestFunction()));
     w.setGeometry(QRect(m_availableTopLeft + QPoint(100, 100), m_testWindowSize));
     w.setFlags(w.flags() | Qt::FramelessWindowHint); // ### FIXME: QTBUG-63542
     w.show();
@@ -2341,35 +2442,57 @@ void tst_QWindow::generatedMouseMove()
     QTest::mouseMove(&w, point);
     QVERIFY(w.mouseMovedCount == 1);
     // A press event that does not change position should not generate mouse move
-    QTest::mousePress(&w, Qt::LeftButton, 0, point);
-    QTest::mousePress(&w, Qt::RightButton, 0, point);
+    QTest::mousePress(&w, Qt::LeftButton, Qt::KeyboardModifiers(), point);
+    QTest::mousePress(&w, Qt::RightButton, Qt::KeyboardModifiers(), point);
 
     QVERIFY(w.mouseMovedCount == 1);
 
     // Verify that a move event is generated for a mouse release event that changes position
     point += step;
-    QTest::mouseRelease(&w, Qt::LeftButton, 0, point);
+    QTest::mouseRelease(&w, Qt::LeftButton,Qt::KeyboardModifiers(), point);
     QVERIFY(w.mouseMovedCount == 2);
     QVERIFY(w.buttonStateInGeneratedMove == (Qt::LeftButton | Qt::RightButton));
     point += step;
-    QTest::mouseRelease(&w, Qt::RightButton, 0, point);
+    QTest::mouseRelease(&w, Qt::RightButton, Qt::KeyboardModifiers(), point);
     QVERIFY(w.mouseMovedCount == 3);
     QVERIFY(w.buttonStateInGeneratedMove == Qt::RightButton);
 
     // Verify that a move event is generated for a mouse press event that changes position
     point += step;
-    QTest::mousePress(&w, Qt::LeftButton, 0, point);
+    QTest::mousePress(&w, Qt::LeftButton, Qt::KeyboardModifiers(), point);
     QVERIFY(w.mouseMovedCount == 4);
     QVERIFY(w.buttonStateInGeneratedMove == Qt::NoButton);
     point += step;
-    QTest::mousePress(&w, Qt::RightButton, 0, point);
+    QTest::mousePress(&w, Qt::RightButton, Qt::KeyboardModifiers(), point);
     QVERIFY(w.mouseMovedCount == 5);
     QVERIFY(w.buttonStateInGeneratedMove == Qt::LeftButton);
 
     // A release event that does not change position should not generate mouse move
-    QTest::mouseRelease(&w, Qt::RightButton, 0, point);
-    QTest::mouseRelease(&w, Qt::LeftButton, 0, point);
+    QTest::mouseRelease(&w, Qt::RightButton, Qt::KeyboardModifiers(), point);
+    QTest::mouseRelease(&w, Qt::LeftButton, Qt::KeyboardModifiers(), point);
     QVERIFY(w.mouseMovedCount == 5);
+}
+
+void tst_QWindow::keepPendingUpdateRequests()
+{
+    QRect geometry(m_availableTopLeft + QPoint(80, 80), m_testWindowSize);
+
+    Window window;
+    window.setTitle(QLatin1String(QTest::currentTestFunction()));
+    window.setGeometry(geometry);
+    window.show();
+    QCoreApplication::processEvents();
+    QTRY_VERIFY(window.isExposed());
+
+    window.requestUpdate();
+    window.close();
+    window.setVisible(true);
+
+    QPlatformWindow *platformWindow = window.handle();
+    QVERIFY(platformWindow);
+
+    QVERIFY(platformWindow->hasPendingUpdateRequest());
+    QTRY_VERIFY(!platformWindow->hasPendingUpdateRequest());
 }
 
 #include <tst_qwindow.moc>

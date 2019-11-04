@@ -136,6 +136,9 @@ QVariant QCupsPrintEngine::property(PrintEnginePropertyKey key) const
     case PPK_CupsOptions:
         ret = d->cupsOptions;
         break;
+    case PPK_Duplex:
+        ret = d->duplex;
+        break;
     default:
         ret = QPdfPrintEngine::property(key);
         break;
@@ -144,7 +147,9 @@ QVariant QCupsPrintEngine::property(PrintEnginePropertyKey key) const
 }
 
 
-QCupsPrintEnginePrivate::QCupsPrintEnginePrivate(QPrinter::PrinterMode m) : QPdfPrintEnginePrivate(m)
+QCupsPrintEnginePrivate::QCupsPrintEnginePrivate(QPrinter::PrinterMode m)
+    : QPdfPrintEnginePrivate(m)
+    , duplex(QPrint::DuplexNone)
 {
 }
 

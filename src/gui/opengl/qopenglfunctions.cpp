@@ -45,6 +45,7 @@
 #include <QtGui/private/qopengl_p.h>
 #include <QtGui/private/qguiapplication_p.h>
 #include <qpa/qplatformintegration.h>
+#include <qpa/qplatformnativeinterface.h>
 
 #ifdef Q_OS_INTEGRITY
 #include <EGL/egl.h>
@@ -89,65 +90,18 @@ void CLASS::init(QOpenGLContext *context) \
     that need it.  The recommended way to use QOpenGLFunctions is by
     direct inheritance:
 
-    \code
-    class MyGLWindow : public QWindow, protected QOpenGLFunctions
-    {
-        Q_OBJECT
-    public:
-        MyGLWindow(QScreen *screen = 0);
-
-    protected:
-        void initializeGL();
-        void paintGL();
-
-        QOpenGLContext *m_context;
-    };
-
-    MyGLWindow(QScreen *screen)
-      : QWindow(screen), QOpenGLWidget(parent)
-    {
-        setSurfaceType(OpenGLSurface);
-        create();
-
-        // Create an OpenGL context
-        m_context = new QOpenGLContext;
-        m_context->create();
-
-        // Setup scene and render it
-        initializeGL();
-        paintGL();
-    }
-
-    void MyGLWindow::initializeGL()
-    {
-        m_context->makeCurrent(this);
-        initializeOpenGLFunctions();
-    }
-    \endcode
+    \snippet code/src_gui_opengl_qopenglfunctions.cpp 0
 
     The \c{paintGL()} function can then use any of the OpenGL ES 2.0
     functions without explicit resolution, such as glActiveTexture()
     in the following example:
 
-    \code
-    void MyGLWindow::paintGL()
-    {
-        m_context->makeCurrent(this);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-        ...
-        m_context->swapBuffers(this);
-        m_context->doneCurrent();
-    }
-    \endcode
+    \snippet code/src_gui_opengl_qopenglfunctions.cpp 1
 
     QOpenGLFunctions can also be used directly for ad-hoc invocation
     of OpenGL ES 2.0 functions on all platforms:
 
-    \code
-    QOpenGLFunctions glFuncs(QOpenGLContext::currentContext());
-    glFuncs.glActiveTexture(GL_TEXTURE1);
-    \endcode
+    \snippet code/src_gui_opengl_qopenglfunctions.cpp 2
 
     An alternative approach is to query the context's associated
     QOpenGLFunctions instance. This is somewhat faster than the previous
@@ -156,10 +110,7 @@ void CLASS::init(QOpenGLContext *context) \
     resolving happens only once for a given context, regardless of the number of
     QOpenGLFunctions instances initialized for it.
 
-    \code
-    QOpenGLFunctions *glFuncs = QOpenGLContext::currentContext()->functions();
-    glFuncs->glActiveTexture(GL_TEXTURE1);
-    \endcode
+    \snippet code/src_gui_opengl_qopenglfunctions.cpp 3
 
     QOpenGLFunctions provides wrappers for all OpenGL ES 2.0
     functions, including the common subset of OpenGL 1.x and ES
@@ -174,10 +125,7 @@ void CLASS::init(QOpenGLContext *context) \
     feature.  For example, the following checks if non power of two
     textures are available:
 
-    \code
-    QOpenGLFunctions funcs(QOpenGLContext::currentContext());
-    bool npot = funcs.hasOpenGLFeature(QOpenGLFunctions::NPOTTextures);
-    \endcode
+    \snippet code/src_gui_opengl_qopenglfunctions.cpp 4
 
     \sa QOpenGLContext, QSurfaceFormat
 */
@@ -194,6 +142,7 @@ void CLASS::init(QOpenGLContext *context) \
     \value BlendColor glBlendColor() is available.
     \value BlendEquation glBlendEquation() is available.
     \value BlendEquationSeparate glBlendEquationSeparate() is available.
+    \value BlendEquationAdvanced Advanced blend equations are available.
     \value BlendFuncSeparate glBlendFuncSeparate() is available.
     \value BlendSubtract Blend subtract mode is available.
     \value CompressedTextures Compressed texture functions are available.
@@ -294,9 +243,19 @@ QOpenGLExtensions::QOpenGLExtensions(QOpenGLContext *context)
 static int qt_gl_resolve_features()
 {
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    QOpenGLExtensionMatcher extensions;
+    int features = 0;
+    if ((extensions.match("GL_KHR_blend_equation_advanced")
+        || extensions.match("GL_NV_blend_equation_advanced")) &&
+        (extensions.match("GL_KHR_blend_equation_advanced_coherent")
+        || extensions.match("GL_NV_blend_equation_advanced_coherent"))) {
+        // We need both the advanced equations and the coherency for us
+        // to be able to easily use the new blend equations
+        features |= QOpenGLFunctions::BlendEquationAdvanced;
+    }
     if (ctx->isOpenGLES()) {
         // OpenGL ES
-        int features = QOpenGLFunctions::Multitexture |
+        features |= QOpenGLFunctions::Multitexture |
             QOpenGLFunctions::Shaders |
             QOpenGLFunctions::Buffers |
             QOpenGLFunctions::Framebuffers |
@@ -308,7 +267,6 @@ static int qt_gl_resolve_features()
             QOpenGLFunctions::CompressedTextures |
             QOpenGLFunctions::Multisample |
             QOpenGLFunctions::StencilSeparate;
-        QOpenGLExtensionMatcher extensions;
         if (extensions.match("GL_IMG_texture_npot"))
             features |= QOpenGLFunctions::NPOTTextures;
         if (extensions.match("GL_OES_texture_npot"))
@@ -320,14 +278,18 @@ static int qt_gl_resolve_features()
             if (!(renderer && strstr(renderer, "Mesa")))
                 features |= QOpenGLFunctions::TextureRGFormats;
         }
-        if (ctx->format().majorVersion() >= 3)
+        if (ctx->format().majorVersion() >= 3) {
             features |= QOpenGLFunctions::MultipleRenderTargets;
+            if (ctx->format().minorVersion() >= 2 && extensions.match("GL_KHR_blend_equation_advanced_coherent")) {
+                // GL_KHR_blend_equation_advanced is included in OpenGL ES/3.2
+                features |= QOpenGLFunctions::BlendEquationAdvanced;
+            }
+        }
         return features;
     } else {
         // OpenGL
-        int features = QOpenGLFunctions::TextureRGFormats;
+        features |= QOpenGLFunctions::TextureRGFormats;
         QSurfaceFormat format = QOpenGLContext::currentContext()->format();
-        QOpenGLExtensionMatcher extensions;
 
         if (format.majorVersion() >= 3)
             features |= QOpenGLFunctions::Framebuffers | QOpenGLFunctions::MultipleRenderTargets;
@@ -411,6 +373,8 @@ static int qt_gl_resolve_extensions()
         extensions |= QOpenGLExtensions::NVFloatBuffer;
     if (extensionMatcher.match("GL_ARB_pixel_buffer_object"))
         extensions |= QOpenGLExtensions::PixelBufferObject;
+    if (extensionMatcher.match("GL_ARB_texture_swizzle") || extensionMatcher.match("GL_EXT_texture_swizzle"))
+        extensions |= QOpenGLExtensions::TextureSwizzle;
 
     if (ctx->isOpenGLES()) {
         if (format.majorVersion() >= 2)
@@ -423,7 +387,8 @@ static int qt_gl_resolve_extensions()
                 | QOpenGLExtensions::MapBufferRange
                 | QOpenGLExtensions::FramebufferBlit
                 | QOpenGLExtensions::FramebufferMultisample
-                | QOpenGLExtensions::Sized8Formats;
+                | QOpenGLExtensions::Sized8Formats
+                | QOpenGLExtensions::TextureSwizzle;
         } else {
             // Recognize features by extension name.
             if (extensionMatcher.match("GL_OES_packed_depth_stencil"))
@@ -449,6 +414,17 @@ static int qt_gl_resolve_extensions()
         // We don't match GL_APPLE_texture_format_BGRA8888 here because it has different semantics.
         if (extensionMatcher.match("GL_IMG_texture_format_BGRA8888") || extensionMatcher.match("GL_EXT_texture_format_BGRA8888"))
             extensions |= QOpenGLExtensions::BGRATextureFormat;
+#if defined(Q_OS_ANDROID) && !defined(Q_OS_ANDROID_EMBEDDED)
+        QString *deviceName =
+                static_cast<QString *>(QGuiApplication::platformNativeInterface()->nativeResourceForIntegration("AndroidDeviceName"));
+        static bool wrongfullyReportsBgra8888Support = deviceName != 0
+                                                        && (deviceName->compare(QLatin1String("samsung SM-T211"), Qt::CaseInsensitive) == 0
+                                                            || deviceName->compare(QLatin1String("samsung SM-T210"), Qt::CaseInsensitive) == 0
+                                                            || deviceName->compare(QLatin1String("samsung SM-T215"), Qt::CaseInsensitive) == 0);
+        if (wrongfullyReportsBgra8888Support)
+            extensions &= ~QOpenGLExtensions::BGRATextureFormat;
+#endif
+
         if (extensionMatcher.match("GL_EXT_discard_framebuffer"))
             extensions |= QOpenGLExtensions::DiscardFramebuffer;
         if (extensionMatcher.match("GL_EXT_texture_norm16"))
@@ -481,6 +457,9 @@ static int qt_gl_resolve_extensions()
 
         if (format.version() >= qMakePair(3, 2) || extensionMatcher.match("GL_ARB_geometry_shader4"))
             extensions |= QOpenGLExtensions::GeometryShaders;
+
+        if (format.version() >= qMakePair(3, 3))
+            extensions |= QOpenGLExtensions::TextureSwizzle;
 
         if (extensionMatcher.match("GL_ARB_map_buffer_range"))
             extensions |= QOpenGLExtensions::MapBufferRange;

@@ -52,7 +52,10 @@
 #include "qendian.h"
 #include <qshareddata.h>
 #include <qplatformdefs.h>
+#include <qendian.h>
 #include "private/qabstractfileengine_p.h"
+#include "private/qnumeric_p.h"
+#include "private/qsimd_p.h"
 #include "private/qsystemerror_p.h"
 
 #ifdef Q_OS_UNIX
@@ -629,17 +632,13 @@ inline QString QResourceRoot::name(int node) const
 
     QString ret;
     qint32 name_offset = qFromBigEndian<qint32>(tree + offset);
-    const qint16 name_length = qFromBigEndian<qint16>(names + name_offset);
+    quint16 name_length = qFromBigEndian<qint16>(names + name_offset);
     name_offset += 2;
     name_offset += 4; //jump past hash
 
     ret.resize(name_length);
     QChar *strData = ret.data();
-    for(int i = 0; i < name_length*2; i+=2) {
-        QChar c(names[name_offset+i+1], names[name_offset+i]);
-        *strData = c;
-        ++strData;
-    }
+    qFromBigEndian<ushort>(names + name_offset, name_length, strData);
     return ret;
 }
 
@@ -853,8 +852,10 @@ bool QResourceRoot::mappingRootSubdir(const QString &path, QString *match) const
 Q_CORE_EXPORT bool qRegisterResourceData(int version, const unsigned char *tree,
                                          const unsigned char *name, const unsigned char *data)
 {
+    if (resourceGlobalData.isDestroyed())
+        return false;
     QMutexLocker lock(resourceMutex());
-    if ((version == 0x01 || version == 0x2) && resourceList()) {
+    if (version == 0x01 || version == 0x2) {
         bool found = false;
         QResourceRoot res(version, tree, name, data);
         for(int i = 0; i < resourceList()->size(); ++i) {
@@ -880,7 +881,7 @@ Q_CORE_EXPORT bool qUnregisterResourceData(int version, const unsigned char *tre
         return false;
 
     QMutexLocker lock(resourceMutex());
-    if ((version == 0x01 || version == 0x02) && resourceList()) {
+    if (version == 0x01 || version == 0x02) {
         QResourceRoot res(version, tree, name, data);
         for(int i = 0; i < resourceList()->size(); ) {
             if(*resourceList()->at(i) == res) {
@@ -1289,7 +1290,6 @@ bool QResourceFileEngine::close()
 {
     Q_D(QResourceFileEngine);
     d->offset = 0;
-    d->uncompressed.clear();
     return true;
 }
 
@@ -1504,12 +1504,25 @@ uchar *QResourceFileEnginePrivate::map(qint64 offset, qint64 size, QFile::Memory
 {
     Q_Q(QResourceFileEngine);
     Q_UNUSED(flags);
-    if (offset < 0 || size <= 0 || !resource.isValid() || offset + size > resource.size()) {
+
+    qint64 max = resource.size();
+    if (resource.isCompressed()) {
+        uncompress();
+        max = uncompressed.size();
+    }
+
+    qint64 end;
+    if (offset < 0 || size <= 0 || !resource.isValid() ||
+            add_overflow(offset, size, &end) || end > max) {
         q->setError(QFile::UnspecifiedError, QString());
         return 0;
     }
-    uchar *address = const_cast<uchar *>(resource.data());
-    return (address + offset);
+
+    const uchar *address = resource.data();
+    if (resource.isCompressed())
+        address = reinterpret_cast<const uchar *>(uncompressed.constData());
+
+    return const_cast<uchar *>(address) + offset;
 }
 
 bool QResourceFileEnginePrivate::unmap(uchar *ptr)

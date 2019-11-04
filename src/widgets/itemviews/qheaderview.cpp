@@ -146,7 +146,10 @@ static const int maxSizeSection = 1048575; // since section size is in a bitfiel
     Not all \l{Qt::}{ItemDataRole}s will have an effect on a
     QHeaderView. If you need to draw other roles, you can subclass
     QHeaderView and reimplement \l{QHeaderView::}{paintEvent()}.
-    QHeaderView respects the following item data roles:
+    QHeaderView respects the following item data roles, unless they are
+    in conflict with the style (which can happen for styles that follow
+    the desktop theme):
+
     \l{Qt::}{TextAlignmentRole}, \l{Qt::}{DisplayRole},
     \l{Qt::}{FontRole}, \l{Qt::}{DecorationRole},
     \l{Qt::}{ForegroundRole}, and \l{Qt::}{BackgroundRole}.
@@ -1853,11 +1856,13 @@ bool QHeaderView::restoreState(const QByteArray &state)
 */
 void QHeaderView::reset()
 {
+    Q_D(QHeaderView);
     QAbstractItemView::reset();
     // it would be correct to call clear, but some apps rely
     // on the header keeping the sections, even after calling reset
     //d->clear();
     initializeSections();
+    d->invalidateCachedSizeHint();
 }
 
 /*!
@@ -2868,6 +2873,7 @@ bool QHeaderView::viewportEvent(QEvent *e)
         }
         return true; }
 #endif // QT_CONFIG(statustip)
+    case QEvent::Resize:
     case QEvent::FontChange:
     case QEvent::StyleChange:
         d->invalidateCachedSizeHint();
@@ -2962,8 +2968,10 @@ void QHeaderView::paintSection(QPainter *painter, const QRect &rect, int logical
         margin += style()->pixelMetric(QStyle::PM_SmallIconSize, 0, this) +
                   style()->pixelMetric(QStyle::PM_HeaderMargin, 0, this);
 
-    if (d->textElideMode != Qt::ElideNone)
-        opt.text = opt.fontMetrics.elidedText(opt.text, d->textElideMode , rect.width() - margin);
+    if (d->textElideMode != Qt::ElideNone) {
+        const QRect textRect = style()->subElementRect(QStyle::SE_HeaderLabel, &opt, this);
+        opt.text = opt.fontMetrics.elidedText(opt.text, d->textElideMode, textRect.width() - margin);
+    }
 
     QVariant foregroundBrush = d->model->headerData(logicalIndex, d->orientation,
                                                     Qt::ForegroundRole);
@@ -3363,7 +3371,9 @@ void QHeaderViewPrivate::setupSectionIndicator(int section, int position)
     sectionIndicator->resize(w, h);
 #endif
 
-    QPixmap pm(w, h);
+    const qreal pixmapDevicePixelRatio = q->devicePixelRatioF();
+    QPixmap pm(QSize(w, h) * pixmapDevicePixelRatio);
+    pm.setDevicePixelRatio(pixmapDevicePixelRatio);
     pm.fill(QColor(0, 0, 0, 45));
     QRect rect(0, 0, w, h);
 
@@ -3828,6 +3838,7 @@ void QHeaderViewPrivate::cascadingResize(int visual, int newSize)
 void QHeaderViewPrivate::setDefaultSectionSize(int size)
 {
     Q_Q(QHeaderView);
+    size = qBound(q->minimumSectionSize(), size, q->maximumSectionSize());
     executePostedLayout();
     invalidateCachedSizeHint();
     defaultSectionSize = size;
@@ -4083,7 +4094,7 @@ bool QHeaderViewPrivate::read(QDataStream &in)
     }
 
     int sectionItemsLengthTotal = 0;
-    foreach (const SectionItem &section, newSectionItems)
+    for (const SectionItem &section : qAsConst(newSectionItems))
         sectionItemsLengthTotal += section.size;
     if (sectionItemsLengthTotal != lengthIn)
         return false;

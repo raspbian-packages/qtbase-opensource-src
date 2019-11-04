@@ -55,7 +55,6 @@ class tst_QObject : public QObject
 {
     Q_OBJECT
 private slots:
-    void initTestCase();
     void disconnect();
     void connectSlotsByName();
     void connectSignalsToSignalsWithDefaultArguments();
@@ -104,6 +103,7 @@ private slots:
     void deleteQObjectWhenDeletingEvent();
     void overloads();
     void isSignalConnected();
+    void isSignalConnectedAfterDisconnection();
     void qMetaObjectConnect();
     void qMetaObjectDisconnectOne();
     void sameName();
@@ -145,6 +145,7 @@ private slots:
     void disconnectDoesNotLeakFunctor();
     void contextDoesNotLeakFunctor();
     void connectBase();
+    void connectWarnings();
     void qmlConnect();
     void exceptions();
     void noDeclarativeParentChangedOnDestruction();
@@ -280,14 +281,6 @@ static void playWithObjects()
         QObject::connect(&lotsOfObjects[i], &SenderObject::signal1,
                          &lotsOfObjects[i], &SenderObject::aPublicSlot);
     }
-}
-
-void tst_QObject::initTestCase()
-{
-#if QT_CONFIG(process)
-    const QString testDataDir = QFileInfo(QFINDTESTDATA("signalbug")).absolutePath();
-    QVERIFY2(QDir::setCurrent(testDataDir), qPrintable("Could not chdir to " + testDataDir));
-#endif
 }
 
 void tst_QObject::disconnect()
@@ -3026,7 +3019,7 @@ void tst_QObject::recursiveSignalEmission()
 #else
     QProcess proc;
     // signalbug helper app should always be next to this test binary
-    const QString path = QStringLiteral("signalbug/signalbug");
+    const QString path = QStringLiteral("signalbug_helper");
     proc.start(path);
     QVERIFY2(proc.waitForStarted(), qPrintable(QString::fromLatin1("Cannot start '%1': %2").arg(path, proc.errorString())));
     QVERIFY(proc.waitForFinished());
@@ -3841,6 +3834,58 @@ void tst_QObject::isSignalConnected()
     QVERIFY(o.isSignalConnected(meta->method(meta->indexOfSignal("destroyed(QObject*)"))));
 
     QVERIFY(!o.isSignalConnected(QMetaMethod()));
+}
+
+void tst_QObject::isSignalConnectedAfterDisconnection()
+{
+    ManySignals o;
+    const QMetaObject *meta = o.metaObject();
+
+    const QMetaMethod sig00 = meta->method(meta->indexOfSignal("sig00()"));
+    QVERIFY(!o.isSignalConnected(sig00));
+    QObject::connect(&o, &ManySignals::sig00, qt_noop);
+    QVERIFY(o.isSignalConnected(sig00));
+    QVERIFY(QObject::disconnect(&o, &ManySignals::sig00, 0, 0));
+    QVERIFY(!o.isSignalConnected(sig00));
+
+    const QMetaMethod sig69 = meta->method(meta->indexOfSignal("sig69()"));
+    QVERIFY(!o.isSignalConnected(sig69));
+    QObject::connect(&o, &ManySignals::sig69, qt_noop);
+    QVERIFY(o.isSignalConnected(sig69));
+    QVERIFY(QObject::disconnect(&o, &ManySignals::sig69, 0, 0));
+    QVERIFY(!o.isSignalConnected(sig69));
+
+    {
+        ManySignals o2;
+        QObject::connect(&o, &ManySignals::sig00, &o2, &ManySignals::sig00);
+        QVERIFY(o.isSignalConnected(sig00));
+        // o2 is destructed
+    }
+    QVERIFY(!o.isSignalConnected(sig00));
+
+    const QMetaMethod sig01 = meta->method(meta->indexOfSignal("sig01()"));
+    QObject::connect(&o, &ManySignals::sig00, qt_noop);
+    QObject::connect(&o, &ManySignals::sig01, qt_noop);
+    QObject::connect(&o, &ManySignals::sig69, qt_noop);
+    QVERIFY(o.isSignalConnected(sig00));
+    QVERIFY(o.isSignalConnected(sig01));
+    QVERIFY(o.isSignalConnected(sig69));
+    QVERIFY(QObject::disconnect(&o, &ManySignals::sig69, 0, 0));
+    QVERIFY(o.isSignalConnected(sig00));
+    QVERIFY(o.isSignalConnected(sig01));
+    QVERIFY(!o.isSignalConnected(sig69));
+    QVERIFY(QObject::disconnect(&o, &ManySignals::sig00, 0, 0));
+    QVERIFY(!o.isSignalConnected(sig00));
+    QVERIFY(o.isSignalConnected(sig01));
+    QVERIFY(!o.isSignalConnected(sig69));
+    QObject::connect(&o, &ManySignals::sig69, qt_noop);
+    QVERIFY(!o.isSignalConnected(sig00));
+    QVERIFY(o.isSignalConnected(sig01));
+    QVERIFY(o.isSignalConnected(sig69));
+    QVERIFY(QObject::disconnect(&o, &ManySignals::sig01, 0, 0));
+    QVERIFY(!o.isSignalConnected(sig00));
+    QVERIFY(!o.isSignalConnected(sig01));
+    QVERIFY(o.isSignalConnected(sig69));
 }
 
 void tst_QObject::qMetaObjectConnect()
@@ -6695,6 +6740,26 @@ void tst_QObject::connectBase()
     QCOMPARE( r1.count_slot1, 1 );
     QCOMPARE( r1.count_slot2, 1 );
     QCOMPARE( r1.count_slot3, 1 );
+}
+
+void tst_QObject::connectWarnings()
+{
+    SubSender sub;
+    SenderObject obj;
+    ReceiverObject r1;
+    r1.reset();
+
+    QTest::ignoreMessage(QtWarningMsg, "QObject::connect(SenderObject, ReceiverObject): invalid null parameter");
+    connect(static_cast<const SenderObject *>(nullptr), &SubSender::signal1, &r1, &ReceiverObject::slot1);
+
+    QTest::ignoreMessage(QtWarningMsg, "QObject::connect(SubSender, Unknown): invalid null parameter");
+    connect(&sub, &SubSender::signal1, static_cast<ReceiverObject *>(nullptr), &ReceiverObject::slot1);
+
+    QTest::ignoreMessage(QtWarningMsg, "QObject::connect(SenderObject, ReceiverObject): invalid null parameter");
+    connect(static_cast<const SenderObject *>(nullptr), &SenderObject::signal1, &r1, &ReceiverObject::slot1);
+
+    QTest::ignoreMessage(QtWarningMsg, "QObject::connect(SenderObject, Unknown): invalid null parameter");
+    connect(&obj, &SenderObject::signal1, static_cast<ReceiverObject *>(nullptr), &ReceiverObject::slot1);
 }
 
 struct QmlReceiver : public QtPrivate::QSlotObjectBase

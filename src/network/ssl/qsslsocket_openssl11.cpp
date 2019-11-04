@@ -88,8 +88,6 @@ bool QSslSocketPrivate::ensureLibraryLoaded()
     const QMutexLocker locker(qt_opensslInitMutex);
 
     if (!s_libraryLoaded) {
-        s_libraryLoaded = true;
-
         // Initialize OpenSSL.
         if (q_OPENSSL_init_ssl(0, nullptr) != 1)
             return false;
@@ -105,6 +103,8 @@ bool QSslSocketPrivate::ensureLibraryLoaded()
             qWarning("Random number generator not seeded, disabling SSL support");
             return false;
         }
+
+        s_libraryLoaded = true;
     }
     return true;
 }
@@ -248,7 +248,7 @@ void QSslSocketBackendPrivate::continueHandshake()
         // we could not agree -> be conservative and use HTTP/1.1
         configuration.nextNegotiatedProtocol = QByteArrayLiteral("http/1.1");
     } else {
-        const unsigned char *proto = 0;
+        const unsigned char *proto = nullptr;
         unsigned int proto_len = 0;
 
         q_SSL_get0_alpn_selected(ssl, &proto, &proto_len);

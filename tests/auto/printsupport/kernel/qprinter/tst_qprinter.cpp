@@ -644,7 +644,7 @@ void tst_QPrinter::taskQTBUG4497_reusePrinterOnDifferentFiles()
         QByteArray file1Line = file1.readLine();
         QByteArray file2Line = file2.readLine();
 
-        if (!file1Line.startsWith("%%CreationDate"))
+        if (!file1Line.contains("CreationDate"))
             QCOMPARE(file1Line, file2Line);
     }
 
@@ -1026,7 +1026,7 @@ void tst_QPrinter::duplex()
     pdf.setOutputFormat(QPrinter::PdfFormat);
     QCOMPARE(pdf.duplex(), QPrinter::DuplexNone);
     pdf.setDuplex(QPrinter::DuplexAuto);
-    QCOMPARE(pdf.duplex(), QPrinter::DuplexAuto);
+    QCOMPARE(pdf.duplex(), QPrinter::DuplexNone); // pdf doesn't have the concept of duplex
 
     QPrinter native;
     if (native.outputFormat() == QPrinter::NativeFormat) {
@@ -1071,7 +1071,7 @@ void tst_QPrinter::doubleSidedPrinting()
     pdf.setOutputFormat(QPrinter::PdfFormat);
     QCOMPARE(pdf.doubleSidedPrinting(), false);
     pdf.setDoubleSidedPrinting(true);
-    QCOMPARE(pdf.doubleSidedPrinting(), true);
+    QCOMPARE(pdf.doubleSidedPrinting(), false); // pdf doesn't have the concept of duplex
 
     QPrinter native;
     if (native.outputFormat() == QPrinter::NativeFormat) {

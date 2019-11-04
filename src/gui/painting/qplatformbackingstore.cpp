@@ -80,6 +80,8 @@
 
 QT_BEGIN_NAMESPACE
 
+Q_LOGGING_CATEGORY(lcQpaBackingStore, "qt.qpa.backingstore", QtWarningMsg);
+
 class QPlatformBackingStorePrivate
 {
 public:
@@ -331,15 +333,18 @@ void QPlatformBackingStore::composeAndFlush(QWindow *window, const QRegion &regi
         d_ptr->context->setScreen(d_ptr->window->screen());
         d_ptr->context->setShareContext(qt_window_private(d_ptr->window)->shareContext());
         if (!d_ptr->context->create()) {
-            qWarning("composeAndFlush: QOpenGLContext creation failed");
+            qCWarning(lcQpaBackingStore, "composeAndFlush: QOpenGLContext creation failed");
             return;
         }
     }
 
     if (!d_ptr->context->makeCurrent(window)) {
-        qWarning("composeAndFlush: makeCurrent() failed");
+        qCWarning(lcQpaBackingStore, "composeAndFlush: makeCurrent() failed");
         return;
     }
+
+    qCDebug(lcQpaBackingStore) << "Composing and flushing" << region << "of" << window
+        << "at offset" << offset << "with" << textures->count() << "texture(s) in" << textures;
 
     QWindowPrivate::get(window)->lastComposeTime.start();
 
@@ -406,6 +411,7 @@ void QPlatformBackingStore::composeAndFlush(QWindow *window, const QRegion &regi
         } else if (!region.isEmpty()){
             funcs->glBindTexture(GL_TEXTURE_2D, d_ptr->textureId);
             QPlatformGraphicsBufferHelper::lockAndBindToTexture(graphicsBuffer, &d_ptr->needsSwizzle, &d_ptr->premultiplied);
+            graphicsBuffer->unlock();
         }
 
         if (graphicsBuffer->origin() == QPlatformGraphicsBuffer::OriginBottomLeft)
@@ -439,6 +445,11 @@ void QPlatformBackingStore::composeAndFlush(QWindow *window, const QRegion &regi
         if (d_ptr->needsSwizzle)
             d_ptr->blitter->setRedBlueSwizzle(false);
     }
+
+    // There is no way to tell if the OpenGL-rendered content is premultiplied or not.
+    // For compatibility, assume that it is not, and use normal alpha blend always.
+    if (d_ptr->premultiplied)
+        funcs->glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
 
     // Textures for renderToTexture widgets that have WA_AlwaysStackOnTop set.
     for (int i = 0; i < textures->count(); ++i) {

@@ -43,6 +43,11 @@
 #include "qxcbobject.h"
 
 #include <xcb/xcb_keysyms.h>
+#if QT_CONFIG(xkb)
+#define explicit dont_use_cxx_explicit
+#include <xcb/xkb.h>
+#undef explicit
+#endif
 
 #include <xkbcommon/xkbcommon.h>
 #if QT_CONFIG(xkb)
@@ -62,6 +67,8 @@ public:
 
     ~QXcbKeyboard();
 
+    void selectEvents();
+
     void handleKeyPressEvent(const xcb_key_press_event_t *event);
     void handleKeyReleaseEvent(const xcb_key_release_event_t *event);
 
@@ -74,7 +81,7 @@ public:
     void updateXKBMods();
     xkb_mod_mask_t xkbModMask(quint16 state);
     void updateXKBStateFromCore(quint16 state);
-#if QT_CONFIG(xinput2)
+#if QT_CONFIG(xcb_xinput)
     void updateXKBStateFromXI(void *modInfo, void *groupInfo);
 #endif
 #if QT_CONFIG(xkb)
@@ -109,7 +116,8 @@ protected:
 
 private:
     bool m_config = false;
-    xcb_keycode_t m_autorepeat_code = 0;
+    bool m_isAutoRepeat = false;
+    xcb_keycode_t m_autoRepeatCode = 0;
 
     struct _mod_masks {
         uint alt;

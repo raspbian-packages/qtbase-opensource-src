@@ -60,6 +60,8 @@
 #include <QtCore/qwaitcondition.h>
 #include <QtCore/qmutex.h>
 
+#include <QtCore/qtestsupport_core.h>
+
 #include <QtTest/private/qtestlog_p.h>
 #include <QtTest/private/qtesttable_p.h>
 #include <QtTest/qtestdata.h>
@@ -75,6 +77,10 @@
 #include <QtTest/private/qtestutil_macos_p.h>
 #endif
 
+#if defined(Q_OS_DARWIN)
+#include <QtTest/private/qappletestlogger_p.h>
+#endif
+
 #include <cmath>
 #include <numeric>
 #include <algorithm>
@@ -85,7 +91,6 @@
 
 #if defined(Q_OS_LINUX)
 #include <sys/types.h>
-#include <unistd.h>
 #include <fcntl.h>
 #endif
 
@@ -99,6 +104,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
+#include <unistd.h>
 # if !defined(Q_OS_INTEGRITY)
 #  include <sys/resource.h>
 # endif
@@ -344,7 +350,9 @@ namespace QTest
     static int keyDelay = -1;
     static int mouseDelay = -1;
     static int eventDelay = -1;
+#if QT_CONFIG(thread)
     static int timeout = -1;
+#endif
     static bool noCrashHandler = false;
 
 /*! \internal
@@ -395,7 +403,7 @@ int Q_TESTLIB_EXPORT defaultKeyDelay()
     }
     return keyDelay;
 }
-
+#if QT_CONFIG(thread)
 static int defaultTimeout()
 {
     if (timeout == -1) {
@@ -407,6 +415,7 @@ static int defaultTimeout()
     }
     return timeout;
 }
+#endif
 
 Q_TESTLIB_EXPORT bool printAvailableFunctions = false;
 Q_TESTLIB_EXPORT QStringList testFunctions;
@@ -504,7 +513,7 @@ static int qToInt(char *str)
 
 Q_TESTLIB_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
 {
-    QTestLog::LogMode logFormat = QTestLog::Plain;
+    int logFormat = -1; // Not set
     const char *logFilename = 0;
 
     QTest::testFunctions.clear();
@@ -526,6 +535,7 @@ Q_TESTLIB_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
          "                         xml      : XML document\n"
          "                         lightxml : A stream of XML tags\n"
          "                         teamcity : TeamCity format\n"
+         "                         tap      : Test Anything Protocol\n"
          "\n"
          "     *** Multiple loggers can be specified, but at most one can log to stdout.\n"
          "\n"
@@ -537,6 +547,7 @@ Q_TESTLIB_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
          " -xml                : Output results as XML document\n"
          " -lightxml           : Output results as stream of XML tags\n"
          " -teamcity           : Output results in TeamCity format\n"
+         " -tap                : Output results in Test Anything Protocol format\n"
          "\n"
          "     *** If no output file is specified, stdout is assumed.\n"
          "     *** If no output format is specified, -txt is assumed.\n"
@@ -624,6 +635,8 @@ Q_TESTLIB_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
             logFormat = QTestLog::LightXML;
         } else if (strcmp(argv[i], "-teamcity") == 0) {
             logFormat = QTestLog::TeamCity;
+        } else if (strcmp(argv[i], "-tap") == 0) {
+            logFormat = QTestLog::TAP;
         } else if (strcmp(argv[i], "-silent") == 0) {
             QTestLog::setVerboseLevel(-1);
         } else if (strcmp(argv[i], "-v1") == 0) {
@@ -658,15 +671,17 @@ Q_TESTLIB_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
                     logFormat = QTestLog::XunitXML;
                 else if (strcmp(format, "teamcity") == 0)
                     logFormat = QTestLog::TeamCity;
+                else if (strcmp(format, "tap") == 0)
+                    logFormat = QTestLog::TAP;
                 else {
-                    fprintf(stderr, "output format must be one of txt, csv, lightxml, xml, teamcity or xunitxml\n");
+                    fprintf(stderr, "output format must be one of txt, csv, lightxml, xml, tap, teamcity or xunitxml\n");
                     exit(1);
                 }
                 if (strcmp(filename, "-") == 0 && QTestLog::loggerUsingStdout()) {
                     fprintf(stderr, "only one logger can log to stdout\n");
                     exit(1);
                 }
-                QTestLog::addLogger(logFormat, filename);
+                QTestLog::addLogger(QTestLog::LogMode(logFormat), filename);
             }
             delete [] filename;
             delete [] format;
@@ -828,10 +843,25 @@ Q_TESTLIB_EXPORT void qtest_qParseArgs(int argc, char *argv[], bool qml)
     QTestLog::setInstalledTestCoverage(installedTestCoverage);
 
     // If no loggers were created by the long version of the -o command-line
-    // option, create a logger using whatever filename and format were
-    // set using the old-style command-line options.
-    if (QTestLog::loggerCount() == 0)
-        QTestLog::addLogger(logFormat, logFilename);
+    // option, but a logger was requested via the old-style option, add it.
+    const bool explicitLoggerRequested = logFormat != -1;
+    if (QTestLog::loggerCount() == 0 && explicitLoggerRequested)
+        QTestLog::addLogger(QTestLog::LogMode(logFormat), logFilename);
+
+    bool addFallbackLogger = !explicitLoggerRequested;
+
+#if defined(QT_USE_APPLE_UNIFIED_LOGGING)
+    // Any explicitly requested loggers will be added by now, so we can check if they use stdout
+    const bool safeToAddAppleLogger = !AppleUnifiedLogger::willMirrorToStderr() || !QTestLog::loggerUsingStdout();
+    if (safeToAddAppleLogger && QAppleTestLogger::debugLoggingEnabled()) {
+        QTestLog::addLogger(QTestLog::Apple, nullptr);
+        if (AppleUnifiedLogger::willMirrorToStderr() && !logFilename)
+            addFallbackLogger = false; // Prevent plain test logger fallback below
+    }
+#endif
+
+    if (addFallbackLogger)
+        QTestLog::addLogger(QTestLog::Plain, logFilename);
 }
 
 QBenchmarkResult qMedian(const QVector<QBenchmarkResult> &container)
@@ -967,6 +997,8 @@ void TestMethods::invokeTestOnData(int index) const
     }
 }
 
+#if QT_CONFIG(thread)
+
 class WatchDog : public QThread
 {
 public:
@@ -1017,6 +1049,17 @@ private:
     QMutex mutex;
     QWaitCondition waitCondition;
 };
+
+#else // !QT_CONFIG(thread)
+
+class WatchDog : public QObject
+{
+public:
+    void beginTest() {};
+    void testFinished() {};
+};
+
+#endif
 
 
 /*!
@@ -1138,6 +1181,31 @@ void *fetchData(QTestData *data, const char *tagName, int typeId)
     }
 
     return data->data(idx);
+}
+
+/*!
+ * \internal
+ */
+char *formatString(const char *prefix, const char *suffix, size_t numArguments, ...)
+{
+    va_list ap;
+    va_start(ap, numArguments);
+
+    QByteArray arguments;
+    arguments += prefix;
+
+    if (numArguments > 0) {
+        arguments += va_arg(ap, const char *);
+
+        for (size_t i = 1; i < numArguments; ++i) {
+            arguments += ", ";
+            arguments += va_arg(ap, const char *);
+        }
+    }
+
+    va_end(ap);
+    arguments += suffix;
+    return qstrdup(arguments.constData());
 }
 
 /*!
@@ -1439,8 +1507,13 @@ void FatalSignalHandler::signal(int signum)
 {
     const int msecsFunctionTime = qRound(QTestLog::msecsFunctionTime());
     const int msecsTotalTime = qRound(QTestLog::msecsTotalTime());
-    if (signum != SIGINT)
+    if (signum != SIGINT) {
         stackTrace();
+        if (qEnvironmentVariableIsSet("QTEST_PAUSE_ON_CRASH")) {
+            fprintf(stderr, "Pausing process %d for debugging\n", getpid());
+            raise(SIGSTOP);
+        }
+    }
     qFatal("Received signal %d\n"
            "         Function time: %dms Total time: %dms",
            signum, msecsFunctionTime, msecsTotalTime);
@@ -2365,7 +2438,7 @@ bool QTest::currentTestFailed()
     Sleeps for \a ms milliseconds, blocking execution of the
     test. qSleep() will not do any event processing and leave your test
     unresponsive. Network communication might time out while
-    sleeping. Use \l qWait() to do non-blocking sleeping.
+    sleeping. Use \l {QTest::qWait()} to do non-blocking sleeping.
 
     \a ms must be greater than 0.
 
@@ -2376,20 +2449,13 @@ bool QTest::currentTestFailed()
     Example:
     \snippet code/src_qtestlib_qtestcase.cpp 23
 
-    \sa qWait()
+    \sa {QTest::qWait()}
 */
 void QTest::qSleep(int ms)
 {
+    // ### Qt 6, move to QtCore or remove altogether
     QTEST_ASSERT(ms > 0);
-
-#if defined(Q_OS_WINRT)
-    WaitForSingleObjectEx(GetCurrentThread(), ms, true);
-#elif defined(Q_OS_WIN)
-    Sleep(uint(ms));
-#else
-    struct timespec ts = { time_t(ms / 1000), (ms % 1000) * 1000 * 1000 };
-    nanosleep(&ts, NULL);
-#endif
+    QTestPrivate::qSleep(ms);
 }
 
 /*! \internal
@@ -2437,7 +2503,16 @@ bool QTest::compare_helper(bool success, const char *failureMsg,
 bool QTest::qCompare(float const &t1, float const &t2, const char *actual, const char *expected,
                     const char *file, int line)
 {
-    return compare_helper(qFuzzyCompare(t1, t2), "Compared floats are not the same (fuzzy compare)",
+    bool equal = false;
+    int cl1 = std::fpclassify(t1);
+    int cl2 = std::fpclassify(t2);
+    if (cl1 == FP_INFINITE)
+        equal = ((t1 < 0) == (t2 < 0)) && cl2 == FP_INFINITE;
+    else if (cl1 == FP_NAN)
+        equal = (cl2 == FP_NAN);
+    else
+        equal = qFuzzyCompare(t1, t2);
+    return compare_helper(equal, "Compared floats are not the same (fuzzy compare)",
                           toString(t1), toString(t2), actual, expected, file, line);
 }
 
@@ -2469,7 +2544,7 @@ bool QTest::qCompare(double const &t1, double const &t2, const char *actual, con
  */
 
 #define TO_STRING_IMPL(TYPE, FORMAT) \
-template <> Q_TESTLIB_EXPORT char *QTest::toString<TYPE >(const TYPE &t) \
+template <> Q_TESTLIB_EXPORT char *QTest::toString<TYPE>(const TYPE &t) \
 { \
     char *msg = new char[128]; \
     qsnprintf(msg, 128, #FORMAT, t); \
@@ -2492,8 +2567,57 @@ TO_STRING_IMPL(quint64, %llu)
 TO_STRING_IMPL(bool, %d)
 TO_STRING_IMPL(signed char, %hhd)
 TO_STRING_IMPL(unsigned char, %hhu)
-TO_STRING_IMPL(float, %g)
-TO_STRING_IMPL(double, %lg)
+
+/*!
+  \internal
+
+  Be consistent about leading 0 in exponent.
+
+  POSIX specifies that %e (hence %g when using it) uses at least two digits in
+  the exponent, requiring a leading 0 on single-digit exponents; (at least)
+  MinGW includes a leading zero also on an already-two-digit exponent,
+  e.g. 9e-040, which differs from more usual platforms.  So massage that away.
+ */
+static void massageExponent(char *text)
+{
+    char *p = strchr(text, 'e');
+    if (!p)
+        return;
+    const char *const end = p + strlen(p); // *end is '\0'
+    p += (p[1] == '-' || p[1] == '+') ? 2 : 1;
+    if (p[0] != '0' || end - 2 <= p)
+        return;
+    // We have a leading 0 on an exponent of at least two more digits
+    const char *n = p + 1;
+    while (end - 2 > n && n[0] == '0')
+        ++n;
+    memmove(p, n, end + 1 - n);
+}
+
+// Be consistent about display of infinities and NaNs (snprintf()'s varies,
+// notably on MinGW, despite POSIX documenting "[-]inf" or "[-]infinity" for %f,
+// %e and %g, uppercasing for their capital versions; similar for "nan"):
+#define TO_STRING_FLOAT(TYPE, FORMAT) \
+template <> Q_TESTLIB_EXPORT char *QTest::toString<TYPE>(const TYPE &t) \
+{ \
+    char *msg = new char[128]; \
+    switch (std::fpclassify(t)) { \
+    case FP_INFINITE: \
+        qstrncpy(msg, (t < 0 ? "-inf" : "inf"), 128); \
+        break; \
+    case FP_NAN: \
+        qstrncpy(msg, "nan", 128); \
+        break; \
+    default: \
+        qsnprintf(msg, 128, #FORMAT, t); \
+        massageExponent(msg); \
+        break; \
+    } \
+    return msg; \
+}
+
+TO_STRING_FLOAT(float, %g)
+TO_STRING_FLOAT(double, %.12lg)
 
 template <> Q_TESTLIB_EXPORT char *QTest::toString<char>(const char &t)
 {

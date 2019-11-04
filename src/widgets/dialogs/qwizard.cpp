@@ -456,7 +456,7 @@ public:
 
     QSize minimumSizeHint() const override {
         if (pixmap() && !pixmap()->isNull())
-            return pixmap()->size();
+            return pixmap()->size() / pixmap()->devicePixelRatio();
         return QFrame::minimumSizeHint();
     }
 
@@ -2890,7 +2890,7 @@ void QWizard::setPixmap(WizardPixmap which, const QPixmap &pixmap)
     Returns the pixmap set for role \a which.
 
     By default, the only pixmap that is set is the BackgroundPixmap on
-    \macos.
+    \macos version 10.13 and earlier.
 
     \sa QWizardPage::pixmap(), {Elements of a Wizard Page}
 */

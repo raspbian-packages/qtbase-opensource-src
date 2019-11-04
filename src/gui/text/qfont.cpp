@@ -1254,7 +1254,7 @@ QFont::StyleStrategy QFont::styleStrategy() const
 /*!
     Returns the StyleHint.
 
-    The style hint affects the \l{#fontmatching}{font matching algorithm}.
+    The style hint affects the \l{QFont#fontmatching}{font matching algorithm}.
     See \l QFont::StyleHint for the list of available hints.
 
     \sa setStyleHint(), QFont::StyleStrategy, QFontInfo::styleHint()
@@ -2703,18 +2703,6 @@ static const int slow_timeout = 300000; //  5m
 
 const uint QFontCache::min_cost = 4*1024; // 4mb
 
-#ifdef QT_NO_THREAD
-Q_GLOBAL_STATIC(QFontCache, theFontCache)
-
-QFontCache *QFontCache::instance()
-{
-    return theFontCache();
-}
-
-void QFontCache::cleanup()
-{
-}
-#else
 Q_GLOBAL_STATIC(QThreadStorage<QFontCache *>, theFontCache)
 
 QFontCache *QFontCache::instance()
@@ -2736,7 +2724,6 @@ void QFontCache::cleanup()
     if (cache && cache->hasLocalData())
         cache->setLocalData(0);
 }
-#endif // QT_NO_THREAD
 
 QBasicAtomicInt font_cache_id = Q_BASIC_ATOMIC_INITIALIZER(1);
 
@@ -2983,7 +2970,7 @@ void QFontCache::decreaseCache()
                      it.value().data->ref.load(), engineCacheCount.value(it.value().data),
                      it.value().data->cache_cost);
 
-            if (it.value().data->ref.load() != 0)
+            if (it.value().data->ref.load() > engineCacheCount.value(it.value().data))
                 in_use_cost += it.value().data->cache_cost / engineCacheCount.value(it.value().data);
         }
 

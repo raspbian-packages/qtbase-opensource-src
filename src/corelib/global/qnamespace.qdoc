@@ -245,7 +245,10 @@
            QEvent::MouseMove, QEvent::TouchUpdate, and changes in window size and
            position will be combined whenever they occur more frequently than the
            application handles them, so that they don't accumulate and overwhelm the
-           application later. On other platforms, the default is false.
+           application later.
+           On Windows 8 and above the default value is also true, but it only applies
+           to touch events. Mouse and window events remain unaffected by this flag.
+           On other platforms, the default is false.
            (In the future, the compression feature may be implemented across platforms.)
            You can test the attribute to see whether compression is enabled.
            If your application needs to handle all events with no compression,
@@ -256,8 +259,9 @@
 
     \value AA_CompressTabletEvents Enables compression of input events from tablet devices.
            Notice that AA_CompressHighFrequencyEvents must be true for events compression
-           to be enabled, and that this flag extends the former to tablet events. Its default
-           value is false.
+           to be enabled, and that this flag extends the former to tablet events.
+           Currently supported on the X11 windowing system, Windows 8 and above.
+           The default value is false.
            This value was added in Qt 5.10.
 
     \value AA_DontCheckOpenGLContextThreadAffinity When making a context
@@ -383,7 +387,8 @@
     \value AltModifier      An Alt key on the keyboard is pressed.
     \value MetaModifier     A Meta key on the keyboard is pressed.
     \value KeypadModifier   A keypad button is pressed.
-    \value GroupSwitchModifier X11 only. A Mode_switch key on the keyboard is pressed.
+    \value GroupSwitchModifier X11 only (unless activated on Windows by a command line argument).
+                            A Mode_switch key on the keyboard is pressed.
 
     \omitvalue KeyboardModifierMask
 
@@ -1155,7 +1160,12 @@
     the widget's author.
 
     \value WA_StyleSheet Indicates that the widget is styled using a
-    \l{Qt Style Sheets}{style sheet}.
+    \l{Qt Style Sheets}{style sheet}. WA_StyleSheet is set whenever a widget
+    is subject to a style sheet, even if the style sheet did not affect the
+    widget appearance.
+
+    \value WA_StyleSheetTarget Indicates that the widget appearance was modified
+    by a \l{Qt Style Sheets}{style sheet}. WA_StyleSheet will also be set.
 
     \value WA_TabletTracking Indicates that the widget has tablet
     tracking enabled. See QWidget::tabletTracking.
@@ -2198,6 +2208,12 @@
     \value MSWindowsFixedSizeDialogHint  Gives the window a thin dialog border on Windows.
            This style is traditionally used for fixed-size dialogs.
 
+           \note The use of this flag is not recommended in multi-monitor
+           environments. This is because the system will enforce that the window
+           maintains its native size when moving it across screens. This is
+           particularly undesirable when using monitors with different
+           resolutions.
+
     \value MSWindowsOwnDC  Gives the window its own display
            context on Windows.
 
@@ -3177,8 +3193,12 @@
 
     \value ScrollUpdate The scrolling distance has changed (default).
 
-    \value ScrollEnd Scrolling has ended, but the scrolling distance
+    \value ScrollEnd Scrolling has ended, and the scrolling distance
     did not change anymore.
+
+    \value ScrollMomentum The user no longer touches the input device,
+    but scrolling continues due to scroll momentum.
+    This value was introduced in Qt 5.12.
 */
 
 /*!
@@ -3231,38 +3251,4 @@
   \value ChecksumIso3309 Checksum calculation based on ISO 3309.
 
   \value ChecksumItuV41 Checksum calculation based on ITU-V.41.
-*/
-
-/*!
-    \fn bool Qt::mightBeRichText(const QString& text)
-
-    Returns \c true if the string \a text is likely to be rich text;
-    otherwise returns \c false.
-
-    This function uses a fast and therefore simple heuristic. It
-    mainly checks whether there is something that looks like a tag
-    before the first line break. Although the result may be correct
-    for common cases, there is no guarantee.
-
-    This function is defined in the \c <QTextDocument> header file.
-*/
-
-/*!
-    \fn QString Qt::convertFromPlainText(const QString &plain, Qt::WhiteSpaceMode mode)
-
-    Converts the plain text string \a plain to an HTML-formatted
-    paragraph while preserving most of its look.
-
-    \a mode defines how whitespace is handled.
-
-    This function is defined in the \c <QTextDocument> header file.
-
-    \sa escape(), mightBeRichText()
-*/
-
-/*!
-    \fn QTextCodec *Qt::codecForHtml(const QByteArray &ba)
-    \internal
-
-    This function is defined in the \c <QTextDocument> header file.
 */

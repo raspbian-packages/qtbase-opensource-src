@@ -147,6 +147,12 @@ endif()
 expect_pass(test_interface_link_libraries)
 expect_pass(test_moc_macro_target)
 
+if (NOT CMAKE_VERSION VERSION_LESS 3.9)
+    # The modification of TARGET_OBJECTS needs the following change in cmake
+    # https://gitlab.kitware.com/cmake/cmake/commit/93c89bc75ceee599ba7c08b8fe1ac5104942054f
+    expect_pass(test_add_big_resource)
+endif()
+
 if (NOT CMAKE_VERSION VERSION_LESS 3.8)
     # With earlier CMake versions, this test would simply run moc multiple times and lead to:
     # /usr/bin/ld: error: CMakeFiles/mywidget.dir/mywidget_automoc.cpp.o: multiple definition of 'MyWidget::qt_static_metacall(QObject*, QMetaObject::Call, int, void**)'

@@ -37,14 +37,14 @@
 **
 ****************************************************************************/
 
-#include <QtCore/QtConfig>
-#ifndef QT_NO_ACCESSIBILITY
+#include <QtGui/qtguiglobal.h>
+#if QT_CONFIG(accessibility)
 
 #include "qwindowsuiautils.h"
 #include "qwindowscontext.h"
 #include "qwindowswindow.h"
 
-#include <QtGui/QWindow>
+#include <QtGui/qwindow.h>
 #include <QtGui/private/qhighdpiscaling_p.h>
 #include <cmath>
 
@@ -90,7 +90,7 @@ HWND hwndForAccessible(const QAccessibleInterface *accessible)
             return QWindowsBaseWindow::handleOf(window);
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 void clearVariant(VARIANT *variant)
@@ -114,7 +114,7 @@ void setVariantBool(bool value, VARIANT *variant)
 void setVariantDouble(double value, VARIANT *variant)
 {
     variant->vt = VT_R8;
-    variant->boolVal = value;
+    variant->dblVal = value;
 }
 
 BSTR bStrFromQString(const QString &value)
@@ -232,4 +232,4 @@ bool isTextUnitSeparator(TextUnit unit, const QChar &ch)
 
 QT_END_NAMESPACE
 
-#endif // QT_NO_ACCESSIBILITY
+#endif // QT_CONFIG(accessibility)

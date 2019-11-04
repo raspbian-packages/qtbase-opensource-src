@@ -91,7 +91,7 @@ QT_BEGIN_NAMESPACE
     \li \l alignment: The alignment of the text in the QAbstractSpinBox.
 
     \li \l wrapping: Whether the QAbstractSpinBox wraps from the
-    minimum value to the maximum value and vica versa.
+    minimum value to the maximum value and vice versa.
 
     \endlist
 
@@ -99,6 +99,16 @@ QT_BEGIN_NAMESPACE
     called whenever the user triggers a step. This function takes an
     integer value to signify how many steps were taken. E.g. Pressing
     Qt::Key_Down will trigger a call to stepBy(-1).
+
+    When the user triggers a step whilst holding the Qt::ControlModifier,
+    QAbstractSpinBox steps by 10 instead of making a single step. This
+    step modifier affects wheel events, key events and interaction with
+    the spinbox buttons. Note that on macOS, Control corresponds to the
+    Command key.
+
+    Since Qt 5.12, QStyle::SH_SpinBox_StepModifier can be used to select
+    which Qt::KeyboardModifier increases the step rate. Qt::NoModifier
+    disables this feature.
 
     QAbstractSpinBox also provide a virtual function stepEnabled() to
     determine whether stepping up/down is allowed at any point. This
@@ -114,6 +124,13 @@ QT_BEGIN_NAMESPACE
     \value StepNone
     \value StepUpEnabled
     \value StepDownEnabled
+*/
+
+/*!
+    \enum QAbstractSpinBox::StepType
+
+    \value DefaultStepType
+    \value AdaptiveDecimalStepType
 */
 
 /*!
@@ -268,7 +285,7 @@ void QAbstractSpinBox::setSpecialValueText(const QString &specialValueText)
     \brief whether the spin box is circular.
 
     If wrapping is true stepping up from maximum() value will take you
-    to the minimum() value and vica versa. Wrapping only make sense if
+    to the minimum() value and vice versa. Wrapping only make sense if
     you have minimum() and maximum() values set.
 
     \snippet code/src_gui_widgets_qabstractspinbox.cpp 0
@@ -640,7 +657,15 @@ void QAbstractSpinBox::stepBy(int steps)
             e = AlwaysEmit;
     }
     if (!dontstep) {
-        d->setValue(d->bound(d->value + (d->singleStep * steps), old, steps), e);
+        QVariant singleStep;
+        switch (d->stepType) {
+        case QAbstractSpinBox::StepType::AdaptiveDecimalStepType:
+            singleStep = d->calculateAdaptiveDecimalStep(steps);
+            break;
+        default:
+            singleStep = d->singleStep;
+        }
+        d->setValue(d->bound(d->value + (singleStep * steps), old, steps), e);
     } else if (e == AlwaysEmit) {
         d->emitSignals(e, old);
     }
@@ -667,7 +692,7 @@ QLineEdit *QAbstractSpinBox::lineEdit() const
 
     QAbstractSpinBox takes ownership of the new lineEdit
 
-    If QLineEdit::validator() for the \a lineEdit returns 0, the internal
+    If QLineEdit::validator() for the \a lineEdit returns \nullptr, the internal
     validator of the spinbox will be set on the line edit.
 */
 
@@ -826,8 +851,12 @@ void QAbstractSpinBox::changeEvent(QEvent *event)
                 style()->styleHint(QStyle::SH_SpinBox_ClickAutoRepeatThreshold, 0, this);
             if (d->edit)
                 d->edit->setFrame(!style()->styleHint(QStyle::SH_SpinBox_ButtonsInsideFrame, nullptr, this));
+            d->stepModifier = static_cast<Qt::KeyboardModifier>(style()->styleHint(QStyle::SH_SpinBox_StepModifier, nullptr, this));
             d->reset();
             d->updateEditFieldGeometry();
+            break;
+        case QEvent::LocaleChange:
+            d->updateEdit();
             break;
         case QEvent::EnabledChange:
             if (!isEnabled()) {
@@ -1008,6 +1037,8 @@ void QAbstractSpinBox::keyPressEvent(QKeyEvent *event)
         const bool up = (event->key() == Qt::Key_PageUp || event->key() == Qt::Key_Up);
         if (!(stepEnabled() & (up ? StepUpEnabled : StepDownEnabled)))
             return;
+        if (!isPgUpOrDown && (event->modifiers() & d->stepModifier))
+            steps *= 10;
         if (!up)
             steps *= -1;
         if (style()->styleHint(QStyle::SH_SpinBox_AnimateButton, 0, this)) {
@@ -1134,11 +1165,24 @@ void QAbstractSpinBox::keyReleaseEvent(QKeyEvent *event)
 void QAbstractSpinBox::wheelEvent(QWheelEvent *event)
 {
     Q_D(QAbstractSpinBox);
+#ifdef Q_OS_MACOS
+    // If the event comes from a real mouse wheel, rather than a track pad
+    // (Qt::MouseEventSynthesizedBySystem), the shift modifier changes the
+    // scroll orientation to horizontal.
+    // Convert horizontal events back to vertical whilst shift is held.
+    if ((event->modifiers() & Qt::ShiftModifier)
+            && event->source() == Qt::MouseEventNotSynthesized) {
+        d->wheelDeltaRemainder += event->angleDelta().x();
+    } else {
+        d->wheelDeltaRemainder += event->angleDelta().y();
+    }
+#else
     d->wheelDeltaRemainder += event->angleDelta().y();
+#endif
     const int steps = d->wheelDeltaRemainder / 120;
     d->wheelDeltaRemainder -= steps * 120;
     if (stepEnabled() & (steps > 0 ? StepUpEnabled : StepDownEnabled))
-        stepBy(event->modifiers() & Qt::ControlModifier ? steps * 10 : steps);
+        stepBy(event->modifiers() & d->stepModifier ? steps * 10 : steps);
     event->accept();
 }
 #endif
@@ -1238,18 +1282,19 @@ void QAbstractSpinBox::timerEvent(QTimerEvent *event)
     }
 
     if (doStep) {
+        const bool increaseStepRate = QGuiApplication::keyboardModifiers() & d->stepModifier;
         const StepEnabled st = stepEnabled();
         if (d->buttonState & Up) {
             if (!(st & StepUpEnabled)) {
                 d->reset();
             } else {
-                stepBy(1);
+                stepBy(increaseStepRate ? 10 : 1);
             }
         } else if (d->buttonState & Down) {
             if (!(st & StepDownEnabled)) {
                 d->reset();
             } else {
-                stepBy(-1);
+                stepBy(increaseStepRate ? -10 : -1);
             }
         }
         return;
@@ -1377,8 +1422,9 @@ QAbstractSpinBoxPrivate::QAbstractSpinBoxPrivate()
       cachedState(QValidator::Invalid), pendingEmit(false), readOnly(false), wrapping(false),
       ignoreCursorPositionChanged(false), frame(true), accelerate(false), keyboardTracking(true),
       cleared(false), ignoreUpdateEdit(false), correctionMode(QAbstractSpinBox::CorrectToPreviousValue),
-      acceleration(0), hoverControl(QStyle::SC_None), buttonSymbols(QAbstractSpinBox::UpDownArrows), validator(0),
-      showGroupSeparator(0), wheelDeltaRemainder(0)
+      stepModifier(Qt::ControlModifier), acceleration(0), hoverControl(QStyle::SC_None),
+      buttonSymbols(QAbstractSpinBox::UpDownArrows), validator(0), showGroupSeparator(0),
+      wheelDeltaRemainder(0)
 {
 }
 
@@ -1629,7 +1675,10 @@ void QAbstractSpinBoxPrivate::updateState(bool up, bool fromKeyboard /* = false 
                                   : QAbstractSpinBox::StepDownEnabled))) {
         spinClickThresholdTimerId = q->startTimer(spinClickThresholdTimerInterval);
         buttonState = (up ? Up : Down) | (fromKeyboard ? Keyboard : Mouse);
-        q->stepBy(up ? 1 : -1);
+        int steps = up ? 1 : -1;
+        if (QGuiApplication::keyboardModifiers() & stepModifier)
+            steps *= 10;
+        q->stepBy(steps);
 #ifndef QT_NO_ACCESSIBILITY
         QAccessibleValueChangeEvent event(q, value);
         QAccessible::updateAccessibility(&event);
@@ -1898,6 +1947,11 @@ void QAbstractSpinBoxPrivate::clearCache() const
     cachedState = QValidator::Acceptable;
 }
 
+QVariant QAbstractSpinBoxPrivate::calculateAdaptiveDecimalStep(int steps) const
+{
+    Q_UNUSED(steps)
+    return singleStep;
+}
 
 // --- QSpinBoxValidator ---
 

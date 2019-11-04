@@ -149,8 +149,16 @@ static bool correctWidgetContext(Qt::ShortcutContext context, QWidget *w, QWidge
     bool visible = w->isVisible();
 #if QT_CONFIG(menubar)
     if (QMenuBar *menuBar = qobject_cast<QMenuBar *>(w)) {
-        if (menuBar->isNativeMenuBar())
-            visible = true;
+        if (auto *pmb = menuBar->platformMenuBar()) {
+            if (menuBar->parentWidget()) {
+                visible = true;
+            } else {
+                if (auto *ww = qobject_cast<QWidgetWindow *>(pmb->parentWindow()))
+                    w = ww->widget(); // Good enough since we only care about the window
+                else
+                    return false; // This is not a QWidget window. We won't deliver
+            }
+        }
     }
 #endif
 
@@ -181,10 +189,15 @@ static bool correctWidgetContext(Qt::ShortcutContext context, QWidget *w, QWidge
     }
 #endif
 
-    /* if a floating tool window is active, keep shortcuts on the
-     * parent working */
-    if (active_window != tlw && active_window && active_window->windowType() == Qt::Tool && active_window->parentWidget()) {
-        active_window = active_window->parentWidget()->window();
+    if (active_window && active_window != tlw) {
+        /* if a floating tool window is active, keep shortcuts on the parent working.
+         * and if a popup window is active (f.ex a completer), keep shortcuts on the
+         * focus proxy working */
+        if (active_window->windowType() == Qt::Tool && active_window->parentWidget()) {
+            active_window = active_window->parentWidget()->window();
+        } else if (active_window->windowType() == Qt::Popup && active_window->focusProxy()) {
+            active_window = active_window->focusProxy()->window();
+        }
     }
 
     if (active_window != tlw) {

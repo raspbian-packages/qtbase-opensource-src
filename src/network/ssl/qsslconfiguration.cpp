@@ -227,7 +227,8 @@ bool QSslConfiguration::operator==(const QSslConfiguration &other) const
         d->sslSessionTicketLifeTimeHint == other.d->sslSessionTicketLifeTimeHint &&
         d->nextAllowedProtocols == other.d->nextAllowedProtocols &&
         d->nextNegotiatedProtocol == other.d->nextNegotiatedProtocol &&
-        d->nextProtocolNegotiationStatus == other.d->nextProtocolNegotiationStatus;
+        d->nextProtocolNegotiationStatus == other.d->nextProtocolNegotiationStatus &&
+        d->dtlsCookieEnabled == other.d->dtlsCookieEnabled;
 }
 
 /*!
@@ -1033,6 +1034,65 @@ void QSslConfiguration::setDefaultConfiguration(const QSslConfiguration &configu
 {
     QSslConfigurationPrivate::setDefaultConfiguration(configuration);
 }
+
+#if QT_CONFIG(dtls) || defined(Q_CLANG_QDOC)
+
+/*!
+  This function returns true if DTLS cookie verification was enabled on a
+  server-side socket.
+
+  \sa setDtlsCookieVerificationEnabled()
+ */
+bool QSslConfiguration::dtlsCookieVerificationEnabled() const
+{
+    return d->dtlsCookieEnabled;
+}
+
+/*!
+  This function enables DTLS cookie verification when \a enable is true.
+
+  \sa dtlsCookieVerificationEnabled()
+ */
+void QSslConfiguration::setDtlsCookieVerificationEnabled(bool enable)
+{
+    d->dtlsCookieEnabled = enable;
+}
+
+/*!
+    Returns the default DTLS configuration to be used in new DTLS
+    connections.
+
+    The default DTLS configuration consists of:
+
+    \list
+      \li no local certificate and no private key
+      \li protocol DtlsV1_2OrLater
+      \li the system's default CA certificate list
+      \li the cipher list equal to the list of the SSL libraries'
+         supported TLS 1.2 ciphers that use 128 or more secret bits
+         for the cipher.
+    \endlist
+
+    \sa setDefaultDtlsConfiguration()
+*/
+QSslConfiguration QSslConfiguration::defaultDtlsConfiguration()
+{
+    return QSslConfigurationPrivate::defaultDtlsConfiguration();
+}
+
+/*!
+    Sets the default DTLS configuration to be used in new DTLS
+    connections to be \a configuration. Existing connections are not
+    affected by this call.
+
+    \sa defaultDtlsConfiguration()
+*/
+void QSslConfiguration::setDefaultDtlsConfiguration(const QSslConfiguration &configuration)
+{
+    QSslConfigurationPrivate::setDefaultDtlsConfiguration(configuration);
+}
+
+#endif // dtls
 
 /*! \internal
 */

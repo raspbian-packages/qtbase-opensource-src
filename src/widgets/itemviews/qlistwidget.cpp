@@ -48,9 +48,6 @@
 
 QT_BEGIN_NAMESPACE
 
-// workaround for VC++ 6.0 linker bug (?)
-typedef bool(*LessThan)(const QPair<QListWidgetItem*,int>&,const QPair<QListWidgetItem*,int>&);
-
 class QListWidgetMimeData : public QMimeData
 {
     Q_OBJECT
@@ -301,7 +298,7 @@ void QListModel::sort(int column, Qt::SortOrder order)
         sorting[i].second = i;
     }
 
-    LessThan compare = (order == Qt::AscendingOrder ? &itemLessThan : &itemGreaterThan);
+    const auto compare = (order == Qt::AscendingOrder ? &itemLessThan : &itemGreaterThan);
     std::sort(sorting.begin(), sorting.end(), compare);
     QModelIndexList fromIndexes;
     QModelIndexList toIndexes;
@@ -338,7 +335,7 @@ void QListModel::ensureSorted(int column, Qt::SortOrder order, int start, int en
         sorting[i].second = start + i;
     }
 
-    LessThan compare = (order == Qt::AscendingOrder ? &itemLessThan : &itemGreaterThan);
+    const auto compare = (order == Qt::AscendingOrder ? &itemLessThan : &itemGreaterThan);
     std::sort(sorting.begin(), sorting.end(), compare);
 
     QModelIndexList oldPersistentIndexes = persistentIndexList();
@@ -1378,7 +1375,7 @@ void QListWidget::setSelectionModel(QItemSelectionModel *selectionModel)
 
 /*!
     Returns the item that occupies the given \a row in the list if one has been
-    set; otherwise returns 0.
+    set; otherwise returns \nullptr.
 
     \sa row()
 */
@@ -1445,7 +1442,7 @@ void QListWidget::insertItems(int row, const QStringList &labels)
 
 /*!
     Removes and returns the item from the given \a row in the list widget;
-    otherwise returns 0.
+    otherwise returns \nullptr.
 
     Items removed from a list widget will not be managed by Qt, and will need
     to be deleted manually.
@@ -1847,7 +1844,7 @@ QMimeData *QListWidget::mimeData(const QList<QListWidgetItem*> items) const
     // if non empty, it's called from the model's own mimeData
     if (cachedIndexes.isEmpty()) {
         cachedIndexes.reserve(items.count());
-        foreach (QListWidgetItem *item, items)
+        for (QListWidgetItem *item : items)
             cachedIndexes << indexFromItem(item);
 
         QMimeData *result = d->listModel()->internalMimeData();

@@ -1866,6 +1866,23 @@ bool QAbstractItemModel::setData(const QModelIndex &index, const QVariant &value
     return false;
 }
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+/*!
+    \since 6.0
+    Removes the data stored in all the roles for the given \a index.
+    Returns \c{true} if successful; otherwise returns \c{false}.
+    The dataChanged() signal should be emitted if the data was successfully
+    removed.
+    The base class implementation returns \c{false}
+    \sa data(), itemData(), setData(), setItemData()
+*/
+bool QAbstractItemModel::clearItemData(const QModelIndex &index)
+{
+    Q_UNUSED(index);
+    return false;
+}
+#endif
+
 /*!
     \fn QVariant QAbstractItemModel::data(const QModelIndex &index, int role) const = 0
 
@@ -2343,6 +2360,7 @@ QModelIndexList QAbstractItemModel::match(const QModelIndex &start, int role,
     bool wrap = flags & Qt::MatchWrap;
     bool allHits = (hits == -1);
     QString text; // only convert to a string if it is needed
+    const int column = start.column();
     QModelIndex p = parent(start);
     int from = start.row();
     int to = rowCount(p);
@@ -2350,7 +2368,7 @@ QModelIndexList QAbstractItemModel::match(const QModelIndex &start, int role,
     // iterates twice if wrapping
     for (int i = 0; (wrap && i < 2) || (!wrap && i < 1); ++i) {
         for (int r = from; (r < to) && (allHits || result.count() < hits); ++r) {
-            QModelIndex idx = index(r, start.column(), p);
+            QModelIndex idx = index(r, column, p);
             if (!idx.isValid())
                  continue;
             QVariant v = data(idx, role);
@@ -2389,10 +2407,13 @@ QModelIndexList QAbstractItemModel::match(const QModelIndex &start, int role,
                         result.append(idx);
                 }
             }
-            if (recurse && hasChildren(idx)) { // search the hierarchy
-                result += match(index(0, idx.column(), idx), role,
-                                (text.isEmpty() ? value : text),
-                                (allHits ? -1 : hits - result.count()), flags);
+            if (recurse) {
+                const auto parent = column != 0 ? idx.sibling(idx.row(), 0) : idx;
+                if (hasChildren(parent)) { // search the hierarchy
+                    result += match(index(0, column, parent), role,
+                                    (text.isEmpty() ? value : text),
+                                    (allHits ? -1 : hits - result.count()), flags);
+                }
             }
         }
         // prepare for the next iteration

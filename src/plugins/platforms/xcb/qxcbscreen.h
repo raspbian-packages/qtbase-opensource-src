@@ -79,7 +79,7 @@ public:
     QXcbScreen *screenAt(const QPoint &pos) const;
 
     QList<QPlatformScreen *> screens() const { return m_screens; }
-    void setScreens(QList<QPlatformScreen *> sl) { m_screens = sl; }
+    void setScreens(QList<QPlatformScreen *> &&sl) { m_screens = std::move(sl); }
     void removeScreen(QPlatformScreen *s) { m_screens.removeOne(s); }
     void addScreen(QPlatformScreen *s);
     void setPrimaryScreen(QPlatformScreen *s);
@@ -102,7 +102,6 @@ public:
     int antialiasingEnabled() const { return m_antialiasingEnabled; }
 
     QString windowManagerName() const { return m_windowManagerName; }
-    bool syncRequestSupported() const { return m_syncRequestSupported; }
 
     QSurfaceFormat surfaceFormatFor(const QSurfaceFormat &format) const;
 
@@ -133,10 +132,9 @@ private:
     QFontEngine::SubpixelAntialiasingType m_subpixelType = QFontEngine::SubpixelAntialiasingType(-1);
     int m_antialiasingEnabled = -1;
     QString m_windowManagerName;
-    bool m_syncRequestSupported = false;
     QMap<xcb_visualid_t, xcb_visualtype_t> m_visuals;
     QMap<xcb_visualid_t, quint8> m_visualDepths;
-    uint16_t m_rotation = XCB_RANDR_ROTATION_ROTATE_0;
+    uint16_t m_rotation = 0;
 };
 
 class Q_XCB_EXPORT QXcbScreen : public QXcbObject, public QPlatformScreen
@@ -188,7 +186,6 @@ public:
 
     void windowShown(QXcbWindow *window);
     QString windowManagerName() const { return m_virtualDesktop->windowManagerName(); }
-    bool syncRequestSupported() const { return m_virtualDesktop->syncRequestSupported(); }
 
     QSurfaceFormat surfaceFormatFor(const QSurfaceFormat &format) const;
 
@@ -211,6 +208,7 @@ public:
 
 private:
     void sendStartupMessage(const QByteArray &message) const;
+    int forcedDpi() const;
 
     QByteArray getOutputProperty(xcb_atom_t atom) const;
     QByteArray getEdid() const;
@@ -220,7 +218,6 @@ private:
     xcb_randr_crtc_t m_crtc;
     xcb_randr_mode_t m_mode = XCB_NONE;
     bool m_primary = false;
-    uint8_t m_rotation = 0;
 
     QString m_outputName;
     QSizeF m_outputSizeMillimeters;

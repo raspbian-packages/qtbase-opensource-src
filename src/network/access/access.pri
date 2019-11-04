@@ -74,6 +74,13 @@ qtConfig(settings) {
 
 mac: LIBS_PRIVATE += -framework Security
 
+wasm {
+    SOURCES += \
+        access/qnetworkreplywasmimpl.cpp
+    HEADERS += \
+        access/qnetworkreplywasmimpl_p.h
+}
+
 include($$PWD/../../3rdparty/zlib_dependency.pri)
 
 qtConfig(http) {

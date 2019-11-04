@@ -84,6 +84,8 @@ int q_CRYPTO_num_locks();
 void q_CRYPTO_set_locking_callback(void (*a)(int, int, const char *, int));
 void q_CRYPTO_set_id_callback(unsigned long (*a)());
 void q_CRYPTO_free(void *a);
+int q_CRYPTO_set_ex_data(CRYPTO_EX_DATA *ad, int idx, void *val);
+void *q_CRYPTO_get_ex_data(const CRYPTO_EX_DATA *ad, int idx);
 unsigned long q_ERR_peek_last_error();
 void q_ERR_free_strings();
 void q_EVP_CIPHER_CTX_cleanup(EVP_CIPHER_CTX *a);
@@ -204,6 +206,7 @@ DSA *q_d2i_DSAPrivateKey(DSA **a, unsigned char **pp, long length);
 #endif // SSLEAY_MACROS
 
 #define q_SSL_CTX_set_options(ctx,op) q_SSL_CTX_ctrl((ctx),SSL_CTRL_OPTIONS,(op),NULL)
+#define q_SSL_set_options(ssl,op) q_SSL_ctrl((ssl),SSL_CTRL_OPTIONS,(op),nullptr)
 #define q_SKM_sk_num(type, st) ((int (*)(const STACK_OF(type) *))q_sk_num)(st)
 #define q_SKM_sk_value(type, st,i) ((type * (*)(const STACK_OF(type) *, int))q_sk_value)(st, i)
 #define q_X509_getm_notAfter(x) X509_get_notAfter(x)
@@ -226,5 +229,19 @@ void q_OPENSSL_add_all_algorithms_conf();
 long q_SSLeay();
 const char *q_SSLeay_version(int type);
 
+#if QT_CONFIG(dtls)
+// DTLS:
+extern "C"
+{
+typedef int (*CookieVerifyCallback)(SSL *, unsigned char *, unsigned);
+}
+
+#define q_DTLSv1_listen(ssl, peer) q_SSL_ctrl(ssl, DTLS_CTRL_LISTEN, 0, (void *)peer)
+
+const SSL_METHOD *q_DTLSv1_server_method();
+const SSL_METHOD *q_DTLSv1_client_method();
+const SSL_METHOD *q_DTLSv1_2_server_method();
+const SSL_METHOD *q_DTLSv1_2_client_method();
+#endif // dtls
 
 #endif // QSSLSOCKET_OPENSSL_PRE11_SYMBOLS_P_H

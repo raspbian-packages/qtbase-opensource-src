@@ -264,7 +264,7 @@
     [stmt.decl], but as of the time of this writing, only compilers based on
     the IA-64 C++ ABI implemented it properly. The implementation requiring
     thread-safe initialization is also used on the Qt bootstrapped tools, which
-    define QT_NO_THREAD.
+    disable the "thread" feature.
 
     The implementation requiring thread-safe initialization from the compiler
     is the simplest: it creates the \a Type object as a function-local static
@@ -435,6 +435,7 @@
 */
 
 /*!
+    \keyword qglobalstatic-operator-type-ptr
     \fn template <typename T, T *(&innerFunction)(), QBasicAtomicInt &guard> QGlobalStatic<T, innerFunction, guard>::operator Type*()
 
     This function returns the address of the contents of this global static. If
@@ -476,10 +477,11 @@
     by this function. If the contents have already been destroyed, this
     function will return a null pointer.
 
-    This function is equivalent to \l {operator Type *()}. It is provided for
-    compatibility with the private Q_GLOBAL_STATIC implementation that existed
-    in Qt 4.x and 5.0. New code should avoid using it and should instead treat
-    the object as a smart pointer.
+    This function is equivalent to \l {qglobalstatic-operator-type-ptr}
+    {operator Type *()}. It is provided for compatibility with the private
+    Q_GLOBAL_STATIC implementation that existed in Qt 4.x and 5.0. New code
+    should avoid using it and should instead treat the object as a smart
+    pointer.
 */
 
 /*!

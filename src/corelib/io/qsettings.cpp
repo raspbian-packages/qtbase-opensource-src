@@ -41,8 +41,6 @@
 #include "qplatformdefs.h"
 #include "qsettings.h"
 
-#ifndef QT_NO_SETTINGS
-
 #include "qsettings_p.h"
 #include "qcache.h"
 #include "qfile.h"
@@ -75,6 +73,10 @@
 
 #ifdef Q_OS_VXWORKS
 #  include <ioLib.h>
+#endif
+
+#ifdef Q_OS_WASM
+#include <emscripten.h>
 #endif
 
 #include <algorithm>
@@ -1544,6 +1546,13 @@ void QConfFileSettingsPrivate::syncConfFile(QConfFile *confFile)
                     perms |= QFile::ReadGroup | QFile::ReadOther;
                 QFile(confFile->name).setPermissions(perms);
             }
+#ifdef Q_OS_WASM
+        EM_ASM(
+            // Sync sandbox filesystem to persistent database filesystem. See QTBUG-70002
+            FS.syncfs(false, function(err) {
+            });
+        );
+#endif
         } else {
             setStatus(QSettings::AccessError);
         }
@@ -1590,12 +1599,14 @@ bool QConfFileSettingsPrivate::readIniLine(const QByteArray &data, int &dataPos,
 
     int i = lineStart;
     while (i < dataLen) {
-        while (!(charTraits[uint(uchar(data.at(i)))] & Special)) {
+        char ch = data.at(i);
+        while (!(charTraits[uchar(ch)] & Special)) {
             if (++i == dataLen)
                 goto break_out_of_outer_loop;
+            ch = data.at(i);
         }
 
-        char ch = data.at(i++);
+        ++i;
         if (ch == '=') {
             if (!inQuotes && equalsPos == -1)
                 equalsPos = i - 1;
@@ -1622,8 +1633,9 @@ bool QConfFileSettingsPrivate::readIniLine(const QByteArray &data, int &dataPos,
             Q_ASSERT(ch == ';');
 
             if (i == lineStart + 1) {
-                char ch;
                 while (i < dataLen && (((ch = data.at(i)) != '\n') && ch != '\r'))
+                    ++i;
+                while (i < dataLen && charTraits[uchar(data.at(i))] & Space)
                     ++i;
                 lineStart = i;
             } else if (!inQuotes) {
@@ -1694,10 +1706,10 @@ bool QConfFileSettingsPrivate::readIniFile(const QByteArray &data,
 
             iniSection = iniSection.trimmed();
 
-            if (qstricmp(iniSection.constData(), "general") == 0) {
+            if (iniSection.compare("general", Qt::CaseInsensitive) == 0) {
                 currentSection.clear();
             } else {
-                if (qstricmp(iniSection.constData(), "%general") == 0) {
+                if (iniSection.compare("%general", Qt::CaseInsensitive) == 0) {
                     currentSection = QLatin1String(iniSection.constData() + 1);
                 } else {
                     currentSection.clear();
@@ -1857,7 +1869,7 @@ bool QConfFileSettingsPrivate::writeIniFile(QIODevice &device, const ParsedSetti
 
         if (realSection.isEmpty()) {
             realSection = "[General]";
-        } else if (qstricmp(realSection.constData(), "general") == 0) {
+        } else if (realSection.compare("general", Qt::CaseInsensitive) == 0) {
             realSection = "[%General]";
         } else {
             realSection.prepend('[');
@@ -2155,6 +2167,9 @@ void QConfFileSettingsPrivate::ensureSectionParsed(QConfFile *confFile,
 
     \snippet settings/settings.cpp 15
 
+    Note that type information is not preserved when reading settings from INI
+    files; all values will be returned as QString.
+
     The \l{tools/settingseditor}{Settings Editor} example lets you
     experiment with different settings location and with fallbacks
     turned on or off.
@@ -2436,7 +2451,10 @@ void QConfFileSettingsPrivate::ensureSectionParsed(QConfFile *confFile,
                             On 32-bit Windows or from a 64-bit application on 64-bit Windows,
                             this works the same as specifying NativeFormat.
                             This enum value was added in Qt 5.7.
-    \value IniFormat        Store the settings in INI files.
+    \value IniFormat        Store the settings in INI files. Note that type information
+                            is not preserved when reading settings from INI files;
+                            all values will be returned as QString.
+
     \value InvalidFormat    Special value returned by registerFormat().
     \omitvalue CustomFormat1
     \omitvalue CustomFormat2
@@ -3573,5 +3591,3 @@ QT_END_NAMESPACE
 #ifndef QT_BOOTSTRAPPED
 #include "moc_qsettings.cpp"
 #endif
-
-#endif // QT_NO_SETTINGS

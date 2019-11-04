@@ -64,7 +64,7 @@ static QEGLPlatformContext::Flags makeFlags()
 {
     QEGLPlatformContext::Flags result = 0;
 
-    if (!QQnxIntegration::options().testFlag(QQnxIntegration::SurfacelessEGLContext))
+    if (!QQnxIntegration::instance()->options().testFlag(QQnxIntegration::SurfacelessEGLContext))
         result |= QEGLPlatformContext::NoSurfaceless;
 
     return result;

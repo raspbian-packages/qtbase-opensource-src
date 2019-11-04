@@ -1,6 +1,7 @@
 /****************************************************************************
 **
-** Copyright (C) 2016 The Qt Company Ltd.
+** Copyright (C) 2018 The Qt Company Ltd.
+** Copyright (C) 2018 Intel Corporation.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
@@ -43,8 +44,9 @@
 #include "qtextcodec_p.h"
 
 #include "qbytearraymatcher.h"
-#include "qlist.h"
+#include "qendian.h"
 #include "qfile.h"
+#include "qlist.h"
 #include "qstringlist.h"
 #include "qvarlengtharray.h"
 #if !defined(QT_BOOTSTRAPPED)
@@ -493,6 +495,24 @@ QTextCodec::QTextCodec()
 */
 QTextCodec::~QTextCodec()
 {
+    QCoreGlobalData *globalData = QCoreGlobalData::instance();
+    if (!globalData)
+        return;
+
+    globalData->codecForLocale.testAndSetRelaxed(this, nullptr);
+
+    QMutexLocker locker(textCodecsMutex());
+
+    globalData->allCodecs.removeOne(this);
+
+    auto it = globalData->codecCache.cbegin();
+
+    while (it != globalData->codecCache.cend()) {
+        if (it.value() == this)
+            it = globalData->codecCache.erase(it);
+        else
+            ++it;
+    }
 }
 
 /*!
@@ -1144,41 +1164,50 @@ QTextCodec *QTextCodec::codecForHtml(const QByteArray &ba)
 
     Tries to detect the encoding of the provided snippet \a ba by
     using the BOM (Byte Order Mark) and returns a QTextCodec instance
-    that is capable of decoding the text to unicode. If the codec
-    cannot be detected from the content provided, \a defaultCodec is
-    returned.
+    that is capable of decoding the text to unicode. This function can
+    detect one of the following codecs:
+
+    \list
+      \li UTF-32 Little Endian
+      \li UTF-32 Big Endian
+      \li UTF-16 Little Endian
+      \li UTF-16 Big Endian
+      \li UTF-8
+    \endlist
+
+    If the codec cannot be detected from the content provided, \a defaultCodec
+    is returned.
 
     \sa codecForHtml()
 */
 QTextCodec *QTextCodec::codecForUtfText(const QByteArray &ba, QTextCodec *defaultCodec)
 {
     const int arraySize = ba.size();
+    const uchar *buf = reinterpret_cast<const uchar *>(ba.constData());
+    const uint bom = 0xfeff;
 
     if (arraySize > 3) {
-        if ((uchar)ba[0] == 0x00
-            && (uchar)ba[1] == 0x00
-            && (uchar)ba[2] == 0xFE
-            && (uchar)ba[3] == 0xFF)
+        uint uc = qFromUnaligned<uint>(buf);
+        if (uc == qToBigEndian(bom))
             return QTextCodec::codecForMib(1018); // utf-32 be
-        else if ((uchar)ba[0] == 0xFF
-                 && (uchar)ba[1] == 0xFE
-                 && (uchar)ba[2] == 0x00
-                 && (uchar)ba[3] == 0x00)
+        else if (uc == qToLittleEndian(bom))
             return QTextCodec::codecForMib(1019); // utf-32 le
     }
 
     if (arraySize < 2)
         return defaultCodec;
-    if ((uchar)ba[0] == 0xfe && (uchar)ba[1] == 0xff)
+
+    ushort uc = qFromUnaligned<ushort>(buf);
+    if (uc == qToBigEndian(ushort(bom)))
         return QTextCodec::codecForMib(1013); // utf16 be
-    else if ((uchar)ba[0] == 0xff && (uchar)ba[1] == 0xfe)
+    else if (uc == qToLittleEndian(ushort(bom)))
         return QTextCodec::codecForMib(1014); // utf16 le
 
     if (arraySize < 3)
         return defaultCodec;
-    if ((uchar)ba[0] == 0xef
-        && (uchar)ba[1] == 0xbb
-        && (uchar)ba[2] == 0xbf)
+
+    static const char utf8bom[] = "\xef\xbb\xbf";
+    if (memcmp(buf, utf8bom, sizeof(utf8bom) - 1) == 0)
         return QTextCodec::codecForMib(106); // utf-8
 
     return defaultCodec;
@@ -1189,8 +1218,19 @@ QTextCodec *QTextCodec::codecForUtfText(const QByteArray &ba, QTextCodec *defaul
 
     Tries to detect the encoding of the provided snippet \a ba by
     using the BOM (Byte Order Mark) and returns a QTextCodec instance
-    that is capable of decoding the text to unicode. If the codec
-    cannot be detected, this overload returns a Latin-1 QTextCodec.
+    that is capable of decoding the text to unicode. This function can
+    detect one of the following codecs:
+
+    \list
+      \li UTF-32 Little Endian
+      \li UTF-32 Big Endian
+      \li UTF-16 Little Endian
+      \li UTF-16 Big Endian
+      \li UTF-8
+    \endlist
+
+    If the codec cannot be detected from the content provided, this overload
+    returns a Latin-1 QTextCodec.
 
     \sa codecForHtml()
 */
@@ -1204,7 +1244,7 @@ QTextCodec *QTextCodec::codecForUtfText(const QByteArray &ba)
     \obsolete
 
     Returns the codec used by QObject::tr() on its argument. If this
-    function returns 0 (the default), tr() assumes Latin-1.
+    function returns \nullptr (the default), tr() assumes Latin-1.
 */
 
 /*!
@@ -1217,6 +1257,19 @@ QTextCodec *QTextCodec::codecForUtfText(const QByteArray &ba)
 bool QTextDecoder::hasFailure() const
 {
     return state.invalidChars != 0;
+}
+
+/*!
+    \internal
+    \since 5.12
+
+    Determines whether the decoder needs more bytes to continue decoding. That
+    is, this signifies that the input string ended in the middle of a
+    multi-byte sequence. Note that it's possible some codecs do not report this.
+ */
+bool QTextDecoder::needsMoreData() const
+{
+    return state.remainingChars;
 }
 
 QT_END_NAMESPACE

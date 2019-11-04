@@ -321,8 +321,8 @@
     callbacks, you'd have to find five different names and keep track
     of the types yourself.
 
-    \sa QLCDNumber, QObject::connect(), {Digital Clock Example}, and
-    {Tetrix Example}.
+    \sa QLCDNumber, QObject::connect(), {Digital Clock Example},
+    {Tetrix Example}
 
     \section1 Signals And Slots With Default Arguments
 
@@ -330,7 +330,7 @@
     arguments can have default values. Consider QObject::destroyed():
 
     \code
-    void destroyed(QObject* = 0);
+    void destroyed(QObject* = nullptr);
     \endcode
 
     When a QObject is deleted, it emits this QObject::destroyed()
@@ -339,7 +339,7 @@
     A suitable slot signature might be:
 
     \code
-    void objectDestroyed(QObject* obj = 0);
+    void objectDestroyed(QObject* obj = nullptr);
     \endcode
 
     To connect the signal to the slot, we use QObject::connect().

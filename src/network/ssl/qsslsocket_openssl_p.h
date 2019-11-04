@@ -131,6 +131,8 @@ public:
     static int s_indexForSSLExtraData; // index used in SSL_get_ex_data to get the matching QSslSocketBackendPrivate
 #endif
 
+    bool inSetAndEmitError = false;
+
     // Platform specific functions
     void startClientEncryption() override;
     void startServerEncryption() override;
@@ -159,24 +161,9 @@ public:
                              QSslKey *key, QSslCertificate *cert,
                              QList<QSslCertificate> *caCertificates,
                              const QByteArray &passPhrase);
-};
 
-#ifdef Q_OS_WIN
-class QWindowsCaRootFetcher : public QObject
-{
-    Q_OBJECT;
-public:
-    QWindowsCaRootFetcher(const QSslCertificate &certificate, QSslSocket::SslMode sslMode);
-    ~QWindowsCaRootFetcher();
-public slots:
-    void start();
-signals:
-    void finished(QSslCertificate brokenChain, QSslCertificate caroot);
-private:
-    QSslCertificate cert;
-    QSslSocket::SslMode mode;
+    static QString msgErrorsDuringHandshake();
 };
-#endif
 
 QT_END_NAMESPACE
 

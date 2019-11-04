@@ -249,7 +249,14 @@ public:
         if (std::fabs(d) > std::numeric_limits<float>::max()) {
             if (ok != 0)
                 *ok = false;
-            return 0.0f;
+            const float huge = std::numeric_limits<float>::infinity();
+            return d < 0 ? -huge : huge;
+        }
+        if (d != 0 && float(d) == 0) {
+            // Values that underflow double already failed. Match them:
+            if (ok != 0)
+                *ok = false;
+            return 0;
         }
         return float(d);
     }
@@ -274,6 +281,7 @@ public:
 public:
     quint16 m_language_id, m_script_id, m_country_id;
 
+    // FIXME QTBUG-69324: not all unicode code-points map to single-token UTF-16 :-(
     quint16 m_decimal, m_group, m_list, m_percent, m_zero, m_minus, m_plus, m_exponential;
     quint16 m_quotation_start, m_quotation_end;
     quint16 m_alternate_quotation_start, m_alternate_quotation_end;
@@ -407,9 +415,10 @@ inline char QLocaleData::digitToCLocale(QChar in) const
     if (in == m_exponential || in == QChar::toUpper(m_exponential))
         return 'e';
 
-    // In several languages group() is the char 0xA0, which looks like a space.
-    // People use a regular space instead of it and complain it doesn't work.
-    if (m_group == 0xA0 && in.unicode() == ' ')
+    // In several languages group() is a non-breaking space (U+00A0) or its thin
+    // version (U+202f), which look like spaces.  People (and thus some of our
+    // tests) use a regular space instead and complain if it doesn't work.
+    if ((m_group == 0xA0 || m_group == 0x202f) && in.unicode() == ' ')
         return ',';
 
     return 0;

@@ -8,11 +8,13 @@ QT += \
 
 DEFINES *= QT_NO_CAST_FROM_ASCII __WRL_NO_DEFAULT_LIB__
 
-LIBS += -lws2_32 -ld3d11
+LIBS += -lws2_32
+QMAKE_USE_PRIVATE += d3d11
 
 SOURCES = \
     main.cpp  \
     qwinrtbackingstore.cpp \
+    qwinrtcanvas.cpp \
     qwinrtclipboard.cpp \
     qwinrtcursor.cpp \
     qwinrteglcontext.cpp \
@@ -30,6 +32,7 @@ SOURCES = \
 
 HEADERS = \
     qwinrtbackingstore.h \
+    qwinrtcanvas.h \
     qwinrtclipboard.h \
     qwinrtcursor.h \
     qwinrteglcontext.h \
@@ -55,6 +58,8 @@ qtConfig(draganddrop) {
     SOURCES += qwinrtdrag.cpp
     HEADERS += qwinrtdrag.h
 }
+
+qtConfig(accessibility): include($$PWD/uiautomation/uiautomation.pri)
 
 PLUGIN_TYPE = platforms
 PLUGIN_CLASS_NAME = QWinRTIntegrationPlugin

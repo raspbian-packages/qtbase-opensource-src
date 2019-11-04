@@ -524,6 +524,8 @@ bool QNetworkReplyHttpImplPrivate::loadFromCacheIfAllowed(QHttpNetworkRequest &h
         QHash<QByteArray, QByteArray> cacheControl = parseHttpOptionHeader(it->second);
         if (cacheControl.contains("must-revalidate"))
             return false;
+        if (cacheControl.contains("no-cache"))
+            return false;
     }
 
     QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
@@ -917,7 +919,7 @@ void QNetworkReplyHttpImplPrivate::postRequest(const QNetworkRequest &newHttpReq
             // From http thread to user thread:
             QObject::connect(forwardUploadDevice, SIGNAL(wantData(qint64)),
                              q, SLOT(wantUploadDataSlot(qint64)));
-            QObject::connect(forwardUploadDevice,SIGNAL(processedData(qint64, qint64)),
+            QObject::connect(forwardUploadDevice,SIGNAL(processedData(qint64,qint64)),
                              q, SLOT(sentUploadDataSlot(qint64,qint64)));
             QObject::connect(forwardUploadDevice, SIGNAL(resetData(bool*)),
                     q, SLOT(resetUploadDataSlot(bool*)),
@@ -1318,7 +1320,7 @@ void QNetworkReplyHttpImplPrivate::replyDownloadMetaData(const QList<QPair<QByte
         if (!value.isEmpty()) {
             // Why are we appending values for headers which are already
             // present?
-            if (qstricmp(it->first.constData(), "set-cookie") == 0)
+            if (it->first.compare("set-cookie", Qt::CaseInsensitive) == 0)
                 value += '\n';
             else
                 value += ", ";
@@ -1584,7 +1586,7 @@ bool QNetworkReplyHttpImplPrivate::sendCacheContents(const QNetworkCacheMetaData
     QUrl redirectUrl;
     for ( ; it != end; ++it) {
         if (httpRequest.isFollowRedirects() &&
-            !qstricmp(it->first.toLower().constData(), "location"))
+            !it->first.compare("location", Qt::CaseInsensitive))
             redirectUrl = QUrl::fromEncoded(it->second);
         setRawHeader(it->first, it->second);
     }
@@ -1676,12 +1678,12 @@ QNetworkCacheMetaData QNetworkReplyHttpImplPrivate::fetchCacheMetaData(const QNe
                 || header == "content-range"
                 || header == "content-type")
                 continue;
-
-            // For MS servers that send "Content-Length: 0" on 304 responses
-            // ignore this too
-            if (header == "content-length")
-                continue;
         }
+
+        // IIS has been known to send "Content-Length: 0" on 304 responses, so
+        // ignore this too
+        if (header == "content-length" && statusCode == 304)
+            continue;
 
 #if defined(QNETWORKACCESSHTTPBACKEND_DEBUG)
         QByteArray n = q->rawHeader(header);
@@ -1730,18 +1732,8 @@ QNetworkCacheMetaData QNetworkReplyHttpImplPrivate::fetchCacheMetaData(const QNe
     if (httpRequest.operation() == QHttpNetworkRequest::Get) {
 
         canDiskCache = true;
-        // 14.32
-        // HTTP/1.1 caches SHOULD treat "Pragma: no-cache" as if the client
-        // had sent "Cache-Control: no-cache".
-        it = cacheHeaders.findRawHeader("pragma");
-        if (it != cacheHeaders.rawHeaders.constEnd()
-            && it->second == "no-cache")
-            canDiskCache = false;
-
         // HTTP/1.1. Check the Cache-Control header
-        if (cacheControl.contains("no-cache"))
-            canDiskCache = false;
-        else if (cacheControl.contains("no-store"))
+        if (cacheControl.contains("no-store"))
             canDiskCache = false;
 
     // responses to POST might be cacheable
@@ -1879,11 +1871,9 @@ void QNetworkReplyHttpImplPrivate::_q_startOperation()
 {
     Q_Q(QNetworkReplyHttpImpl);
 
-    // ensure this function is only being called once
-    if (state == Working) {
-        qDebug() << "QNetworkReplyHttpImplPrivate::_q_startOperation was called more than once" << url;
+    if (state == Working) // ensure this function is only being called once
         return;
-    }
+
     state = Working;
 
 #ifndef QT_NO_BEARERMANAGEMENT

@@ -52,6 +52,7 @@ static const char *const additionalMimeFiles[] = {
     "invalid-magic1.xml",
     "invalid-magic2.xml",
     "invalid-magic3.xml",
+    "magic-and-hierarchy.xml",
     0
 };
 
@@ -983,6 +984,26 @@ void tst_QMimeDatabase::installNewGlobalMimeType()
         QMimeType objcsrc = db.mimeTypeForName(QStringLiteral("text/x-objcsrc"));
         QVERIFY(objcsrc.isValid());
         qDebug() << objcsrc.globPatterns();
+    }
+
+    const QString fooTestFile = QLatin1String(RESOURCE_PREFIX "magic-and-hierarchy.foo");
+    QCOMPARE(db.mimeTypeForFile(fooTestFile).name(), QString::fromLatin1("application/foo"));
+
+    const QString fooTestFile2 = QLatin1String(RESOURCE_PREFIX "magic-and-hierarchy2.foo");
+    QCOMPARE(db.mimeTypeForFile(fooTestFile2).name(), QString::fromLatin1("application/vnd.qnx.bar-descriptor"));
+
+    // Test if we can use the default comment
+    {
+        struct RestoreLocale
+        {
+            ~RestoreLocale() { QLocale::setDefault(QLocale::c()); }
+        } restoreLocale;
+
+        QLocale::setDefault(QLocale("zh_CN"));
+        QMimeType suseymp = db.mimeTypeForName("text/x-suse-ymp");
+        QVERIFY(suseymp.isValid());
+        QCOMPARE(suseymp.comment(),
+                 QString::fromLatin1("YaST Meta Package"));
     }
 
     // Now test removing the mimetype definitions again

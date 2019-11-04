@@ -2595,6 +2595,21 @@ QTextStream &QTextStream::operator<<(const QString &string)
 
     Writes \a string to the stream, and returns a reference to the
     QTextStream.
+    \since 5.12
+*/
+QTextStream &QTextStream::operator<<(QStringView string)
+{
+    Q_D(QTextStream);
+    CHECK_VALID_STREAM(*this);
+    d->putString(string.cbegin(), int(string.size()));
+    return *this;
+}
+
+/*!
+    \overload
+
+    Writes \a string to the stream, and returns a reference to the
+    QTextStream.
 */
 QTextStream &QTextStream::operator<<(QLatin1String string)
 {
@@ -3096,15 +3111,15 @@ QTextCodec *QTextStream::codec() const
 }
 
 /*!
-    If \a enabled is true, QTextStream will attempt to detect Unicode
-    encoding by peeking into the stream data to see if it can find the
-    UTF-16 or UTF-32 BOM (Byte Order Mark). If this mark is found, QTextStream
-    will replace the current codec with the UTF codec.
+    If \a enabled is true, QTextStream will attempt to detect Unicode encoding
+    by peeking into the stream data to see if it can find the UTF-8, UTF-16, or
+    UTF-32 Byte Order Mark (BOM). If this mark is found, QTextStream will
+    replace the current codec with the UTF codec.
 
     This function can be used together with setCodec(). It is common
     to set the codec to UTF-8, and then enable UTF-16 detection.
 
-    \sa autoDetectUnicode(), setCodec()
+    \sa autoDetectUnicode(), setCodec(), QTextCodec::codecForUtfText()
 */
 void QTextStream::setAutoDetectUnicode(bool enabled)
 {
@@ -3116,7 +3131,7 @@ void QTextStream::setAutoDetectUnicode(bool enabled)
     Returns \c true if automatic Unicode detection is enabled, otherwise
     returns \c false. Automatic Unicode detection is enabled by default.
 
-    \sa setAutoDetectUnicode(), setCodec()
+    \sa setAutoDetectUnicode(), setCodec(), QTextCodec::codecForUtfText()
 */
 bool QTextStream::autoDetectUnicode() const
 {

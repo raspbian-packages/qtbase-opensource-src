@@ -66,6 +66,14 @@
 #include "qsslpresharedkeyauthenticator.h"
 #include "qsslpresharedkeyauthenticator_p.h"
 
+#ifdef Q_OS_WIN
+#include "qwindowscarootfetcher_p.h"
+#endif
+
+#if !QT_CONFIG(opensslv11)
+#include <openssl/x509_vfy.h>
+#endif
+
 #include <QtCore/qdatetime.h>
 #include <QtCore/qdebug.h>
 #include <QtCore/qdir.h>
@@ -77,15 +85,16 @@
 #include <QtCore/qthread.h>
 #include <QtCore/qurl.h>
 #include <QtCore/qvarlengtharray.h>
+#include <QtCore/qscopedvaluerollback.h>
 
 #include <string.h>
 
 QT_BEGIN_NAMESPACE
 
 #if defined(Q_OS_WIN)
-    PtrCertOpenSystemStoreW QSslSocketPrivate::ptrCertOpenSystemStoreW = 0;
-    PtrCertFindCertificateInStore QSslSocketPrivate::ptrCertFindCertificateInStore = 0;
-    PtrCertCloseStore QSslSocketPrivate::ptrCertCloseStore = 0;
+    PtrCertOpenSystemStoreW QSslSocketPrivate::ptrCertOpenSystemStoreW = nullptr;
+    PtrCertFindCertificateInStore QSslSocketPrivate::ptrCertFindCertificateInStore = nullptr;
+    PtrCertCloseStore QSslSocketPrivate::ptrCertCloseStore = nullptr;
 #endif
 
 bool QSslSocketPrivate::s_libraryLoaded = false;
@@ -99,12 +108,13 @@ int QSslSocketBackendPrivate::s_indexForSSLExtraData = -1;
 QString QSslSocketBackendPrivate::getErrorsFromOpenSsl()
 {
     QString errorString;
+    char buf[256] = {}; // OpenSSL docs claim both 120 and 256; use the larger.
     unsigned long errNum;
     while ((errNum = q_ERR_get_error())) {
-        if (! errorString.isEmpty())
+        if (!errorString.isEmpty())
             errorString.append(QLatin1String(", "));
-        const char *error = q_ERR_error_string(errNum, NULL);
-        errorString.append(QString::fromLatin1(error)); // error is ascii according to man ERR_error_string
+        q_ERR_error_string_n(errNum, buf, sizeof buf);
+        errorString.append(QString::fromLatin1(buf)); // error is ascii according to man ERR_error_string
     }
     return errorString;
 }
@@ -130,14 +140,63 @@ static unsigned int q_ssl_psk_server_callback(SSL *ssl,
     Q_ASSERT(d);
     return d->tlsPskServerCallback(identity, psk, max_psk_len);
 }
+
+#ifdef TLS1_3_VERSION
+#ifndef OPENSSL_NO_PSK
+static unsigned int q_ssl_psk_restore_client(SSL *ssl,
+                                             const char *hint,
+                                             char *identity, unsigned int max_identity_len,
+                                             unsigned char *psk, unsigned int max_psk_len)
+{
+    Q_UNUSED(hint);
+    Q_UNUSED(identity);
+    Q_UNUSED(max_identity_len);
+    Q_UNUSED(psk);
+    Q_UNUSED(max_psk_len);
+
+#ifdef QT_DEBUG
+    QSslSocketBackendPrivate *d = reinterpret_cast<QSslSocketBackendPrivate *>(q_SSL_get_ex_data(ssl, QSslSocketBackendPrivate::s_indexForSSLExtraData));
+    Q_ASSERT(d);
+    Q_ASSERT(d->mode == QSslSocket::SslClientMode);
+#endif
+    q_SSL_set_psk_client_callback(ssl, &q_ssl_psk_client_callback);
+
+    return 0;
+}
+#endif // !OPENSSL_NO_PSK
+
+static int q_ssl_psk_use_session_callback(SSL *ssl, const EVP_MD *md, const unsigned char **id,
+                                          size_t *idlen, SSL_SESSION **sess)
+{
+    Q_UNUSED(ssl);
+    Q_UNUSED(md);
+    Q_UNUSED(id);
+    Q_UNUSED(idlen);
+    Q_UNUSED(sess);
+
+#ifndef OPENSSL_NO_PSK
+#ifdef QT_DEBUG
+    QSslSocketBackendPrivate *d = reinterpret_cast<QSslSocketBackendPrivate *>(q_SSL_get_ex_data(ssl, QSslSocketBackendPrivate::s_indexForSSLExtraData));
+    Q_ASSERT(d);
+    Q_ASSERT(d->mode == QSslSocket::SslClientMode);
+#endif
+
+    // Temporarily rebind the psk because it will be called next. The function will restore it.
+    q_SSL_set_psk_client_callback(ssl, &q_ssl_psk_restore_client);
+#endif
+
+    return 1; // need to return 1 or else "the connection setup fails."
+}
+#endif // TLS1_3_VERSION
+
 #endif
 } // extern "C"
 
 QSslSocketBackendPrivate::QSslSocketBackendPrivate()
-    : ssl(0),
-      readBio(0),
-      writeBio(0),
-      session(0)
+    : ssl(nullptr),
+      readBio(nullptr),
+      writeBio(nullptr),
+      session(nullptr)
 {
     // Calls SSL_library_init().
     ensureInitialized();
@@ -174,6 +233,8 @@ QSslCipher QSslSocketBackendPrivate::QSslCipher_from_SSL_CIPHER(const SSL_CIPHER
             ciph.d->protocol = QSsl::TlsV1_1;
         else if (protoString == QLatin1String("TLSv1.2"))
             ciph.d->protocol = QSsl::TlsV1_2;
+        else if (protoString == QLatin1String("TLSv1.3"))
+            ciph.d->protocol = QSsl::TlsV1_3;
 
         if (descriptionList.at(2).startsWith(QLatin1String("Kx=")))
             ciph.d->keyExchangeMethod = descriptionList.at(2).mid(3).toString();
@@ -188,8 +249,7 @@ QSslCipher QSslSocketBackendPrivate::QSslCipher_from_SSL_CIPHER(const SSL_CIPHER
     return ciph;
 }
 
-// static
-inline QSslErrorEntry QSslErrorEntry::fromStoreContext(X509_STORE_CTX *ctx)
+QSslErrorEntry QSslErrorEntry::fromStoreContext(X509_STORE_CTX *ctx)
 {
     return {
         q_X509_STORE_CTX_get_error(ctx),
@@ -197,50 +257,74 @@ inline QSslErrorEntry QSslErrorEntry::fromStoreContext(X509_STORE_CTX *ctx)
     };
 }
 
-// ### This list is shared between all threads, and protected by a
-// mutex. Investigate using thread local storage instead.
-struct QSslErrorList
-{
-    QMutex mutex;
-    QVector<QSslErrorEntry> errors;
-};
-
-Q_GLOBAL_STATIC(QSslErrorList, _q_sslErrorList)
-
 int q_X509Callback(int ok, X509_STORE_CTX *ctx)
 {
     if (!ok) {
         // Store the error and at which depth the error was detected.
-        _q_sslErrorList()->errors << QSslErrorEntry::fromStoreContext(ctx);
-#if !QT_CONFIG(opensslv11)
-#ifdef QSSLSOCKET_DEBUG
-        qCDebug(lcSsl) << "verification error: dumping bad certificate";
-        qCDebug(lcSsl) << QSslCertificatePrivate::QSslCertificate_from_X509(q_X509_STORE_CTX_get_current_cert(ctx)).toPem();
-        qCDebug(lcSsl) << "dumping chain";
-        const auto certs = QSslSocketBackendPrivate::STACKOFX509_to_QSslCertificates(q_X509_STORE_CTX_get_chain(ctx));
-        for (const QSslCertificate &cert : certs) {
-            qCDebug(lcSsl) << "Issuer:" << "O=" << cert.issuerInfo(QSslCertificate::Organization)
-                << "CN=" << cert.issuerInfo(QSslCertificate::CommonName)
-                << "L=" << cert.issuerInfo(QSslCertificate::LocalityName)
-                << "OU=" << cert.issuerInfo(QSslCertificate::OrganizationalUnitName)
-                << "C=" << cert.issuerInfo(QSslCertificate::CountryName)
-                << "ST=" << cert.issuerInfo(QSslCertificate::StateOrProvinceName);
-            qCDebug(lcSsl) << "Subject:" << "O=" << cert.subjectInfo(QSslCertificate::Organization)
-                << "CN=" << cert.subjectInfo(QSslCertificate::CommonName)
-                << "L=" << cert.subjectInfo(QSslCertificate::LocalityName)
-                << "OU=" << cert.subjectInfo(QSslCertificate::OrganizationalUnitName)
-                << "C=" << cert.subjectInfo(QSslCertificate::CountryName)
-                << "ST=" << cert.subjectInfo(QSslCertificate::StateOrProvinceName);
-            qCDebug(lcSsl) << "Valid:" << cert.effectiveDate() << '-' << cert.expiryDate();
+
+        using ErrorListPtr = QVector<QSslErrorEntry>*;
+        ErrorListPtr errors = nullptr;
+
+        // Error list is attached to either 'SSL' or 'X509_STORE'.
+        if (X509_STORE *store = q_X509_STORE_CTX_get0_store(ctx)) { // We try store first:
+#if QT_CONFIG(opensslv11)
+            errors = ErrorListPtr(q_X509_STORE_get_ex_data(store, 0));
+#else
+            errors = ErrorListPtr(q_CRYPTO_get_ex_data(&store->ex_data, 0));
+#endif // opensslv11
         }
-#endif // QSSLSOCKET_DEBUG
-#endif // !QT_CONFIG(opensslv11)
+
+        if (!errors) {
+            // Not found on store? Try SSL and its external data then. According to the OpenSSL's
+            // documentation:
+            //
+            // "Whenever a X509_STORE_CTX object is created for the verification of the peers certificate
+            // during a handshake, a pointer to the SSL object is stored into the X509_STORE_CTX object
+            // to identify the connection affected. To retrieve this pointer the X509_STORE_CTX_get_ex_data()
+            // function can be used with the correct index."
+            if (SSL *ssl = static_cast<SSL *>(q_X509_STORE_CTX_get_ex_data(ctx, q_SSL_get_ex_data_X509_STORE_CTX_idx())))
+                errors = ErrorListPtr(q_SSL_get_ex_data(ssl, QSslSocketBackendPrivate::s_indexForSSLExtraData + 1));
+        }
+
+        if (!errors) {
+            qCWarning(lcSsl, "Neither X509_STORE, nor SSL contains error list, handshake failure");
+            return 0;
+        }
+
+        errors->append(QSslErrorEntry::fromStoreContext(ctx));
     }
     // Always return OK to allow verification to continue. We handle the
     // errors gracefully after collecting all errors, after verification has
     // completed.
     return 1;
 }
+
+static void q_loadCiphersForConnection(SSL *connection, QList<QSslCipher> &ciphers,
+                                       QList<QSslCipher> &defaultCiphers)
+{
+    Q_ASSERT(connection);
+
+    STACK_OF(SSL_CIPHER) *supportedCiphers = q_SSL_get_ciphers(connection);
+    for (int i = 0; i < q_sk_SSL_CIPHER_num(supportedCiphers); ++i) {
+        if (SSL_CIPHER *cipher = q_sk_SSL_CIPHER_value(supportedCiphers, i)) {
+            QSslCipher ciph = QSslSocketBackendPrivate::QSslCipher_from_SSL_CIPHER(cipher);
+            if (!ciph.isNull()) {
+                // Unconditionally exclude ADH and AECDH ciphers since they offer no MITM protection
+                if (!ciph.name().toLower().startsWith(QLatin1String("adh")) &&
+                    !ciph.name().toLower().startsWith(QLatin1String("exp-adh")) &&
+                    !ciph.name().toLower().startsWith(QLatin1String("aecdh"))) {
+                    ciphers << ciph;
+
+                    if (ciph.usedBits() >= 128)
+                        defaultCiphers << ciph;
+                }
+            }
+        }
+    }
+}
+
+// Defined in qsslsocket.cpp
+void q_setDefaultDtlsCiphers(const QList<QSslCipher> &ciphers);
 
 long QSslSocketBackendPrivate::setupOpenSslOptions(QSsl::SslProtocol protocol, QSsl::SslOptions sslOptions)
 {
@@ -259,6 +343,8 @@ long QSslSocketBackendPrivate::setupOpenSslOptions(QSsl::SslProtocol protocol, Q
         options = SSL_OP_ALL|SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1;
     else if (protocol == QSsl::TlsV1_2OrLater)
         options = SSL_OP_ALL|SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1;
+    else if (protocol == QSsl::TlsV1_3OrLater)
+        options = SSL_OP_ALL|SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2;
 #endif
     else
         options = SSL_OP_ALL;
@@ -360,11 +446,7 @@ bool QSslSocketBackendPrivate::initSslContext()
     else
         q_SSL_set_accept_state(ssl);
 
-#if OPENSSL_VERSION_NUMBER >= 0x10001000L
-    // Save a pointer to this object into the SSL structure.
-    if (QSslSocket::sslLibraryVersionNumber() >= 0x10001000L)
-        q_SSL_set_ex_data(ssl, s_indexForSSLExtraData, this);
-#endif
+    q_SSL_set_ex_data(ssl, s_indexForSSLExtraData, this);
 
 #if OPENSSL_VERSION_NUMBER >= 0x10001000L && !defined(OPENSSL_NO_PSK)
     // Set the client callback for PSK
@@ -375,6 +457,13 @@ bool QSslSocketBackendPrivate::initSslContext()
             q_SSL_set_psk_server_callback(ssl, &q_ssl_psk_server_callback);
     }
 #endif
+#if OPENSSL_VERSION_NUMBER >= 0x10101006L
+    // Set the client callback for TLSv1.3 PSK
+    if (mode == QSslSocket::SslClientMode
+        && QSslSocket::sslLibraryBuildVersionNumber() >= 0x10101006L) {
+        q_SSL_set_psk_use_session_callback(ssl, &q_ssl_psk_use_session_callback);
+    }
+#endif // openssl version >= 0x10101006L
 
     return true;
 }
@@ -382,8 +471,12 @@ bool QSslSocketBackendPrivate::initSslContext()
 void QSslSocketBackendPrivate::destroySslContext()
 {
     if (ssl) {
+        // We do not send a shutdown alert here. Just mark the session as
+        // resumable for qhttpnetworkconnection's "optimization", otherwise
+        // OpenSSL won't start a session resumption.
+        q_SSL_shutdown(ssl);
         q_SSL_free(ssl);
-        ssl = 0;
+        ssl = nullptr;
     }
     sslContextPointer.clear();
 }
@@ -442,34 +535,38 @@ void QSslSocketPrivate::resetDefaultCiphers()
 #else
     SSL_CTX *myCtx = q_SSL_CTX_new(q_SSLv23_client_method());
 #endif
+    // Note, we assert, not just silently return/bail out early:
+    // this should never happen and problems with OpenSSL's initialization
+    // must be caught before this (see supportsSsl()).
+    Q_ASSERT(myCtx);
     SSL *mySsl = q_SSL_new(myCtx);
+    Q_ASSERT(mySsl);
 
     QList<QSslCipher> ciphers;
     QList<QSslCipher> defaultCiphers;
 
-    STACK_OF(SSL_CIPHER) *supportedCiphers = q_SSL_get_ciphers(mySsl);
-    for (int i = 0; i < q_sk_SSL_CIPHER_num(supportedCiphers); ++i) {
-        if (SSL_CIPHER *cipher = q_sk_SSL_CIPHER_value(supportedCiphers, i)) {
-            QSslCipher ciph = QSslSocketBackendPrivate::QSslCipher_from_SSL_CIPHER(cipher);
-            if (!ciph.isNull()) {
-                // Unconditionally exclude ADH and AECDH ciphers since they offer no MITM protection
-                if (!ciph.name().toLower().startsWith(QLatin1String("adh")) &&
-                    !ciph.name().toLower().startsWith(QLatin1String("exp-adh")) &&
-                    !ciph.name().toLower().startsWith(QLatin1String("aecdh"))) {
-                    ciphers << ciph;
-
-                    if (ciph.usedBits() >= 128)
-                        defaultCiphers << ciph;
-                }
-            }
-        }
-    }
+    q_loadCiphersForConnection(mySsl, ciphers, defaultCiphers);
 
     q_SSL_CTX_free(myCtx);
     q_SSL_free(mySsl);
 
     setDefaultSupportedCiphers(ciphers);
     setDefaultCiphers(defaultCiphers);
+
+#if QT_CONFIG(dtls)
+    ciphers.clear();
+    defaultCiphers.clear();
+    myCtx = q_SSL_CTX_new(q_DTLS_client_method());
+    if (myCtx) {
+        mySsl = q_SSL_new(myCtx);
+        if (mySsl) {
+            q_loadCiphersForConnection(mySsl, ciphers, defaultCiphers);
+            q_setDefaultDtlsCiphers(defaultCiphers);
+            q_SSL_free(mySsl);
+        }
+        q_SSL_CTX_free(myCtx);
+    }
+#endif // dtls
 }
 
 void QSslSocketPrivate::resetDefaultEllipticCurves()
@@ -615,6 +712,11 @@ void QSslSocketBackendPrivate::transmit()
 {
     Q_Q(QSslSocket);
 
+    using ScopedBool = QScopedValueRollback<bool>;
+
+    if (inSetAndEmitError)
+        return;
+
     // If we don't have any SSL context, don't bother transmitting.
     if (!ssl)
         return;
@@ -642,6 +744,7 @@ void QSslSocketBackendPrivate::transmit()
                         break;
                     } else {
                         // ### Better error handling.
+                        const ScopedBool bg(inSetAndEmitError, true);
                         setErrorAndEmit(QAbstractSocket::SslInternalError,
                                         QSslSocket::tr("Unable to write data: %1").arg(
                                             getErrorsFromOpenSsl()));
@@ -688,6 +791,7 @@ void QSslSocketBackendPrivate::transmit()
 #endif
             if (actualWritten < 0) {
                 //plain socket write fails if it was in the pending close state.
+                const ScopedBool bg(inSetAndEmitError, true);
                 setErrorAndEmit(plainSocket->error(), plainSocket->errorString());
                 return;
             }
@@ -713,6 +817,7 @@ void QSslSocketBackendPrivate::transmit()
                     plainSocket->skip(writtenToBio);
                 } else {
                     // ### Better error handling.
+                    const ScopedBool bg(inSetAndEmitError, true);
                     setErrorAndEmit(QAbstractSocket::SslInternalError,
                                     QSslSocket::tr("Unable to decrypt data: %1").arg(
                                         getErrorsFromOpenSsl()));
@@ -794,15 +899,21 @@ void QSslSocketBackendPrivate::transmit()
                 qCDebug(lcSsl) << "QSslSocketBackendPrivate::transmit: remote disconnect";
 #endif
                 shutdown = true; // the other side shut down, make sure we do not send shutdown ourselves
-                setErrorAndEmit(QAbstractSocket::RemoteHostClosedError,
-                                QSslSocket::tr("The TLS/SSL connection has been closed"));
+                {
+                    const ScopedBool bg(inSetAndEmitError, true);
+                    setErrorAndEmit(QAbstractSocket::RemoteHostClosedError,
+                                    QSslSocket::tr("The TLS/SSL connection has been closed"));
+                }
                 return;
             case SSL_ERROR_SYSCALL: // some IO error
             case SSL_ERROR_SSL: // error in the SSL library
                 // we do not know exactly what the error is, nor whether we can recover from it,
                 // so just return to prevent an endless loop in the outer "while" statement
-                setErrorAndEmit(QAbstractSocket::SslInternalError,
-                                QSslSocket::tr("Error while reading: %1").arg(getErrorsFromOpenSsl()));
+                {
+                    const ScopedBool bg(inSetAndEmitError, true);
+                    setErrorAndEmit(QAbstractSocket::SslInternalError,
+                                    QSslSocket::tr("Error while reading: %1").arg(getErrorsFromOpenSsl()));
+                }
                 return;
             default:
                 // SSL_ERROR_WANT_CONNECT, SSL_ERROR_WANT_ACCEPT: can only happen with a
@@ -810,15 +921,18 @@ void QSslSocketBackendPrivate::transmit()
                 // SSL_ERROR_WANT_X509_LOOKUP: can only happen with a
                 // SSL_CTX_set_client_cert_cb(), which we do not call.
                 // So this default case should never be triggered.
-                setErrorAndEmit(QAbstractSocket::SslInternalError,
-                                QSslSocket::tr("Error while reading: %1").arg(getErrorsFromOpenSsl()));
+                {
+                    const ScopedBool bg(inSetAndEmitError, true);
+                    setErrorAndEmit(QAbstractSocket::SslInternalError,
+                                    QSslSocket::tr("Error while reading: %1").arg(getErrorsFromOpenSsl()));
+                }
                 break;
             }
         } while (ssl && readBytes > 0);
     } while (ssl && transmitting);
 }
 
-static QSslError _q_OpenSSL_to_QSslError(int errorCode, const QSslCertificate &cert)
+QSslError _q_OpenSSL_to_QSslError(int errorCode, const QSslCertificate &cert)
 {
     QSslError error;
     switch (errorCode) {
@@ -867,20 +981,32 @@ static QSslError _q_OpenSSL_to_QSslError(int errorCode, const QSslCertificate &c
     return error;
 }
 
+QString QSslSocketBackendPrivate::msgErrorsDuringHandshake()
+{
+    return QSslSocket::tr("Error during SSL handshake: %1")
+                         .arg(QSslSocketBackendPrivate::getErrorsFromOpenSsl());
+}
+
 bool QSslSocketBackendPrivate::startHandshake()
 {
     Q_Q(QSslSocket);
 
     // Check if the connection has been established. Get all errors from the
     // verification stage.
-    QMutexLocker locker(&_q_sslErrorList()->mutex);
-    _q_sslErrorList()->errors.clear();
-    int result = (mode == QSslSocket::SslClientMode) ? q_SSL_connect(ssl) : q_SSL_accept(ssl);
 
-    const auto &lastErrors = _q_sslErrorList()->errors;
+    using ScopedBool = QScopedValueRollback<bool>;
+
+    if (inSetAndEmitError)
+        return false;
+
+    QVector<QSslErrorEntry> lastErrors;
+    q_SSL_set_ex_data(ssl, s_indexForSSLExtraData + 1, &lastErrors);
+    int result = (mode == QSslSocket::SslClientMode) ? q_SSL_connect(ssl) : q_SSL_accept(ssl);
+    q_SSL_set_ex_data(ssl, s_indexForSSLExtraData + 1, nullptr);
+
     if (!lastErrors.isEmpty())
         storePeerCertificates();
-    for (const auto &currentError : lastErrors) {
+    for (const auto &currentError : qAsConst(lastErrors)) {
         emit q->peerVerifyError(_q_OpenSSL_to_QSslError(currentError.code,
                                 configuration.peerCertificateChain.value(currentError.depth)));
         if (q->state() != QAbstractSocket::ConnectedState)
@@ -888,7 +1014,6 @@ bool QSslSocketBackendPrivate::startHandshake()
     }
 
     errorList << lastErrors;
-    locker.unlock();
 
     // Connection aborted during handshake phase.
     if (q->state() != QAbstractSocket::ConnectedState)
@@ -902,12 +1027,14 @@ bool QSslSocketBackendPrivate::startHandshake()
             // The handshake is not yet complete.
             break;
         default:
-            QString errorString
-                    = QSslSocket::tr("Error during SSL handshake: %1").arg(getErrorsFromOpenSsl());
+            QString errorString = QSslSocketBackendPrivate::msgErrorsDuringHandshake();
 #ifdef QSSLSOCKET_DEBUG
             qCDebug(lcSsl) << "QSslSocketBackendPrivate::startHandshake: error!" << errorString;
 #endif
-            setErrorAndEmit(QAbstractSocket::SslHandshakeFailedError, errorString);
+            {
+                const ScopedBool bg(inSetAndEmitError, true);
+                setErrorAndEmit(QAbstractSocket::SslHandshakeFailedError, errorString);
+            }
             q->abort();
         }
         return false;
@@ -1177,119 +1304,6 @@ void QSslSocketBackendPrivate::_q_caRootLoaded(QSslCertificate cert, QSslCertifi
     }
 }
 
-class QWindowsCaRootFetcherThread : public QThread
-{
-public:
-    QWindowsCaRootFetcherThread()
-    {
-        qRegisterMetaType<QSslCertificate>();
-        setObjectName(QStringLiteral("QWindowsCaRootFetcher"));
-        start();
-    }
-    ~QWindowsCaRootFetcherThread()
-    {
-        quit();
-        wait(15500); // worst case, a running request can block for 15 seconds
-    }
-};
-
-Q_GLOBAL_STATIC(QWindowsCaRootFetcherThread, windowsCaRootFetcherThread);
-
-QWindowsCaRootFetcher::QWindowsCaRootFetcher(const QSslCertificate &certificate, QSslSocket::SslMode sslMode)
-    : cert(certificate), mode(sslMode)
-{
-    moveToThread(windowsCaRootFetcherThread());
-}
-
-QWindowsCaRootFetcher::~QWindowsCaRootFetcher()
-{
-}
-
-void QWindowsCaRootFetcher::start()
-{
-    QByteArray der = cert.toDer();
-    PCCERT_CONTEXT wincert = CertCreateCertificateContext(X509_ASN_ENCODING, (const BYTE *)der.constData(), der.length());
-    if (!wincert) {
-#ifdef QSSLSOCKET_DEBUG
-        qCDebug(lcSsl, "QWindowsCaRootFetcher failed to convert certificate to windows form");
-#endif
-        emit finished(cert, QSslCertificate());
-        deleteLater();
-        return;
-    }
-
-    CERT_CHAIN_PARA parameters;
-    memset(&parameters, 0, sizeof(parameters));
-    parameters.cbSize = sizeof(parameters);
-    // set key usage constraint
-    parameters.RequestedUsage.dwType = USAGE_MATCH_TYPE_AND;
-    parameters.RequestedUsage.Usage.cUsageIdentifier = 1;
-    LPSTR oid = (LPSTR)(mode == QSslSocket::SslClientMode ? szOID_PKIX_KP_SERVER_AUTH : szOID_PKIX_KP_CLIENT_AUTH);
-    parameters.RequestedUsage.Usage.rgpszUsageIdentifier = &oid;
-
-#ifdef QSSLSOCKET_DEBUG
-    QElapsedTimer stopwatch;
-    stopwatch.start();
-#endif
-    PCCERT_CHAIN_CONTEXT chain;
-    BOOL result = CertGetCertificateChain(
-        0, //default engine
-        wincert,
-        0, //current date/time
-        0, //default store
-        &parameters,
-        0, //default dwFlags
-        0, //reserved
-        &chain);
-#ifdef QSSLSOCKET_DEBUG
-    qCDebug(lcSsl) << "QWindowsCaRootFetcher" << stopwatch.elapsed() << "ms to get chain";
-#endif
-
-    QSslCertificate trustedRoot;
-    if (result) {
-#ifdef QSSLSOCKET_DEBUG
-        qCDebug(lcSsl) << "QWindowsCaRootFetcher - examining windows chains";
-        if (chain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR)
-            qCDebug(lcSsl) << " - TRUSTED";
-        else
-            qCDebug(lcSsl) << " - NOT TRUSTED" << chain->TrustStatus.dwErrorStatus;
-        if (chain->TrustStatus.dwInfoStatus & CERT_TRUST_IS_SELF_SIGNED)
-            qCDebug(lcSsl) << " - SELF SIGNED";
-        qCDebug(lcSsl) << "QSslSocketBackendPrivate::fetchCaRootForCert - dumping simple chains";
-        for (unsigned int i = 0; i < chain->cChain; i++) {
-            if (chain->rgpChain[i]->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR)
-                qCDebug(lcSsl) << " - TRUSTED SIMPLE CHAIN" << i;
-            else
-                qCDebug(lcSsl) << " - UNTRUSTED SIMPLE CHAIN" << i << "reason:" << chain->rgpChain[i]->TrustStatus.dwErrorStatus;
-            for (unsigned int j = 0; j < chain->rgpChain[i]->cElement; j++) {
-                QSslCertificate foundCert(QByteArray((const char *)chain->rgpChain[i]->rgpElement[j]->pCertContext->pbCertEncoded
-                    , chain->rgpChain[i]->rgpElement[j]->pCertContext->cbCertEncoded), QSsl::Der);
-                qCDebug(lcSsl) << "   - " << foundCert;
-            }
-        }
-        qCDebug(lcSsl) << " - and" << chain->cLowerQualityChainContext << "low quality chains"; //expect 0, we haven't asked for them
-#endif
-
-        //based on http://msdn.microsoft.com/en-us/library/windows/desktop/aa377182%28v=vs.85%29.aspx
-        //about the final chain rgpChain[cChain-1] which must begin with a trusted root to be valid
-        if (chain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR
-            && chain->cChain > 0) {
-            const PCERT_SIMPLE_CHAIN finalChain = chain->rgpChain[chain->cChain - 1];
-            // http://msdn.microsoft.com/en-us/library/windows/desktop/aa377544%28v=vs.85%29.aspx
-            // rgpElement[0] is the end certificate chain element. rgpElement[cElement-1] is the self-signed "root" certificate element.
-            if (finalChain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR
-                && finalChain->cElement > 0) {
-                    trustedRoot = QSslCertificate(QByteArray((const char *)finalChain->rgpElement[finalChain->cElement - 1]->pCertContext->pbCertEncoded
-                        , finalChain->rgpElement[finalChain->cElement - 1]->pCertContext->cbCertEncoded), QSsl::Der);
-            }
-        }
-        CertFreeCertificateChain(chain);
-    }
-    CertFreeCertificateContext(wincert);
-
-    emit finished(cert, trustedRoot);
-    deleteLater();
-}
 #endif
 
 void QSslSocketBackendPrivate::disconnectFromHost()
@@ -1345,6 +1359,8 @@ QSsl::SslProtocol QSslSocketBackendPrivate::sessionProtocol() const
         return QSsl::TlsV1_1;
     case 0x303:
         return QSsl::TlsV1_2;
+    case 0x304:
+        return QSsl::TlsV1_3;
     }
 
     return QSsl::UnknownProtocol;
@@ -1400,13 +1416,26 @@ QList<QSslError> QSslSocketBackendPrivate::verify(const QList<QSslCertificate> &
         }
     }
 
-    QMutexLocker sslErrorListMutexLocker(&_q_sslErrorList()->mutex);
+    QVector<QSslErrorEntry> lastErrors;
+#if QT_CONFIG(opensslv11)
+    if (!q_X509_STORE_set_ex_data(certStore, 0, &lastErrors)) {
+        qCWarning(lcSsl) << "Unable to attach external data (error list) to a store";
+        errors << QSslError(QSslError::UnspecifiedError);
+        return errors;
+    }
+#else
+    if (!q_CRYPTO_set_ex_data(&certStore->ex_data, 0, &lastErrors)) {
+        qCWarning(lcSsl) << "Unable to attach external data (error list) to a store";
+        errors << QSslError(QSslError::UnspecifiedError);
+        return errors;
+    }
+#endif // opensslv11
 
     // Register a custom callback to get all verification errors.
     q_X509_STORE_set_verify_cb(certStore, q_X509Callback);
 
     // Build the chain of intermediate certificates
-    STACK_OF(X509) *intermediates = 0;
+    STACK_OF(X509) *intermediates = nullptr;
     if (certificateChain.length() > 1) {
         intermediates = (STACK_OF(X509) *) q_OPENSSL_sk_new_null();
 
@@ -1450,12 +1479,7 @@ QList<QSslError> QSslSocketBackendPrivate::verify(const QList<QSslCertificate> &
     q_OPENSSL_sk_free((OPENSSL_STACK *)intermediates);
 
     // Now process the errors
-    const auto errorList = std::move(_q_sslErrorList()->errors);
-    _q_sslErrorList()->errors.clear();
 
-    sslErrorListMutexLocker.unlock();
-
-    // Translate the errors
     if (QSslCertificatePrivate::isBlacklisted(certificateChain[0])) {
         QSslError error(QSslError::CertificateBlacklisted, certificateChain[0]);
         errors << error;
@@ -1469,8 +1493,8 @@ QList<QSslError> QSslSocketBackendPrivate::verify(const QList<QSslCertificate> &
     }
 
     // Translate errors from the error list into QSslErrors.
-    errors.reserve(errors.size() + errorList.size());
-    for (const auto &error : qAsConst(errorList))
+    errors.reserve(errors.size() + lastErrors.size());
+    for (const auto &error : qAsConst(lastErrors))
         errors << _q_OpenSSL_to_QSslError(error.code, certificateChain.value(error.depth));
 
     q_X509_STORE_free(certStore);
@@ -1499,9 +1523,10 @@ bool QSslSocketBackendPrivate::importPkcs12(QIODevice *device,
     BIO *bio = q_BIO_new_mem_buf(const_cast<char *>(pkcs12data.constData()), pkcs12data.size());
 
     // Create the PKCS#12 object
-    PKCS12 *p12 = q_d2i_PKCS12_bio(bio, 0);
+    PKCS12 *p12 = q_d2i_PKCS12_bio(bio, nullptr);
     if (!p12) {
-        qCWarning(lcSsl, "Unable to read PKCS#12 structure, %s", q_ERR_error_string(q_ERR_get_error(), 0));
+        qCWarning(lcSsl, "Unable to read PKCS#12 structure, %s",
+                  q_ERR_error_string(q_ERR_get_error(), nullptr));
         q_BIO_free(bio);
         return false;
     }
@@ -1509,10 +1534,11 @@ bool QSslSocketBackendPrivate::importPkcs12(QIODevice *device,
     // Extract the data
     EVP_PKEY *pkey = nullptr;
     X509 *x509;
-    STACK_OF(X509) *ca = 0;
+    STACK_OF(X509) *ca = nullptr;
 
     if (!q_PKCS12_parse(p12, passPhrase.constData(), &pkey, &x509, &ca)) {
-        qCWarning(lcSsl, "Unable to parse PKCS#12 structure, %s", q_ERR_error_string(q_ERR_get_error(), 0));
+        qCWarning(lcSsl, "Unable to parse PKCS#12 structure, %s",
+                  q_ERR_error_string(q_ERR_get_error(), nullptr));
         q_PKCS12_free(p12);
         q_BIO_free(bio);
         return false;

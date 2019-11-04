@@ -103,7 +103,7 @@ QThreadData::~QThreadData()
 
 void QThreadData::ref()
 {
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
     (void) _ref.ref();
     Q_ASSERT(_ref.load() != 0);
 #endif
@@ -111,10 +111,18 @@ void QThreadData::ref()
 
 void QThreadData::deref()
 {
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
     if (!_ref.deref())
         delete this;
 #endif
+}
+
+QAbstractEventDispatcher *QThreadData::createEventDispatcher()
+{
+    QAbstractEventDispatcher *ed = QThreadPrivate::createEventDispatcher(this);
+    eventDispatcher.storeRelease(ed);
+    ed->startingUp();
+    return ed;
 }
 
 /*
@@ -126,7 +134,7 @@ QAdoptedThread::QAdoptedThread(QThreadData *data)
 {
     // thread should be running and not finished for the lifetime
     // of the application (even if QCoreApplication goes away)
-#ifndef QT_NO_THREAD
+#if QT_CONFIG(thread)
     d_func()->running = true;
     d_func()->finished = false;
     init();
@@ -140,12 +148,13 @@ QAdoptedThread::~QAdoptedThread()
     // fprintf(stderr, "~QAdoptedThread = %p\n", this);
 }
 
+#if QT_CONFIG(thread)
 void QAdoptedThread::run()
 {
     // this function should never be called
     qFatal("QAdoptedThread::run(): Internal error, this implementation should never be called.");
 }
-#ifndef QT_NO_THREAD
+
 /*
   QThreadPrivate
 */
@@ -289,12 +298,9 @@ QThreadPrivate::~QThreadPrivate()
     \warning The handle returned by this function is used for internal
     purposes and should not be used in any application code.
 
-    \warning On Windows, the returned value is a pseudo-handle for the
-    current thread. It can't be used for numerical comparison. i.e.,
-    this function returns the DWORD (Windows-Thread ID) returned by
-    the Win32 function getCurrentThreadId(), not the HANDLE
-    (Windows-Thread HANDLE) returned by the Win32 function
-    getCurrentThread().
+    \note On Windows, this function returns the DWORD (Windows-Thread
+    ID) returned by the Win32 function GetCurrentThreadId(), not the pseudo-HANDLE
+    (Windows-Thread HANDLE) returned by the Win32 function GetCurrentThread().
 */
 
 /*!
@@ -644,6 +650,13 @@ QThread::Priority QThread::priority() const
 
     Forces the current thread to sleep for \a secs seconds.
 
+    Avoid using this function if you need to wait for a given condition to
+    change. Instead, connect a slot to the signal that indicates the change or
+    use an event handler (see \l QObject::event()).
+
+    \note This function does not guarantee accuracy. The application may sleep
+    longer than \a secs under heavy load conditions.
+
     \sa msleep(), usleep()
 */
 
@@ -652,6 +665,14 @@ QThread::Priority QThread::priority() const
 
     Forces the current thread to sleep for \a msecs milliseconds.
 
+    Avoid using this function if you need to wait for a given condition to
+    change. Instead, connect a slot to the signal that indicates the change or
+    use an event handler (see \l QObject::event()).
+
+    \note This function does not guarantee accuracy. The application may sleep
+    longer than \a msecs under heavy load conditions. Some OSes might round \a
+    msecs up to 10 ms or 15 ms.
+
     \sa sleep(), usleep()
 */
 
@@ -659,6 +680,15 @@ QThread::Priority QThread::priority() const
     \fn void QThread::usleep(unsigned long usecs)
 
     Forces the current thread to sleep for \a usecs microseconds.
+
+    Avoid using this function if you need to wait for a given condition to
+    change. Instead, connect a slot to the signal that indicates the change or
+    use an event handler (see \l QObject::event()).
+
+    \note This function does not guarantee accuracy. The application may sleep
+    longer than \a usecs under heavy load conditions. Some OSes might round \a
+    usecs up to 10 ms or 15 ms; on Windows, it will be rounded up to a multiple
+    of 1 ms.
 
     \sa sleep(), msleep()
 */
@@ -747,12 +777,71 @@ int QThread::loopLevel() const
     return d->data->eventLoops.size();
 }
 
-#else // QT_NO_THREAD
+#else // QT_CONFIG(thread)
 
 QThread::QThread(QObject *parent)
-    : QObject(*(new QThreadPrivate), (QObject*)0){
+    : QObject(*(new QThreadPrivate), parent)
+{
     Q_D(QThread);
     d->data->thread = this;
+}
+
+QThread::~QThread()
+{
+
+}
+
+void QThread::run()
+{
+
+}
+
+int QThread::exec()
+{
+    return 0;
+}
+
+void QThread::start(Priority priority)
+{
+    Q_D(QThread);
+    Q_UNUSED(priority);
+    d->running = true;
+}
+
+void QThread::terminate()
+{
+
+}
+
+void QThread::quit()
+{
+
+}
+
+void QThread::exit(int returnCode)
+{
+    Q_D(QThread);
+    d->data->quitNow = true;
+    for (int i = 0; i < d->data->eventLoops.size(); ++i) {
+        QEventLoop *eventLoop = d->data->eventLoops.at(i);
+        eventLoop->exit(returnCode);
+    }
+}
+
+bool QThread::wait(unsigned long time)
+{
+    Q_UNUSED(time);
+    return false;
+}
+
+bool QThread::event(QEvent* event)
+{
+    return QObject::event(event);
+}
+
+Qt::HANDLE QThread::currentThreadId() Q_DECL_NOTHROW
+{
+    return Qt::HANDLE(currentThread());
 }
 
 QThread *QThread::currentThread()
@@ -760,16 +849,48 @@ QThread *QThread::currentThread()
     return QThreadData::current()->thread;
 }
 
-QThreadData* QThreadData::current()
+int QThread::idealThreadCount() Q_DECL_NOTHROW
 {
-    static QThreadData *data = 0; // reinterpret_cast<QThreadData *>(pthread_getspecific(current_thread_data_key));
-    if (!data) {
-        QScopedPointer<QThreadData> newdata(new QThreadData);
-        newdata->thread = new QAdoptedThread(newdata.data());
-        data = newdata.take();
+    return 1;
+}
+
+void QThread::yieldCurrentThread()
+{
+
+}
+
+bool QThread::isFinished() const
+{
+    return false;
+}
+
+bool QThread::isRunning() const
+{
+    Q_D(const QThread);
+    return d->running;
+}
+
+// No threads: so we can just use static variables
+static QThreadData *data = 0;
+
+QThreadData *QThreadData::current(bool createIfNecessary)
+{
+    if (!data && createIfNecessary) {
+        data = new QThreadData;
+        data->thread = new QAdoptedThread(data);
+        data->threadId.store(Qt::HANDLE(data->thread));
         data->deref();
+        data->isAdopted = true;
+        if (!QCoreApplicationPrivate::theMainThread)
+            QCoreApplicationPrivate::theMainThread = data->thread.load();
     }
     return data;
+}
+
+void QThreadData::clearCurrentThreadData()
+{
+    delete data;
+    data = 0;
 }
 
 /*!
@@ -783,13 +904,23 @@ QThread::QThread(QThreadPrivate &dd, QObject *parent)
     d->data->thread = this;
 }
 
-#endif // QT_NO_THREAD
+QThreadPrivate::QThreadPrivate(QThreadData *d) : data(d ? d : new QThreadData)
+{
+}
+
+QThreadPrivate::~QThreadPrivate()
+{
+    data->thread = nullptr; // prevent QThreadData from deleting the QThreadPrivate (again).
+    delete data;
+}
+
+#endif // QT_CONFIG(thread)
 
 /*!
     \since 5.0
 
     Returns a pointer to the event dispatcher object for the thread. If no event
-    dispatcher exists for the thread, this function returns 0.
+    dispatcher exists for the thread, this function returns \nullptr.
 */
 QAbstractEventDispatcher *QThread::eventDispatcher() const
 {
@@ -819,6 +950,8 @@ void QThread::setEventDispatcher(QAbstractEventDispatcher *eventDispatcher)
             qWarning("QThread::setEventDispatcher: Could not move event dispatcher to target thread");
     }
 }
+
+#if QT_CONFIG(thread)
 
 /*!
     \reimp
@@ -982,6 +1115,8 @@ QDaemonThread::QDaemonThread(QObject *parent)
 QDaemonThread::~QDaemonThread()
 {
 }
+
+#endif // QT_CONFIG(thread)
 
 QT_END_NAMESPACE
 

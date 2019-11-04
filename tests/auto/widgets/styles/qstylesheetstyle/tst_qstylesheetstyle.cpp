@@ -33,6 +33,7 @@
 #include <QMetaObject>
 
 #include <private/qstylesheetstyle_p.h>
+#include <private/qhighdpiscaling_p.h>
 #include <QtTest/private/qtesthelpers_p.h>
 
 using namespace QTestPrivate;
@@ -47,6 +48,7 @@ public:
 private slots:
     void init();
     void repolish();
+    void repolish_without_crashing();
     void numinstances();
     void widgetsBeforeAppStyleSheet();
     void widgetsAfterAppStyleSheet();
@@ -98,7 +100,12 @@ private slots:
     void widgetStyle();
     void appStyle();
     void QTBUG11658_cachecrash();
+    void styleSheetTargetAttribute();
     void unpolish();
+
+    void highdpiImages_data();
+    void highdpiImages();
+
 private:
     QColor COLOR(const QWidget& w) {
         w.ensurePolished();
@@ -359,6 +366,26 @@ void tst_QStyleSheetStyle::repolish()
     p1.setStyleSheet("");
     QCOMPARE(COLOR(p1), APPCOLOR(p1));
     QCOMPARE(BACKGROUND(p1), APPBACKGROUND(p1));
+}
+
+void tst_QStyleSheetStyle::repolish_without_crashing()
+{
+    // This used to crash, QTBUG-69204
+    QMainWindow w;
+    QScopedPointer<QSplitter> splitter1(new QSplitter(w.centralWidget()));
+    QScopedPointer<QSplitter> splitter2(new QSplitter);
+    QScopedPointer<QSplitter> splitter3(new QSplitter);
+    splitter2->addWidget(splitter3.data());
+
+    splitter2->setStyleSheet("color: red");
+    QScopedPointer<QLabel> label(new QLabel);
+    label->setTextFormat(Qt::RichText);
+    splitter3->addWidget(label.data());
+    label->setText("hey");
+
+    splitter1->addWidget(splitter2.data());
+    w.show();
+    QCOMPARE(COLOR(*label), QColor(Qt::red));
 }
 
 void tst_QStyleSheetStyle::widgetStyle()
@@ -735,9 +762,9 @@ void tst_QStyleSheetStyle::fontPropagation()
     QCOMPARE(FONTSIZE(pb), 20);
 
     QWidget window;
-    window.setStyleSheet("* { font-size: 10pt }");
+    window.setStyleSheet("* { font-size: 9pt }");
     pb.setParent(&window);
-    QCOMPARE(FONTSIZE(pb), 10);
+    QCOMPARE(FONTSIZE(pb), 9);
     window.setStyleSheet("");
     QCOMPARE(FONTSIZE(pb), buttonFontSize);
 
@@ -2000,6 +2027,59 @@ void tst_QStyleSheetStyle::widgetStylePropagation()
     QCOMPARE(COLOR(childLabel), childExpectedColor);
 }
 
+void tst_QStyleSheetStyle::styleSheetTargetAttribute()
+{
+    QGroupBox gb;
+    QLabel lb(&gb);
+    QPushButton pb(&lb);
+
+    gb.ensurePolished(); lb.ensurePolished(); pb.ensurePolished();
+    QCOMPARE(gb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(lb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(pb.testAttribute(Qt::WA_StyleSheetTarget), false);
+
+    qApp->setStyleSheet("QPushButton { background-color: blue; }");
+
+    gb.ensurePolished(); lb.ensurePolished(); pb.ensurePolished();
+    QCOMPARE(gb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(lb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(pb.testAttribute(Qt::WA_StyleSheetTarget), true);
+
+    qApp->setStyleSheet("QGroupBox { background-color: blue; }");
+
+    gb.ensurePolished(); lb.ensurePolished(); pb.ensurePolished();
+    QCOMPARE(gb.testAttribute(Qt::WA_StyleSheetTarget), true);
+    QCOMPARE(lb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(pb.testAttribute(Qt::WA_StyleSheetTarget), false);
+
+    qApp->setStyleSheet("QGroupBox * { background-color: blue; }");
+
+    gb.ensurePolished(); lb.ensurePolished(); pb.ensurePolished();
+    QCOMPARE(gb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(lb.testAttribute(Qt::WA_StyleSheetTarget), true);
+    QCOMPARE(pb.testAttribute(Qt::WA_StyleSheetTarget), true);
+
+    qApp->setStyleSheet("* { background-color: blue; }");
+    gb.ensurePolished(); lb.ensurePolished(); pb.ensurePolished();
+    QCOMPARE(gb.testAttribute(Qt::WA_StyleSheetTarget), true);
+    QCOMPARE(lb.testAttribute(Qt::WA_StyleSheetTarget), true);
+    QCOMPARE(pb.testAttribute(Qt::WA_StyleSheetTarget), true);
+
+    qApp->setStyleSheet("QLabel { font-size: 32pt; }");
+
+    gb.ensurePolished(); lb.ensurePolished(); pb.ensurePolished();
+    QCOMPARE(gb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(lb.testAttribute(Qt::WA_StyleSheetTarget), true);
+    QCOMPARE(pb.testAttribute(Qt::WA_StyleSheetTarget), false);
+
+    qApp->setStyleSheet("");
+
+    gb.ensurePolished(); lb.ensurePolished(); pb.ensurePolished();
+    QCOMPARE(gb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(lb.testAttribute(Qt::WA_StyleSheetTarget), false);
+    QCOMPARE(pb.testAttribute(Qt::WA_StyleSheetTarget), false);
+}
+
 void tst_QStyleSheetStyle::unpolish()
 {
     QWidget w;
@@ -2009,6 +2089,36 @@ void tst_QStyleSheetStyle::unpolish()
     QCOMPARE(w.minimumWidth(), 100);
     w.setStyleSheet("");
     QCOMPARE(w.minimumWidth(), 0);
+}
+
+void tst_QStyleSheetStyle::highdpiImages_data()
+{
+    QTest::addColumn<qreal>("screenFactor");
+    QTest::addColumn<QColor>("color");
+
+    QTest::newRow("highdpi") << 2.0 << QColor(0x00, 0xFF, 0x00);
+    QTest::newRow("lowdpi")  << 1.0 << QColor(0xFF, 0x00, 0x00);
+}
+
+void tst_QStyleSheetStyle::highdpiImages()
+{
+    QFETCH(qreal, screenFactor);
+    QFETCH(QColor, color);
+
+    QWidget w;
+    QScreen *screen = QGuiApplication::primaryScreen();
+    w.move(screen->availableGeometry().topLeft());
+    QHighDpiScaling::setScreenFactor(screen, screenFactor);
+    w.setStyleSheet("QWidget { background-image: url(\":/images/testimage.png\"); }");
+    w.show();
+
+    QVERIFY(QTest::qWaitForWindowExposed(&w));
+    QImage image(w.size(), QImage::Format_ARGB32);
+    w.render(&image);
+    QVERIFY(testForColors(image, color));
+
+    QHighDpiScaling::setScreenFactor(screen, 1.0);
+    QHighDpiScaling::updateHighDpiScaling(); // reset to normal
 }
 
 QTEST_MAIN(tst_QStyleSheetStyle)

@@ -218,36 +218,39 @@ void QQnxScreenEventHandler::injectKeyboardEvent(int flags, int sym, int modifie
 void QQnxScreenEventHandler::setScreenEventThread(QQnxScreenEventThread *eventThread)
 {
     m_eventThread = eventThread;
+    connect(m_eventThread, &QQnxScreenEventThread::eventsPending,
+            this, &QQnxScreenEventHandler::processEvents);
 }
 
-void QQnxScreenEventHandler::processEventsFromScreenThread()
+void QQnxScreenEventHandler::processEvents()
 {
     if (!m_eventThread)
         return;
 
-    QQnxScreenEventArray *events = m_eventThread->lock();
+    screen_event_t event = nullptr;
+    if (screen_create_event(&event) != 0)
+        return;
 
-    for (int i = 0; i < events->size(); ++i) {
-        screen_event_t event = events->at(i);
-        if (!event)
-            continue;
-        (*events)[i] = 0;
+    int count = 0;
+    for (;;) {
+        if (screen_get_event(m_eventThread->context(), event, 0) != 0)
+            break;
 
-        m_eventThread->unlock();
+        int type = SCREEN_EVENT_NONE;
+        screen_get_event_property_iv(event, SCREEN_PROPERTY_TYPE, &type);
+        if (type == SCREEN_EVENT_NONE)
+            break;
 
+        ++count;
         long result = 0;
         QAbstractEventDispatcher* dispatcher = QAbstractEventDispatcher::instance();
         bool handled = dispatcher && dispatcher->filterNativeEvent(QByteArrayLiteral("screen_event_t"), event, &result);
         if (!handled)
             handleEvent(event);
-        screen_destroy_event(event);
-
-        m_eventThread->lock();
     }
 
-    events->clear();
-
-    m_eventThread->unlock();
+    m_eventThread->armEventsPending(count);
+    screen_destroy_event(event);
 }
 
 void QQnxScreenEventHandler::handleKeyboardEvent(screen_event_t event)
@@ -323,11 +326,11 @@ void QQnxScreenEventHandler::handlePointerEvent(screen_event_t event)
             "Failed to query event wheel delta");
 
     // Map window handle to top-level QWindow
-    QWindow *w = QQnxIntegration::window(qnxWindow);
+    QWindow *w = QQnxIntegration::instance()->window(qnxWindow);
 
     // Generate enter and leave events as needed.
     if (qnxWindow != m_lastMouseWindow) {
-        QWindow *wOld = QQnxIntegration::window(m_lastMouseWindow);
+        QWindow *wOld = QQnxIntegration::instance()->window(m_lastMouseWindow);
 
         if (wOld) {
             QWindowSystemInterface::handleLeaveEvent(wOld);
@@ -435,11 +438,11 @@ void QQnxScreenEventHandler::handleTouchEvent(screen_event_t event, int qnxType)
     if (touchId < MaximumTouchPoints) {
 
         // Map window handle to top-level QWindow
-        QWindow *w = QQnxIntegration::window(qnxWindow);
+        QWindow *w = QQnxIntegration::instance()->window(qnxWindow);
 
         // Generate enter and leave events as needed.
         if (qnxWindow != m_lastMouseWindow) {
-            QWindow *wOld = QQnxIntegration::window(m_lastMouseWindow);
+            QWindow *wOld = QQnxIntegration::instance()->window(m_lastMouseWindow);
 
             if (wOld) {
                 QWindowSystemInterface::handleLeaveEvent(wOld);
@@ -529,7 +532,7 @@ void QQnxScreenEventHandler::handleCloseEvent(screen_event_t event)
     Q_EMIT windowClosed(window);
 
     // Map window handle to top-level QWindow
-    QWindow *w = QQnxIntegration::window(window);
+    QWindow *w = QQnxIntegration::instance()->window(window);
     if (w != 0)
         QWindowSystemInterface::handleCloseEvent(w);
 }
@@ -629,7 +632,7 @@ void QQnxScreenEventHandler::handleKeyboardFocusPropertyEvent(screen_window_t wi
     if (Q_UNLIKELY(window && screen_get_window_property_iv(window, SCREEN_PROPERTY_FOCUS, &focus) != 0))
         qFatal("QQnx: failed to query keyboard focus property, errno=%d", errno);
 
-    QWindow *focusWindow = QQnxIntegration::window(window);
+    QWindow *focusWindow = QQnxIntegration::instance()->window(window);
 
     if (m_focusLostTimer != -1) {
         killTimer(m_focusLostTimer);
@@ -655,7 +658,7 @@ void QQnxScreenEventHandler::handleGeometryPropertyEvent(screen_window_t window)
     }
 
     QRect rect(pos[0], pos[1], size[0], size[1]);
-    QWindow *qtWindow = QQnxIntegration::window(window);
+    QWindow *qtWindow = QQnxIntegration::instance()->window(window);
     if (qtWindow) {
         qtWindow->setGeometry(rect);
         QWindowSystemInterface::handleGeometryChange(qtWindow, rect);

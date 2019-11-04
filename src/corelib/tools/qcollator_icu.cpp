@@ -55,13 +55,15 @@ QT_BEGIN_NAMESPACE
 void QCollatorPrivate::init()
 {
     cleanup();
+    if (isC())
+        return;
 
     UErrorCode status = U_ZERO_ERROR;
     QByteArray name = QLocalePrivate::get(locale)->bcp47Name('_');
     collator = ucol_open(name.constData(), &status);
     if (U_FAILURE(status)) {
         qWarning("Could not create collator: %d", status);
-        collator = 0;
+        collator = nullptr;
         dirty = false;
         return;
     }
@@ -100,7 +102,7 @@ void QCollatorPrivate::cleanup()
 {
     if (collator)
         ucol_close(collator);
-    collator = 0;
+    collator = nullptr;
 }
 
 int QCollator::compare(const QChar *s1, int len1, const QChar *s2, int len2) const
@@ -140,6 +142,8 @@ QCollatorSortKey QCollator::sortKey(const QString &string) const
 {
     if (d->dirty)
         d->init();
+    if (d->isC())
+        return QCollatorSortKey(new QCollatorSortKeyPrivate(string.toUtf8()));
 
     if (d->collator) {
         QByteArray result(16 + string.size() + (string.size() >> 2), Qt::Uninitialized);

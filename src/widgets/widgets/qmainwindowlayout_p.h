@@ -92,6 +92,7 @@ public:
     QPoint hoverPos;
 
 #if QT_CONFIG(dockwidget)
+
 #if QT_CONFIG(cursor)
     QCursor separatorCursor(const QList<int> &path);
     void adjustCursor(const QPoint &pos);
@@ -108,13 +109,15 @@ public:
     bool startSeparatorMove(const QPoint &pos);
     bool separatorMove(const QPoint &pos);
     bool endSeparatorMove(const QPoint &pos);
+    bool windowEvent(QEvent *e);
 
 #endif // QT_CONFIG(dockwidget)
 
-    bool windowEvent(QEvent *e);
 };
 
-#if QT_CONFIG(dockwidget) && QT_CONFIG(cursor)
+#if QT_CONFIG(dockwidget)
+
+#if QT_CONFIG(cursor)
 template <typename Layout>
 QCursor QMainWindowLayoutSeparatorHelper<Layout>::separatorCursor(const QList<int> &path)
 {
@@ -187,14 +190,13 @@ void QMainWindowLayoutSeparatorHelper<Layout>::adjustCursor(const QPoint &pos)
         }
     }
 }
-#endif // QT_CONFIG(cursor) && QT_CONFIG(dockwidget)
+#endif // QT_CONFIG(cursor)
 
 template <typename Layout>
 bool QMainWindowLayoutSeparatorHelper<Layout>::windowEvent(QEvent *event)
 {
     QWidget *w = window();
     switch (event->type()) {
-#if QT_CONFIG(dockwidget)
     case QEvent::Paint: {
         QPainter p(w);
         QRegion r = static_cast<QPaintEvent *>(event)->region();
@@ -290,14 +292,12 @@ bool QMainWindowLayoutSeparatorHelper<Layout>::windowEvent(QEvent *event)
             return true;
         }
         break;
-#endif // QT_CONFIG(dockwidget)
     default:
         break;
     }
     return false;
 }
 
-#if QT_CONFIG(dockwidget)
 template <typename Layout>
 bool QMainWindowLayoutSeparatorHelper<Layout>::startSeparatorMove(const QPoint &pos)
 {

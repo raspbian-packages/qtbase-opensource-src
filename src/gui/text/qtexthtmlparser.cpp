@@ -447,13 +447,6 @@ static const QTextHtmlElement elements[Html_NumElements]= {
     { "var",        Html_var,        QTextHtmlElement::DisplayInline },
 };
 
-#if defined(Q_CC_MSVC) && _MSC_VER < 1600
-static bool operator<(const QTextHtmlElement &e1, const QTextHtmlElement &e2)
-{
-    return QLatin1String(e1.name) < QLatin1String(e2.name);
-}
-#endif
-
 static bool operator<(const QString &str, const QTextHtmlElement &e)
 {
     return str < QLatin1String(e.name);
@@ -1727,6 +1720,8 @@ QStringList QTextHtmlStyleSelector::nodeNames(NodePtr node) const
 
 #endif // QT_NO_CSSPARSER
 
+#ifndef QT_NO_CSSPARSER
+
 static inline int findAttribute(const QStringList &attributes, const QString &name)
 {
     int idx = -1;
@@ -1735,8 +1730,6 @@ static inline int findAttribute(const QStringList &attributes, const QString &na
     } while (idx != -1 && (idx % 2 == 1));
     return idx;
 }
-
-#ifndef QT_NO_CSSPARSER
 
 QString QTextHtmlStyleSelector::attribute(NodePtr node, const QString &name) const
 {

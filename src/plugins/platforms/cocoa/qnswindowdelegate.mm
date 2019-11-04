@@ -39,30 +39,29 @@
 
 #include "qnswindowdelegate.h"
 #include "qcocoahelpers.h"
+#include "qcocoawindow.h"
 #include "qcocoascreen.h"
 
 #include <QDebug>
+#include <QtCore/private/qcore_mac_p.h>
 #include <qpa/qplatformscreen.h>
 #include <qpa/qwindowsysteminterface.h>
 
 static QRegExp whitespaceRegex = QRegExp(QStringLiteral("\\s*"));
 
-@implementation QNSWindowDelegate
-
-- (id)initWithQCocoaWindow:(QCocoaWindow *)cocoaWindow
+static QCocoaWindow *toPlatformWindow(NSWindow *window)
 {
-    if (self = [super init])
-        m_cocoaWindow = cocoaWindow;
-
-    return self;
+    if ([window conformsToProtocol:@protocol(QNSWindowProtocol)])
+        return static_cast<QCocoaNSWindow *>(window).platformWindow;
+    return nullptr;
 }
 
-- (BOOL)windowShouldClose:(NSNotification *)notification
+@implementation QNSWindowDelegate
+
+- (BOOL)windowShouldClose:(NSWindow *)window
 {
-    Q_UNUSED(notification);
-    if (m_cocoaWindow) {
-        return m_cocoaWindow->windowShouldClose();
-    }
+    if (QCocoaWindow *platformWindow = toPlatformWindow(window))
+        return platformWindow->windowShouldClose();
 
     return YES;
 }
@@ -76,14 +75,16 @@ static QRegExp whitespaceRegex = QRegExp(QStringLiteral("\\s*"));
 - (NSRect)windowWillUseStandardFrame:(NSWindow *)window defaultFrame:(NSRect)proposedFrame
 {
     Q_UNUSED(proposedFrame);
-    Q_ASSERT(window == m_cocoaWindow->nativeWindow());
-    const QWindow *w = m_cocoaWindow->window();
+
+    QCocoaWindow *platformWindow = toPlatformWindow(window);
+    Q_ASSERT(platformWindow);
+    const QWindow *w = platformWindow->window();
 
     // maximumSize() refers to the client size, but AppKit expects the full frame size
     QSizeF maximumSize = w->maximumSize() + QSize(0, w->frameMargins().top());
 
     // The window should never be larger than the current screen geometry
-    const QRectF screenGeometry = m_cocoaWindow->screen()->geometry();
+    const QRectF screenGeometry = platformWindow->screen()->geometry();
     maximumSize = maximumSize.boundedTo(screenGeometry.size());
 
     // Use the current frame position for the initial maximized frame,
@@ -105,23 +106,27 @@ static QRegExp whitespaceRegex = QRegExp(QStringLiteral("\\s*"));
 
 - (BOOL)window:(NSWindow *)window shouldPopUpDocumentPathMenu:(NSMenu *)menu
 {
-    Q_UNUSED(window);
     Q_UNUSED(menu);
+
+    QCocoaWindow *platformWindow = toPlatformWindow(window);
+    Q_ASSERT(platformWindow);
 
     // Only pop up document path if the filename is non-empty. We allow whitespace, to
     // allow faking a window icon by setting the file path to a single space character.
-    return !whitespaceRegex.exactMatch(m_cocoaWindow->window()->filePath());
+    return !whitespaceRegex.exactMatch(platformWindow->window()->filePath());
 }
 
 - (BOOL)window:(NSWindow *)window shouldDragDocumentWithEvent:(NSEvent *)event from:(NSPoint)dragImageLocation withPasteboard:(NSPasteboard *)pasteboard
 {
-    Q_UNUSED(window);
     Q_UNUSED(event);
     Q_UNUSED(dragImageLocation);
     Q_UNUSED(pasteboard);
 
+    QCocoaWindow *platformWindow = toPlatformWindow(window);
+    Q_ASSERT(platformWindow);
+
     // Only allow drag if the filename is non-empty. We allow whitespace, to
     // allow faking a window icon by setting the file path to a single space.
-    return !whitespaceRegex.exactMatch(m_cocoaWindow->window()->filePath());
+    return !whitespaceRegex.exactMatch(platformWindow->window()->filePath());
 }
 @end

@@ -97,16 +97,18 @@ HPack::HttpHeader build_headers(const QHttpNetworkRequest &request, quint32 maxH
         if (size.second > maxHeaderListSize)
             break;
 
-        QByteArray key(field.first.toLower());
-        if (key == "connection" || key == "host" || key == "keep-alive"
-            || key == "proxy-connection" || key == "transfer-encoding")
+        if (field.first.compare("connection", Qt::CaseInsensitive) == 0 ||
+                field.first.compare("host", Qt::CaseInsensitive) == 0 ||
+                field.first.compare("keep-alive", Qt::CaseInsensitive) == 0 ||
+                field.first.compare("proxy-connection", Qt::CaseInsensitive) == 0 ||
+                field.first.compare("transfer-encoding", Qt::CaseInsensitive) == 0)
             continue; // Those headers are not valid (section 3.2.1) - from QSpdyProtocolHandler
         // TODO: verify with specs, which fields are valid to send ....
         // toLower - 8.1.2 .... "header field names MUST be converted to lowercase prior
         // to their encoding in HTTP/2.
         // A request or response containing uppercase header field names
         // MUST be treated as malformed (Section 8.1.2.6)".
-        header.push_back(HeaderField(key, field.second));
+        header.push_back(HeaderField(field.first.toLower(), field.second));
     }
 
     return header;
@@ -168,7 +170,6 @@ QHttp2ProtocolHandler::QHttp2ProtocolHandler(QHttpNetworkConnectionChannel *chan
       encoder(HPack::FieldLookupTable::DefaultSize, true)
 {
     Q_ASSERT(channel && m_connection);
-
     continuedFrames.reserve(20);
 
     const ProtocolParameters params(m_connection->http2Parameters());
@@ -196,7 +197,7 @@ QHttp2ProtocolHandler::QHttp2ProtocolHandler(QHttpNetworkConnectionChannel *chan
         }
     }
 
-    if (!channel->ssl) {
+    if (!channel->ssl && m_connection->connectionType() != QHttpNetworkConnection::ConnectionTypeHTTP2Direct) {
         // We upgraded from HTTP/1.1 to HTTP/2. channel->request was already sent
         // as HTTP/1.1 request. The response with status code 101 triggered
         // protocol switch and now we are waiting for the real response, sent
@@ -320,10 +321,32 @@ bool QHttp2ProtocolHandler::sendRequest()
         return false;
     }
 
+    // Process 'fake' (created by QNetworkAccessManager::connectToHostEncrypted())
+    // requests first:
+    auto &requests = m_channel->spdyRequestsToSend;
+    for (auto it = requests.begin(), endIt = requests.end(); it != endIt;) {
+        const auto &pair = *it;
+        const QString scheme(pair.first.url().scheme());
+        if (scheme == QLatin1String("preconnect-http")
+            || scheme == QLatin1String("preconnect-https")) {
+            m_connection->preConnectFinished();
+            emit pair.second->finished();
+            it = requests.erase(it);
+            if (!requests.size()) {
+                // Normally, after a connection was established and H2
+                // was negotiated, we send a client preface. connectToHostEncrypted
+                // though is not meant to send any data, it's just a 'preconnect'.
+                // Thus we return early:
+                return true;
+            }
+        } else {
+            ++it;
+        }
+    }
+
     if (!prefaceSent && !sendClientPreface())
         return false;
 
-    auto &requests = m_channel->spdyRequestsToSend;
     if (!requests.size())
         return true;
 
@@ -816,7 +839,6 @@ void QHttp2ProtocolHandler::handleGOAWAY()
         // and a NO_ERROR code."
         if (lastStreamID != Http2::lastValidStreamID || errorCode != HTTP2_NO_ERROR)
             return connectionError(PROTOCOL_ERROR, "GOAWAY invalid stream/error code");
-        lastStreamID = 1;
     } else {
         lastStreamID += 2;
     }
@@ -833,6 +855,14 @@ void QHttp2ProtocolHandler::handleGOAWAY()
     QNetworkReply::NetworkError error = QNetworkReply::NoError;
     QString message;
     qt_error(errorCode, error, message);
+
+    // Even if the GOAWAY frame contains NO_ERROR we must send an error
+    // when terminating streams to ensure users can distinguish from a
+    // successful completion.
+    if (errorCode == HTTP2_NO_ERROR) {
+        error = QNetworkReply::ContentReSendError;
+        message = QLatin1String("Server stopped accepting new streams before this stream was established");
+    }
 
     for (quint32 id = lastStreamID; id < nextID; id += 2) {
         const auto it = activeStreams.find(id);
@@ -1054,6 +1084,7 @@ void QHttp2ProtocolHandler::updateStream(Stream &stream, const HPack::HttpHeader
                                          Qt::ConnectionType connectionType)
 {
     const auto httpReply = stream.reply();
+    const auto &httpRequest = stream.request();
     Q_ASSERT(httpReply || stream.state == Stream::remoteReserved);
 
     if (!httpReply) {
@@ -1112,6 +1143,9 @@ void QHttp2ProtocolHandler::updateStream(Stream &stream, const HPack::HttpHeader
 
     if (QHttpNetworkReply::isHttpRedirect(statusCode) && redirectUrl.isValid())
         httpReply->setRedirectUrl(redirectUrl);
+
+    if (httpReplyPrivate->isCompressed() && httpRequest.d->autoDecompress)
+        httpReplyPrivate->removeAutoDecompressHeader();
 
     if (QHttpNetworkReply::isHttpRedirect(statusCode)
         || statusCode == 401 || statusCode == 407) {
@@ -1404,8 +1438,9 @@ bool QHttp2ProtocolHandler::tryReserveStream(const Http2::Frame &pushPromiseFram
         return false;
     }
 
-    const auto method = pseudoHeaders[":method"].toLower();
-    if (method != "get" && method != "head")
+    const QByteArray method = pseudoHeaders[":method"];
+    if (method.compare("get", Qt::CaseInsensitive) != 0 &&
+            method.compare("head", Qt::CaseInsensitive) != 0)
         return false;
 
     QUrl url;

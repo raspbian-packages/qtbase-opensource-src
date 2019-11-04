@@ -163,13 +163,17 @@ public:
 #endif
 
 #if QT_CONFIG(draganddrop)
-    static QPlatformDragQtResponse processDrag(QWindow *w, const QMimeData *dropData, const QPoint &p, Qt::DropActions supportedActions);
-    static QPlatformDropQtResponse processDrop(QWindow *w, const QMimeData *dropData, const QPoint &p, Qt::DropActions supportedActions);
+    static QPlatformDragQtResponse processDrag(QWindow *w, const QMimeData *dropData,
+                                               const QPoint &p, Qt::DropActions supportedActions,
+                                               Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers);
+    static QPlatformDropQtResponse processDrop(QWindow *w, const QMimeData *dropData,
+                                               const QPoint &p, Qt::DropActions supportedActions,
+                                               Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers);
 #endif
 
     static bool processNativeEvent(QWindow *window, const QByteArray &eventType, void *message, long *result);
 
-    static void sendQWindowEventToQPlatformWindow(QWindow *window, QEvent *event);
+    static bool sendQWindowEventToQPlatformWindow(QWindow *window, QEvent *event);
 
     static inline Qt::Alignment visualAlignment(Qt::LayoutDirection direction, Qt::Alignment alignment)
     {
@@ -207,12 +211,12 @@ public:
     static Qt::MouseButton mousePressButton;
     static int mousePressX;
     static int mousePressY;
-    static int mouse_double_click_distance;
     static QPointF lastCursorPosition;
     static QWindow *currentMouseWindow;
     static QWindow *currentMousePressWindow;
     static Qt::ApplicationState applicationState;
     static bool highDpiScalingUpdated;
+    static QPointer<QWindow> currentDragWindow;
 
     struct TabletPointData {
         TabletPointData(qint64 devId = 0) : deviceId(devId), state(Qt::NoButton), target(nullptr) {}
@@ -308,6 +312,7 @@ public:
 
 protected:
     virtual void notifyThemeChanged();
+    virtual void sendApplicationPaletteChange(bool toAllWidgets = false, const char *className = nullptr);
     bool tryCloseRemainingWindows(QWindowList processedWindows);
 #if QT_CONFIG(draganddrop)
     virtual void notifyDragStarted(const QDrag *);

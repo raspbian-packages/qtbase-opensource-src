@@ -26,6 +26,7 @@
 **
 ****************************************************************************/
 
+#include "../../../shared/highdpi.h"
 
 #include <QtTest/QtTest>
 
@@ -50,6 +51,8 @@
 #include <QTextEdit>
 #include <QPlainTextEdit>
 #include <QDialog>
+
+#include <qscreen.h>
 
 #include <QtWidgets/private/qabstractitemdelegate_p.h>
 
@@ -223,8 +226,8 @@ private slots:
     void dateTextForRole_data();
     void dateTextForRole();
 
-#ifdef QT_BUILD_INTERNAL
 private:
+#ifdef QT_BUILD_INTERNAL
     struct RoleDelegate : public QItemDelegate
     {
         QString textForRole(Qt::ItemDataRole role, const QVariant &value, const QLocale &locale)
@@ -234,6 +237,8 @@ private:
         }
     };
 #endif
+
+    const int m_fuzz = int(QGuiApplication::primaryScreen()->devicePixelRatio());
 };
 
 
@@ -286,8 +291,8 @@ void tst_QItemDelegate::textRectangle()
     QFont font;
     TestItemDelegate delegate;
     QRect result = delegate.textRectangle(0, rect, font, text);
-
-    QCOMPARE(result, expected);
+    QVERIFY2(HighDpi::fuzzyCompare(result, expected, m_fuzz),
+             HighDpi::msgRectMismatch(result, expected).constData());
 }
 
 void tst_QItemDelegate::sizeHint_data()
@@ -727,6 +732,16 @@ void tst_QItemDelegate::dateTimeEditor_data()
         << QDate(2006, 10, 31);
 }
 
+static QDateTimeEdit *findDateTimeEdit(const QWidget *widget)
+{
+    const auto dateTimeEditors = widget->findChildren<QDateTimeEdit *>();
+    for (auto dateTimeEditor : dateTimeEditors) {
+        if (qstrcmp(dateTimeEditor->metaObject()->className(), "QDateTimeEdit") == 0)
+            return dateTimeEditor;
+    }
+    return nullptr;
+}
+
 void tst_QItemDelegate::dateTimeEditor()
 {
     QFETCH(QTime, time);
@@ -742,17 +757,24 @@ void tst_QItemDelegate::dateTimeEditor()
     item3->setData(Qt::DisplayRole, QDateTime(date, time));
 
     QTableWidget widget(1, 3);
+    widget.setWindowTitle(QLatin1String(QTest::currentTestFunction())
+                          + QLatin1String("::")
+                          + QLatin1String(QTest::currentDataTag()));
     widget.setItem(0, 0, item1);
     widget.setItem(0, 1, item2);
     widget.setItem(0, 2, item3);
     widget.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&widget));
+    QApplication::setActiveWindow(&widget);
 
     widget.editItem(item1);
 
     QTestEventLoop::instance().enterLoop(1);
 
-    QTimeEdit *timeEditor = widget.viewport()->findChild<QTimeEdit *>();
-    QVERIFY(timeEditor);
+
+    QTimeEdit *timeEditor = nullptr;
+    auto viewport = widget.viewport();
+    QTRY_VERIFY( (timeEditor = viewport->findChild<QTimeEdit *>()) );
     QCOMPARE(timeEditor->time(), time);
     // The data must actually be different in order for the model
     // to be updated.
@@ -763,8 +785,8 @@ void tst_QItemDelegate::dateTimeEditor()
     widget.setFocus();
     widget.editItem(item2);
 
-    QTRY_VERIFY(widget.viewport()->findChild<QDateEdit *>());
-    QDateEdit *dateEditor = widget.viewport()->findChild<QDateEdit *>();
+    QDateEdit *dateEditor = nullptr;
+    QTRY_VERIFY( (dateEditor = viewport->findChild<QDateEdit *>()) );
     QCOMPARE(dateEditor->date(), date);
     dateEditor->setDate(date.addDays(60));
 
@@ -774,12 +796,8 @@ void tst_QItemDelegate::dateTimeEditor()
 
     QTestEventLoop::instance().enterLoop(1);
 
-    QList<QDateTimeEdit *> dateTimeEditors = widget.findChildren<QDateTimeEdit *>();
-    QDateTimeEdit *dateTimeEditor = 0;
-    foreach(dateTimeEditor, dateTimeEditors)
-        if (dateTimeEditor->metaObject()->className() == QLatin1String("QDateTimeEdit"))
-            break;
-    QVERIFY(dateTimeEditor);
+    QDateTimeEdit *dateTimeEditor = nullptr;
+    QTRY_VERIFY( (dateTimeEditor = findDateTimeEdit(viewport)) );
     QCOMPARE(dateTimeEditor->date(), date);
     QCOMPARE(dateTimeEditor->time(), time);
     dateTimeEditor->setTime(time.addSecs(600));
@@ -1387,6 +1405,7 @@ void tst_QItemDelegate::comboBox()
     widget.setItem(0, 0, item1);
     widget.show();
     QVERIFY(QTest::qWaitForWindowExposed(&widget));
+    QApplication::setActiveWindow(&widget);
 
     widget.editItem(item1);
 

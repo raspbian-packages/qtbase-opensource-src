@@ -131,11 +131,12 @@ QT_BEGIN_NAMESPACE
          of the sibling that follows the parent.
     \row \li Left  \li Hides the children of the current item (if present)
          by collapsing a branch.
-    \row \li Minus  \li Same as LeftArrow.
+    \row \li Minus \li Same as Left.
     \row \li Right \li Reveals the children of the current item (if present)
          by expanding a branch.
-    \row \li Plus  \li Same as RightArrow.
-    \row \li Asterisk  \li Expands all children of the current item (if present).
+    \row \li Plus  \li Same as Right.
+    \row \li Asterisk  \li Expands the current item and all its children
+         (if present).
     \row \li PageUp   \li Moves the cursor up one page.
     \row \li PageDown \li Moves the cursor down one page.
     \row \li Home \li Moves the cursor to an item in the same column of the first
@@ -632,11 +633,8 @@ bool QTreeView::isFirstColumnSpanned(int row, const QModelIndex &parent) const
     Q_D(const QTreeView);
     if (d->spanningIndexes.isEmpty() || !d->model)
         return false;
-    QModelIndex index = d->model->index(row, 0, parent);
-    for (int i = 0; i < d->spanningIndexes.count(); ++i)
-        if (d->spanningIndexes.at(i) == index)
-            return true;
-    return false;
+    const QModelIndex index = d->model->index(row, 0, parent);
+    return d->spanningIndexes.contains(index);
 }
 
 /*!
@@ -653,20 +651,14 @@ void QTreeView::setFirstColumnSpanned(int row, const QModelIndex &parent, bool s
     Q_D(QTreeView);
     if (!d->model)
         return;
-    QModelIndex index = d->model->index(row, 0, parent);
+    const QModelIndex index = d->model->index(row, 0, parent);
     if (!index.isValid())
         return;
 
-    if (span) {
-        QPersistentModelIndex persistent(index);
-        if (!d->spanningIndexes.contains(persistent))
-            d->spanningIndexes.append(persistent);
-    } else {
-        QPersistentModelIndex persistent(index);
-        int i = d->spanningIndexes.indexOf(persistent);
-        if (i >= 0)
-            d->spanningIndexes.remove(i);
-    }
+    if (span)
+        d->spanningIndexes.insert(index);
+    else
+        d->spanningIndexes.remove(index);
 
     d->executePostedLayout();
     int i = d->viewIndex(index);
@@ -1420,7 +1412,7 @@ QItemViewPaintPairs QTreeViewPrivate::draggablePaintPairs(const QModelIndexList 
     if (spanningIndexes.isEmpty())
         return QAbstractItemViewPrivate::draggablePaintPairs(indexes, r);
     QModelIndexList list;
-    foreach (const QModelIndex &idx, indexes) {
+    for (const QModelIndex &idx : indexes) {
         if (idx.column() > 0 && q->isFirstColumnSpanned(idx.row(), idx.parent()))
             continue;
         list << idx;
@@ -1749,7 +1741,8 @@ void QTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &option,
             }
             // draw background for the branch (selection + alternate row)
             opt.rect = branches;
-            style()->drawPrimitive(QStyle::PE_PanelItemViewRow, &opt, painter, this);
+            if (style()->styleHint(QStyle::SH_ItemView_ShowDecorationSelected, &opt, this))
+                style()->drawPrimitive(QStyle::PE_PanelItemViewRow, &opt, painter, this);
 
             // draw background of the item (only alternate row). rest of the background
             // is provided by the delegate
@@ -2000,19 +1993,21 @@ void QTreeView::keyPressEvent(QKeyEvent *event)
     if (d->isIndexValid(current) && d->model && d->itemsExpandable) {
         switch (event->key()) {
         case Qt::Key_Asterisk: {
+            // do layouting only once after expanding is done
+            d->doDelayedItemsLayout();
             QStack<QModelIndex> parents;
             parents.push(current);
-                while (!parents.isEmpty()) {
-                    QModelIndex parent = parents.pop();
-                    for (int row = 0; row < d->model->rowCount(parent); ++row) {
-                        QModelIndex child = d->model->index(row, 0, parent);
-                        if (!d->isIndexValid(child))
-                            break;
-                        parents.push(child);
-                        expand(child);
-                    }
+            while (!parents.isEmpty()) {
+                QModelIndex parent = parents.pop();
+                for (int row = 0; row < d->model->rowCount(parent); ++row) {
+                    QModelIndex child = d->model->index(row, 0, parent);
+                    if (!d->isIndexValid(child))
+                        break;
+                    parents.push(child);
+                    expand(child);
                 }
-                expand(current);
+            }
+            expand(current);
             break; }
         case Qt::Key_Plus:
             expand(current);
@@ -2495,7 +2490,6 @@ void QTreeView::scrollContentsBy(int dx, int dy)
         int previousScrollbarValue = currentScrollbarValue + dy; // -(-dy)
         int currentViewIndex = currentScrollbarValue; // the first visible item
         int previousViewIndex = previousScrollbarValue;
-        const QVector<QTreeViewItem> viewItems = d->viewItems;
         dy = 0;
         if (previousViewIndex < currentViewIndex) { // scrolling down
             for (int i = previousViewIndex; i < currentViewIndex; ++i) {
@@ -3732,9 +3726,14 @@ void QTreeViewPrivate::updateScrollBars()
 
 int QTreeViewPrivate::itemDecorationAt(const QPoint &pos) const
 {
+    Q_Q(const QTreeView);
     executePostedLayout();
-    int x = pos.x();
-    int column = header->logicalIndexAt(x);
+    bool spanned = false;
+    if (!spanningIndexes.isEmpty()) {
+        const QModelIndex index = q->indexAt(pos);
+        spanned = q->isFirstColumnSpanned(index.row(), index.parent());
+    }
+    const int column = spanned ? 0 : header->logicalIndexAt(pos.x());
     if (!isTreePosition(column))
         return -1; // no logical index at x
 

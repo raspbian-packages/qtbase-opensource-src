@@ -528,7 +528,7 @@ QUrl QHttpNetworkConnectionPrivate::parseRedirectResponse(QAbstractSocket *socke
     QUrl redirectUrl;
     const QList<QPair<QByteArray, QByteArray> > fields = reply->header();
     for (const QNetworkReply::RawHeaderPair &header : fields) {
-        if (header.first.toLower() == "location") {
+        if (header.first.compare("location", Qt::CaseInsensitive) == 0) {
             redirectUrl = QUrl::fromEncoded(header.second);
             break;
         }
@@ -1528,19 +1528,21 @@ void QHttpNetworkConnectionPrivate::emitProxyAuthenticationRequired(const QHttpN
     // dialog is displaying
     pauseConnection();
     QHttpNetworkReply *reply;
-#ifndef QT_NO_SSL
-    if (connectionType == QHttpNetworkConnection::ConnectionTypeSPDY) {
+    if (connectionType == QHttpNetworkConnection::ConnectionTypeHTTP2
+        || connectionType == QHttpNetworkConnection::ConnectionTypeHTTP2Direct
+#if QT_CONFIG(ssl)
+        || connectionType == QHttpNetworkConnection::ConnectionTypeSPDY
+#endif
+        ) {
+
         // we choose the reply to emit the proxyAuth signal from somewhat arbitrarily,
         // but that does not matter because the signal will ultimately be emitted
         // by the QNetworkAccessManager.
         Q_ASSERT(chan->spdyRequestsToSend.count() > 0);
         reply = chan->spdyRequestsToSend.cbegin().value().second;
     } else { // HTTP
-#endif // QT_NO_SSL
         reply = chan->reply;
-#ifndef QT_NO_SSL
     }
-#endif // QT_NO_SSL
 
     Q_ASSERT(reply);
     emit reply->proxyAuthenticationRequired(proxy, auth);

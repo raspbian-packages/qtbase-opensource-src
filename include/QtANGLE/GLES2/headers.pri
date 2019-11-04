@@ -1,4 +1,4 @@
-SYNCQT.HEADER_FILES = gl2.h gl2ext.h gl2platform.h 
+SYNCQT.HEADER_FILES = gl2.h gl2ext.h gl2ext_angle.h gl2platform.h 
 SYNCQT.GENERATED_HEADER_FILES = 
 SYNCQT.PRIVATE_HEADER_FILES = 
 SYNCQT.QPA_HEADER_FILES = 

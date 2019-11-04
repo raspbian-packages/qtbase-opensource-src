@@ -48,6 +48,7 @@
 #include <qdrag.h>
 #endif
 #include <qclipboard.h>
+#include <qmath.h>
 #if QT_CONFIG(menu)
 #include <qmenu.h>
 #endif
@@ -293,6 +294,7 @@ void QPlainTextDocumentLayout::documentChanged(int from, int charsRemoved, int c
 
     QTextBlock changeStartBlock = doc->findBlock(from);
     QTextBlock changeEndBlock = doc->findBlock(qMax(0, from + charsChanged - 1));
+    bool blockVisibilityChanged = false;
 
     if (changeStartBlock == changeEndBlock && newBlockCount == d->blockCount) {
         QTextBlock block = changeStartBlock;
@@ -310,14 +312,19 @@ void QPlainTextDocumentLayout::documentChanged(int from, int charsRemoved, int c
         QTextBlock block = changeStartBlock;
         do {
             block.clearLayout();
+            if (block.isVisible()
+                    ? (block.lineCount() == 0)
+                    : (block.lineCount() > 0)) {
+                blockVisibilityChanged = true;
+                block.setLineCount(block.isVisible() ? 1 : 0);
+            }
             if (block == changeEndBlock)
                 break;
             block = block.next();
         } while(block.isValid());
     }
 
-    if (newBlockCount != d->blockCount) {
-
+    if (newBlockCount != d->blockCount || blockVisibilityChanged) {
         int changeEnd = changeEndBlock.blockNumber();
         int blockDiff = newBlockCount - d->blockCount;
         int oldChangeEnd = changeEnd - blockDiff;
@@ -382,6 +389,8 @@ void QPlainTextDocumentLayout::layoutBlock(const QTextBlock &block)
         line.setLineWidth(availableWidth);
         line.setPosition(QPointF(margin, height));
         height += line.height();
+        if (line.leading() < 0)
+            height += qCeil(line.leading());
         blockMaximumWidth = qMax(blockMaximumWidth, line.naturalTextWidth() + 2*margin);
     }
     tl->endLayout();
@@ -1230,6 +1239,8 @@ void QPlainTextEditPrivate::ensureViewportLayouted()
 
     This property gets and sets the plain text editor's contents. The previous
     contents are removed and undo/redo history is reset when this property is set.
+    currentCharFormat() is also reset, unless textCursor() is already at the
+    beginning of the document.
 
     By default, for an editor with no contents, this property contains an empty string.
 */
@@ -1509,7 +1520,12 @@ void QPlainTextEdit::paste()
 /*!
     Deletes all the text in the text edit.
 
-    Note that the undo/redo history is cleared by this function.
+    Notes:
+    \list
+    \li The undo/redo history is also cleared.
+    \li currentCharFormat() is reset, unless textCursor()
+    is already at the beginning of the document.
+    \endlist
 
     \sa cut(), setPlainText()
 */
@@ -1642,7 +1658,12 @@ void QPlainTextEdit::timerEvent(QTimerEvent *e)
 
     \a text is interpreted as plain text.
 
-    Note that the undo/redo history is cleared by this function.
+    Notes:
+    \list
+    \li The undo/redo history is also cleared.
+    \li currentCharFormat() is reset, unless textCursor()
+    is already at the beginning of the document.
+    \endlist
 
     \sa toPlainText()
 */
@@ -1927,8 +1948,7 @@ void QPlainTextEdit::paintEvent(QPaintEvent *e)
     painter.setClipRect(er);
 
     if (d->placeholderVisible) {
-        QColor col = d->control->palette().text().color();
-        col.setAlpha(128);
+        const QColor col = d->control->palette().placeholderText().color();
         painter.setPen(col);
         painter.setClipRect(e->rect());
         const int margin = int(document()->documentMargin());
@@ -1937,6 +1957,7 @@ void QPlainTextEdit::paintEvent(QPaintEvent *e)
     }
 
     QAbstractTextDocumentLayout::PaintContext context = getPaintContext();
+    painter.setPen(context.palette.text().color());
 
     while (block.isValid()) {
 
@@ -2336,8 +2357,6 @@ void QPlainTextEdit::wheelEvent(QWheelEvent *e)
 #endif
 
 /*!
-    \fn QPlainTextEdit::zoomIn(int range)
-
     Zooms in on the text by making the base font size \a range
     points larger and recalculating all font sizes to be the new size.
     This does not change the size of any images.
@@ -2350,10 +2369,6 @@ void QPlainTextEdit::zoomIn(int range)
 }
 
 /*!
-    \fn QPlainTextEdit::zoomOut(int range)
-
-    \overload
-
     Zooms out on the text by making the base font size \a range points
     smaller and recalculating all font sizes to be the new size. This
     does not change the size of any images.
@@ -2631,8 +2646,8 @@ void QPlainTextEdit::setReadOnly(bool ro)
     } else {
         flags = Qt::TextEditorInteraction;
     }
-    setAttribute(Qt::WA_InputMethodEnabled, shouldEnableInputMethod(this));
     d->control->setTextInteractionFlags(flags);
+    setAttribute(Qt::WA_InputMethodEnabled, shouldEnableInputMethod(this));
     QEvent event(QEvent::ReadOnlyChange);
     QApplication::sendEvent(this, &event);
 }

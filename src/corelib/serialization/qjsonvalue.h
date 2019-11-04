@@ -150,6 +150,7 @@ private:
     friend class QJsonPrivate::Value;
     friend class QJsonArray;
     friend class QJsonObject;
+    friend class QCborValue;
     friend Q_CORE_EXPORT QDebug operator<<(QDebug, const QJsonValue &);
 
     QJsonValue(QJsonPrivate::Data *d, QJsonPrivate::Base *b, const QJsonPrivate::Value& v);
@@ -172,9 +173,9 @@ class Q_CORE_EXPORT QJsonValueRef
 {
 public:
     QJsonValueRef(QJsonArray *array, int idx)
-        : a(array), is_object(false), index(idx) {}
+        : a(array), is_object(false), index(static_cast<uint>(idx)) {}
     QJsonValueRef(QJsonObject *object, int idx)
-        : o(object), is_object(true), index(idx) {}
+        : o(object), is_object(true), index(static_cast<uint>(idx)) {}
 
     inline operator QJsonValue() const { return toValue(); }
     QJsonValueRef &operator = (const QJsonValue &val);
@@ -217,7 +218,6 @@ private:
     uint index : 31;
 };
 
-#ifndef Q_QDOC
 // ### Qt 6: Get rid of these fake pointer classes
 class QJsonValuePtr
 {
@@ -242,9 +242,10 @@ public:
     QJsonValueRef& operator*() { return valueRef; }
     QJsonValueRef* operator->() { return &valueRef; }
 };
-#endif
 
 Q_DECLARE_SHARED_NOT_MOVABLE_UNTIL_QT6(QJsonValue)
+
+Q_CORE_EXPORT uint qHash(const QJsonValue &value, uint seed = 0);
 
 #if !defined(QT_NO_DEBUG_STREAM) && !defined(QT_JSON_READONLY)
 Q_CORE_EXPORT QDebug operator<<(QDebug, const QJsonValue &);

@@ -55,9 +55,6 @@
 #include <qcache.h>
 #include <qregularexpression.h>
 #endif
-#if QT_CONFIG(timezone)
-#include <QTimeZone>
-#endif
 #include <QScopedValueRollback>
 
 #if defined Q_OS_WIN
@@ -421,34 +418,6 @@ bool QSQLiteResult::prepare(const QString &query)
     return true;
 }
 
-static QString secondsToOffset(int seconds)
-{
-    const QChar sign = ushort(seconds < 0 ? '-' : '+');
-    seconds = qAbs(seconds);
-    const int hours = seconds / 3600;
-    const int minutes = (seconds % 3600) / 60;
-
-    return QString(QStringLiteral("%1%2:%3")).arg(sign).arg(hours, 2, 10, QLatin1Char('0')).arg(minutes, 2, 10, QLatin1Char('0'));
-}
-
-static QString timespecToString(const QDateTime &dateTime)
-{
-    switch (dateTime.timeSpec()) {
-    case Qt::LocalTime:
-        return QString();
-    case Qt::UTC:
-        return QStringLiteral("Z");
-    case Qt::OffsetFromUTC:
-        return secondsToOffset(dateTime.offsetFromUtc());
-#if QT_CONFIG(timezone)
-    case Qt::TimeZone:
-        return secondsToOffset(dateTime.timeZone().offsetFromUtc(dateTime));
-#endif
-    default:
-        return QString();
-    }
-}
-
 bool QSQLiteResult::execBatch(bool arrayBind)
 {
     Q_UNUSED(arrayBind);
@@ -555,7 +524,7 @@ bool QSQLiteResult::exec()
                     break;
                 case QVariant::DateTime: {
                     const QDateTime dateTime = value.toDateTime();
-                    const QString str = dateTime.toString(QLatin1String("yyyy-MM-ddThh:mm:ss.zzz") + timespecToString(dateTime));
+                    const QString str = dateTime.toString(Qt::ISODateWithMs);
                     res = sqlite3_bind_text16(d->stmt, i + 1, str.utf16(),
                                               str.size() * sizeof(ushort), SQLITE_TRANSIENT);
                     break;
@@ -673,7 +642,7 @@ static void _q_regexp(sqlite3_context* context, int argc, sqlite3_value** argv)
     const bool wasCached = regexp;
 
     if (!wasCached)
-        regexp = new QRegularExpression(pattern, QRegularExpression::DontCaptureOption | QRegularExpression::OptimizeOnFirstUsageOption);
+        regexp = new QRegularExpression(pattern, QRegularExpression::DontCaptureOption);
 
     const bool found = subject.contains(*regexp);
 
@@ -953,13 +922,20 @@ static QSqlIndex qGetTableInfo(QSqlQuery &q, const QString &tableName, bool only
         if (onlyPIndex && !isPk)
             continue;
         QString typeName = q.value(2).toString().toLower();
+        QString defVal = q.value(4).toString();
+        if (!defVal.isEmpty() && defVal.at(0) == QLatin1Char('\'')) {
+            const int end = defVal.lastIndexOf(QLatin1Char('\''));
+            if (end > 0)
+                defVal = defVal.mid(1, end - 1);
+        }
+
         QSqlField fld(q.value(1).toString(), qGetColumnType(typeName), tableName);
         if (isPk && (typeName == QLatin1String("integer")))
             // INTEGER PRIMARY KEY fields are auto-generated in sqlite
             // INT PRIMARY KEY is not the same as INTEGER PRIMARY KEY!
             fld.setAutoValue(true);
         fld.setRequired(q.value(3).toInt() != 0);
-        fld.setDefaultValue(q.value(4));
+        fld.setDefaultValue(defVal);
         ind.append(fld);
     }
     return ind;
