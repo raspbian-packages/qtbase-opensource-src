@@ -1986,12 +1986,10 @@ QUuid QCborValue::toUuid(const QUuid &defaultValue) const
     return QUuid::fromRfc4122(byteData->asByteArrayView());
 }
 
-QCborArray QCborValue::toArray() const
-{
-    return toArray(QCborArray());
-}
-
 /*!
+    \fn QCborArray QCborValue::toArray() const
+    \fn QCborArray QCborValue::toArray(const QCborArray &defaultValue) const
+
     Returns the array value stored in this QCborValue, if it is of the array
     type. Otherwise, it returns \a defaultValue.
 
@@ -2000,6 +1998,25 @@ QCborArray QCborValue::toArray() const
 
     \sa isArray(), isByteArray(), isMap(), isContainer(), toMap()
  */
+
+/*!
+    \fn QCborArray QCborValueRef::toArray() const
+    \fn QCborArray QCborValueRef::toArray(const QCborArray &defaultValue) const
+    \internal
+
+    Returns the array value stored in this QCborValue, if it is of the array
+    type. Otherwise, it returns \a defaultValue.
+
+    Note that this function performs no conversion from other types to
+    QCborArray.
+
+    \sa isArray(), isByteArray(), isMap(), isContainer(), toMap()
+ */
+QCborArray QCborValue::toArray() const
+{
+    return toArray(QCborArray());
+}
+
 QCborArray QCborValue::toArray(const QCborArray &defaultValue) const
 {
     if (!isArray())
@@ -2011,12 +2028,10 @@ QCborArray QCborValue::toArray(const QCborArray &defaultValue) const
     return dd ? QCborArray(*dd) : defaultValue;
 }
 
-QCborMap QCborValue::toMap() const
-{
-    return toMap(QCborMap());
-}
-
 /*!
+    \fn QCborMap QCborValue::toMap() const
+    \fn QCborMap QCborValue::toMap(const QCborMap &defaultValue) const
+
     Returns the map value stored in this QCborValue, if it is of the map type.
     Otherwise, it returns \a defaultValue.
 
@@ -2025,6 +2040,25 @@ QCborMap QCborValue::toMap() const
 
     \sa isMap(), isArray(), isContainer(), toArray()
  */
+
+/*!
+    \fn QCborMap QCborValueRef::toMap() const
+    \fn QCborMap QCborValueRef::toMap(const QCborMap &defaultValue) const
+    \internal
+
+    Returns the map value stored in this QCborValue, if it is of the map type.
+    Otherwise, it returns \a defaultValue.
+
+    Note that this function performs no conversion from other types to
+    QCborMap.
+
+    \sa isMap(), isArray(), isContainer(), toArray()
+ */
+QCborMap QCborValue::toMap() const
+{
+    return toMap(QCborMap());
+}
+
 QCborMap QCborValue::toMap(const QCborMap &defaultValue) const
 {
     if (!isMap())
