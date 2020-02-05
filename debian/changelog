@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.7.1+dfsg-3+rpi1+deb9u1) stretch-staging; urgency=medium
+qtbase-opensource-src (5.7.1+dfsg-3+rpi1+deb9u2) stretch-staging; urgency=medium
 
   [changes brought forward from 5.3.2+dfsg-4+rpi1 by Peter Michael Green <plugwash@raspbian.org> at Thu, 27 Nov 2014 01:56:58 +0000]
   * Disable neon (-no-neon no longer seems to work, so edit configure instead)
@@ -6,7 +6,13 @@ qtbase-opensource-src (5.7.1+dfsg-3+rpi1+deb9u1) stretch-staging; urgency=medium
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
 
- -- Raspbian forward porter <root@raspbian.org>  Wed, 30 Jan 2019 21:53:04 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 05 Feb 2020 02:33:52 +0000
+
+qtbase-opensource-src (5.7.1+dfsg-3+deb9u2) stretch-security; urgency=high
+
+  * Backport fix for CVE-2020-0569: Do not load plugin from the CWD.
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Thu, 30 Jan 2020 12:33:15 -0300
 
 qtbase-opensource-src (5.7.1+dfsg-3+deb9u1) stretch-security; urgency=medium
 
