@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.11.3+dfsg1-1+rpi1) buster-staging; urgency=medium
+qtbase-opensource-src (5.11.3+dfsg1-1+rpi1+deb10u3) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,36 @@ qtbase-opensource-src (5.11.3+dfsg1-1+rpi1) buster-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Fri, 29 Mar 2019 05:56:47 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 05 Feb 2020 05:31:29 +0000
+
+qtbase-opensource-src (5.11.3+dfsg1-1+deb10u3) buster-security; urgency=high
+
+  [ Dmitry Shachnev ]
+  * Backport fixes for two vulnerabilities:
+    - CVE-2020-0569: Do not load plugin from the CWD.
+    - CVE-2020-0570: Qt tries to load invalid library from CWD.
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Thu, 30 Jan 2020 10:42:01 -0300
+
+qtbase-opensource-src (5.11.3+dfsg1-1+deb10u2) buster; urgency=medium
+
+  [ Dmitry Shachnev ]
+  * Backport upstream patch to add support for non-PPD printers and avoid
+    silent fallback to a printer supporting PPD (closes: #911702, #911844).
+  * Backport upstream patch to fix crash in QStyleSheetStyle::repolish()
+    when using QLabels with rich text (closes: #935909).
+
+  [ Melvin Vermeeren ]
+  * Backport upstream patch to fix graphics tablet hover events (closes:
+    #935627).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sun, 24 Nov 2019 20:34:59 +0300
+
+qtbase-opensource-src (5.11.3+dfsg1-1+deb10u1) buster-security; urgency=high
+
+  * Fix crash when text contains too many directional chars (CVE-2019-18281).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Wed, 30 Oct 2019 14:47:19 +0300
 
 qtbase-opensource-src (5.11.3+dfsg1-1) unstable; urgency=medium
 
