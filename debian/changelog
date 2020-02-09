@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.12.5+dfsg-7+rpi1) bullseye-staging; urgency=medium
+qtbase-opensource-src (5.12.5+dfsg-8+rpi1) bullseye-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,27 @@ qtbase-opensource-src (5.12.5+dfsg-7+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Fri, 31 Jan 2020 16:03:36 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 09 Feb 2020 03:54:23 +0000
+
+qtbase-opensource-src (5.12.5+dfsg-8) unstable; urgency=medium
+
+  * Revert adding alternative qtbase5-gles-dev dependencies:
+    - For qtbase5-private-dev: it is wrong, those who need private headers
+      and OpenGL ES specific API should use qtbase5-private-gles-dev, not
+      qtbase5-private-dev.
+    - For libqt5opengl5-dev: it does not help, libqt5opengl5 uses desktop
+      OpenGL specific symbols, so it is not installable with libqt5gui5-gles.
+  * Remove explicit libqt5gui5 | libqt5gui5-gles dependencies from the
+    platformtheme packages. Rely on ${shlibs:Depends} instead.
+  * Override the remaining version-substvar-for-external-package error.
+  * Backport fixes for two vulnerabilities:
+    - CVE-2020-0569: Do not load plugin from the CWD.
+    - CVE-2020-0570: Qt tries to load invalid library from CWD.
+  * Make Qt 5 the default configuration in qtchooser, by installing the
+    qt-default/qtchooser/default.conf symlink in libqt5core5a package.
+  * Bump Standards-Version to 4.5.0, no changes needed.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 31 Jan 2020 00:03:38 +0300
 
 qtbase-opensource-src (5.12.5+dfsg-7) unstable; urgency=medium
 
