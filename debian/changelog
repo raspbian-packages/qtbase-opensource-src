@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.12.5+dfsg-8+rpi1) bullseye-staging; urgency=medium
+qtbase-opensource-src (5.12.5+dfsg-9+rpi1) bullseye-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,19 @@ qtbase-opensource-src (5.12.5+dfsg-8+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sun, 09 Feb 2020 03:54:23 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Thu, 05 Mar 2020 09:30:02 +0000
+
+qtbase-opensource-src (5.12.5+dfsg-9) unstable; urgency=medium
+
+  [ Dmitry Shachnev ]
+  * Backport upstream patch to add an expansion limit for XML entities
+    (CVE-2015-9541, closes: #951066).
+    - Add two new symbols to debian/libqt5core5a.symbols.
+
+  [ Helmut Grohne ]
+  * qmake cross wrapper should pass QMAKE_STRIP. (Closes: #950507)
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 27 Feb 2020 16:52:19 +0300
 
 qtbase-opensource-src (5.12.5+dfsg-8) unstable; urgency=medium
 
