@@ -218,7 +218,6 @@ private:
     uint index : 31;
 };
 
-#ifndef Q_QDOC
 // ### Qt 6: Get rid of these fake pointer classes
 class QJsonValuePtr
 {
@@ -243,7 +242,6 @@ public:
     QJsonValueRef& operator*() { return valueRef; }
     QJsonValueRef* operator->() { return &valueRef; }
 };
-#endif
 
 Q_DECLARE_SHARED_NOT_MOVABLE_UNTIL_QT6(QJsonValue)
 
