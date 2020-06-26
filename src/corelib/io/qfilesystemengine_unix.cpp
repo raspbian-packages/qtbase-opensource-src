@@ -684,7 +684,11 @@ QFileSystemEntry QFileSystemEngine::canonicalName(const QFileSystemEntry &entry,
     Q_UNUSED(data);
     return QFileSystemEntry(slowCanonicalized(absoluteName(entry).filePath()));
 #else
+#ifdef PATH_MAX
     char stack_result[PATH_MAX+1];
+#else
+    char stack_result[4096+1];
+#endif
     char *resolved_name = nullptr;
 # if defined(Q_OS_DARWIN) || defined(Q_OS_ANDROID)
     // On some Android and macOS versions, realpath() will return a path even if
