@@ -379,7 +379,7 @@ QT_BEGIN_NAMESPACE
   This is naturally not the only possible solution. One alternative is to use
   the \l{QOpenGLContext::aboutToBeDestroyed()}{aboutToBeDestroyed()} signal of
   QOpenGLContext. By connecting a slot, using direct connection, to this signal,
-  it is possible to perform cleanup whenever the the underlying native context
+  it is possible to perform cleanup whenever the underlying native context
   handle, or the entire QOpenGLContext instance, is going to be released. The
   following snippet is in principle equivalent to the previous one:
 
@@ -788,10 +788,12 @@ void QOpenGLWidgetPrivate::initialize()
     if (initialized)
         return;
 
-    // Get our toplevel's context with which we will share in order to make the
-    // texture usable by the underlying window's backingstore.
+    // If no global shared context get our toplevel's context with which we
+    // will share in order to make the texture usable by the underlying window's backingstore.
     QWidget *tlw = q->window();
-    QOpenGLContext *shareContext = get(tlw)->shareContext();
+    QOpenGLContext *shareContext = qt_gl_global_share_context();
+    if (!shareContext)
+        shareContext = get(tlw)->shareContext();
     // If shareContext is null, showing content on-screen will not work.
     // However, offscreen rendering and grabFramebuffer() will stay fully functional.
 
@@ -1118,8 +1120,8 @@ void QOpenGLWidget::setTextureFormat(GLenum texFormat)
 /*!
     \return the active internal texture format if the widget has already
     initialized, the requested format if one was set but the widget has not yet
-    been made visible, or 0 if setTextureFormat() was not called and the widget
-    has not yet been made visible.
+    been made visible, or \nullptr if setTextureFormat() was not called and the
+    widget has not yet been made visible.
 
     \since 5.10
  */
@@ -1333,11 +1335,8 @@ int QOpenGLWidget::metric(QPaintDevice::PaintDeviceMetric metric) const
     if (d->inBackingStorePaint)
         return QWidget::metric(metric);
 
-    QWidget *tlw = window();
-    QWindow *window = tlw ? tlw->windowHandle() : 0;
-    QScreen *screen = tlw && tlw->windowHandle() ? tlw->windowHandle()->screen() : 0;
-    if (!screen && QGuiApplication::primaryScreen())
-        screen = QGuiApplication::primaryScreen();
+    auto window = d->windowHandle(QWidgetPrivate::WindowHandleMode::TopLevel);
+    QScreen *screen = window ? window->screen() : QGuiApplication::primaryScreen();
 
     const float dpmx = qt_defaultDpiX() * 100. / 2.54;
     const float dpmy = qt_defaultDpiY() * 100. / 2.54;
@@ -1435,7 +1434,7 @@ bool QOpenGLWidget::event(QEvent *e)
     Q_D(QOpenGLWidget);
     switch (e->type()) {
     case QEvent::WindowChangeInternal:
-        if (qGuiApp->testAttribute(Qt::AA_ShareOpenGLContexts))
+        if (QCoreApplication::testAttribute(Qt::AA_ShareOpenGLContexts))
             break;
         if (d->initialized)
             d->reset();
@@ -1448,7 +1447,7 @@ bool QOpenGLWidget::event(QEvent *e)
         {
             // Special case: did grabFramebuffer() for a hidden widget that then became visible.
             // Recreate all resources since the context now needs to share with the TLW's.
-            if (!qGuiApp->testAttribute(Qt::AA_ShareOpenGLContexts))
+            if (!QCoreApplication::testAttribute(Qt::AA_ShareOpenGLContexts))
                 d->reset();
         }
         if (!d->initialized && !size().isEmpty() && window()->windowHandle()) {

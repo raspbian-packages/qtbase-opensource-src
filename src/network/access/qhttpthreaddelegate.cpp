@@ -123,7 +123,7 @@ static QNetworkReply::NetworkError statusCodeFromHttp(int httpStatusCode, const 
 }
 
 
-static QByteArray makeCacheKey(QUrl &url, QNetworkProxy *proxy)
+static QByteArray makeCacheKey(QUrl &url, QNetworkProxy *proxy, const QString &peerVerifyName)
 {
     QString result;
     QUrl copy = url;
@@ -171,7 +171,8 @@ static QByteArray makeCacheKey(QUrl &url, QNetworkProxy *proxy)
 #else
     Q_UNUSED(proxy)
 #endif
-
+    if (!peerVerifyName.isEmpty())
+        result += QLatin1Char(':') + peerVerifyName;
     return "http-connection:" + std::move(result).toLatin1();
 }
 
@@ -189,7 +190,7 @@ public:
                                        QHttpNetworkConnection::ConnectionType connectionType,
                                        QSharedPointer<QNetworkSession> networkSession)
         : QHttpNetworkConnection(hostName, port, encrypt, connectionType, /*parent=*/0,
-                                 qMove(networkSession))
+                                 std::move(networkSession))
 #endif
     {
         setExpires(true);
@@ -296,6 +297,11 @@ void QHttpThreadDelegate::startRequest()
         connectionType = QHttpNetworkConnection::ConnectionTypeHTTP2Direct;
     }
 
+#if QT_CONFIG(ssl)
+    // See qnetworkreplyhttpimpl, delegate's initialization code.
+    Q_ASSERT(!ssl || incomingSslConfiguration.data());
+#endif // QT_CONFIG(ssl)
+
     const bool isH2 = httpRequest.isHTTP2Allowed() || httpRequest.isHTTP2Direct();
     if (isH2) {
 #if QT_CONFIG(ssl)
@@ -315,9 +321,6 @@ void QHttpThreadDelegate::startRequest()
     }
 
 #ifndef QT_NO_SSL
-    if (ssl && !incomingSslConfiguration.data())
-        incomingSslConfiguration.reset(new QSslConfiguration);
-
     if (!isH2 && httpRequest.isSPDYAllowed() && ssl) {
         connectionType = QHttpNetworkConnection::ConnectionTypeSPDY;
         urlCopy.setScheme(QStringLiteral("spdy")); // to differentiate SPDY requests from HTTPS requests
@@ -330,12 +333,12 @@ void QHttpThreadDelegate::startRequest()
 
 #ifndef QT_NO_NETWORKPROXY
     if (transparentProxy.type() != QNetworkProxy::NoProxy)
-        cacheKey = makeCacheKey(urlCopy, &transparentProxy);
+        cacheKey = makeCacheKey(urlCopy, &transparentProxy, httpRequest.peerVerifyName());
     else if (cacheProxy.type() != QNetworkProxy::NoProxy)
-        cacheKey = makeCacheKey(urlCopy, &cacheProxy);
+        cacheKey = makeCacheKey(urlCopy, &cacheProxy, httpRequest.peerVerifyName());
     else
 #endif
-        cacheKey = makeCacheKey(urlCopy, nullptr);
+        cacheKey = makeCacheKey(urlCopy, nullptr, httpRequest.peerVerifyName());
 
     // the http object is actually a QHttpNetworkConnection
     httpConnection = static_cast<QNetworkAccessCachedHttpConnection *>(connections.localData()->requestEntryNow(cacheKey));
@@ -351,9 +354,9 @@ void QHttpThreadDelegate::startRequest()
                                                                 networkSession);
 #endif // QT_NO_BEARERMANAGEMENT
         if (connectionType == QHttpNetworkConnection::ConnectionTypeHTTP2
-            && http2Parameters.validate()) {
+            || connectionType == QHttpNetworkConnection::ConnectionTypeHTTP2Direct) {
             httpConnection->setHttp2Parameters(http2Parameters);
-        } // else we ignore invalid parameters and use our own defaults.
+        }
 #ifndef QT_NO_SSL
         // Set the QSslConfiguration from this QNetworkRequest.
         if (ssl)
@@ -364,7 +367,7 @@ void QHttpThreadDelegate::startRequest()
         httpConnection->setTransparentProxy(transparentProxy);
         httpConnection->setCacheProxy(cacheProxy);
 #endif
-
+        httpConnection->setPeerVerifyName(httpRequest.peerVerifyName());
         // cache the QHttpNetworkConnection corresponding to this cache key
         connections.localData()->addEntry(cacheKey, httpConnection);
     } else {
@@ -425,6 +428,12 @@ void QHttpThreadDelegate::startRequest()
 
     connect(httpReply, SIGNAL(cacheCredentials(QHttpNetworkRequest,QAuthenticator*)),
             this, SLOT(cacheCredentialsSlot(QHttpNetworkRequest,QAuthenticator*)));
+    if (httpReply->errorCode() != QNetworkReply::NoError) {
+        if (synchronous)
+            synchronousFinishedWithErrorSlot(httpReply->errorCode(), httpReply->errorString());
+        else
+            finishedWithErrorSlot(httpReply->errorCode(), httpReply->errorString());
+    }
 }
 
 // This gets called from the user thread or by the synchronous HTTP timeout timer

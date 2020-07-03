@@ -66,6 +66,12 @@
     Qt also offers a \l{foreach} keyword that make it very
     easy to iterate over all the items stored in a container.
 
+    \note Since Qt 5.14, range constructors are available for most of the
+    container classes. QMultiMap is a notable exception. Their use is
+    encouraged in place of the various from/to methods. For example:
+
+    \snippet code/doc_src_containers.cpp 25
+
     \section1 The Container Classes
 
     Qt provides the following sequential containers: QList,
@@ -171,8 +177,9 @@
 
     The values stored in the various containers can be of any
     \e{assignable data type}. To qualify, a type must provide a
-    default constructor, a copy constructor, and an assignment
-    operator. This covers most data types you are likely to want to
+    copy constructor, and an assignment operator. For some
+    operations a default constructor is also required. This
+    covers most data types you are likely to want to
     store in a container, including basic types such as \c int and \c
     double, pointer types, and Qt data types such as QString, QDate,
     and QTime, but it doesn't cover QObject or any QObject subclass
@@ -665,7 +672,7 @@
     \li \b{Logarithmic time:} O(log \e n). A function that runs in
        logarithmic time is a function whose running time is
        proportional to the logarithm of the number of items in the
-       container. One example is qBinaryFind().
+       container. One example is the binary search algorithm.
 
     \li \b{Linear time:} O(\e n). A function that runs in linear time
        will execute in a time directly proportional to the number of

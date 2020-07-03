@@ -66,7 +66,7 @@ class QStylePrivate: public QObjectPrivate
     Q_DECLARE_PUBLIC(QStyle)
 public:
     inline QStylePrivate()
-        : layoutSpacingIndex(-1), proxyStyle(0) {}
+        : layoutSpacingIndex(-1), proxyStyle(nullptr) {}
 
     static bool useFullScreenForPopup();
 
@@ -99,7 +99,7 @@ inline QPixmap styleCachePixmap(const QSize &size)
     int txType = painter->deviceTransform().type() | painter->worldTransform().type(); \
     bool doPixmapCache = (!option->rect.isEmpty()) \
             && ((txType <= QTransform::TxTranslate) || (painter->deviceTransform().type() == QTransform::TxScale)); \
-    if (doPixmapCache && QPixmapCache::find(unique, internalPixmapCache)) { \
+    if (doPixmapCache && QPixmapCache::find(unique, &internalPixmapCache)) { \
         painter->drawPixmap(option->rect.topLeft(), internalPixmapCache); \
     } else { \
         if (doPixmapCache) { \

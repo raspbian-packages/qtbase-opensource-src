@@ -200,6 +200,7 @@ void tst_QApplication::staticSetup()
     QVERIFY(style);
     QApplication::setStyle(style);
 
+    bool palette_changed = false;
     QPalette pal;
     QApplication::setPalette(pal);
 
@@ -208,6 +209,10 @@ void tst_QApplication::staticSetup()
 
     int argc = 0;
     QApplication app(argc, nullptr);
+    QObject::connect(&app, &QApplication::paletteChanged, [&palette_changed]{ palette_changed = true; });
+    QVERIFY(!palette_changed);
+    qApp->setPalette(QPalette(Qt::red));
+    QVERIFY(palette_changed);
 }
 
 
@@ -885,7 +890,9 @@ void tst_QApplication::libraryPaths()
 
         QStringList actual = QApplication::libraryPaths();
         actual.sort();
-        QStringList expected = QSet<QString>::fromList((QStringList() << testDir << appDirPath)).toList();
+        QStringList expected;
+        expected << testDir << appDirPath;
+        expected = QSet<QString>(expected.constBegin(), expected.constEnd()).values();
         expected.sort();
 
         QVERIFY2(isPathListIncluded(actual, expected),
@@ -902,7 +909,9 @@ void tst_QApplication::libraryPaths()
         QStringList actual = QApplication::libraryPaths();
         actual.sort();
 
-        QStringList expected = QSet<QString>::fromList((QStringList() << installPathPlugins << appDirPath)).toList();
+        QStringList expected;
+        expected << installPathPlugins << appDirPath;
+        expected = QSet<QString>(expected.constBegin(), expected.constEnd()).values();
         expected.sort();
 
 #ifdef Q_OS_WINRT
@@ -2166,8 +2175,6 @@ void tst_QApplication::abortQuitOnShow()
 void tst_QApplication::staticFunctions()
 {
     QApplication::setStyle(QStringLiteral("blub"));
-    QApplication::colorSpec();
-    QApplication::setColorSpec(42);
     QApplication::allWidgets();
     QApplication::topLevelWidgets();
     QApplication::desktop();

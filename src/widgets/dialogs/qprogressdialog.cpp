@@ -47,7 +47,6 @@
 #include "qapplication.h"
 #include "qstyle.h"
 #include "qpushbutton.h"
-#include "qcursor.h"
 #include "qtimer.h"
 #include "qelapsedtimer.h"
 #include <private/qdialog_p.h>
@@ -94,9 +93,6 @@ public:
     bool cancellation_flag;
     bool setValue_called;
     QElapsedTimer starttime;
-#ifndef QT_NO_CURSOR
-    QCursor parentCursor;
-#endif
     int showTime;
     bool autoClose;
     bool autoReset;
@@ -597,12 +593,6 @@ void QProgressDialog::setRange(int minimum, int maximum)
 void QProgressDialog::reset()
 {
     Q_D(QProgressDialog);
-#ifndef QT_NO_CURSOR
-    if (value() >= 0) {
-        if (parentWidget())
-            parentWidget()->setCursor(d->parentCursor);
-    }
-#endif
     if (d->autoClose || d->forceHide)
         hide();
     d->bar->reset();
@@ -653,7 +643,7 @@ int QProgressDialog::value() const
 
   \warning If the progress dialog is modal
     (see QProgressDialog::QProgressDialog()),
-    setValue() calls QApplication::processEvents(), so take care that
+    setValue() calls QCoreApplication::processEvents(), so take care that
     this does not cause undesirable re-entrancy in your code. For example,
     don't use a QProgressDialog inside a paintEvent()!
 
@@ -669,7 +659,7 @@ void QProgressDialog::setValue(int progress)
 
     if (d->shown_once) {
         if (isModal())
-            QApplication::processEvents();
+            QCoreApplication::processEvents();
     } else {
         if ((!d->setValue_called && progress == 0 /* for compat with Qt < 5.4 */) || progress == minimum()) {
             d->starttime.start();
@@ -718,14 +708,17 @@ void QProgressDialog::setValue(int progress)
 QSize QProgressDialog::sizeHint() const
 {
     Q_D(const QProgressDialog);
-    QSize sh = d->label ? d->label->sizeHint() : QSize(0, 0);
-    QSize bh = d->bar->sizeHint();
-    int margin = style()->pixelMetric(QStyle::PM_DefaultTopLevelMargin);
-    int spacing = style()->pixelMetric(QStyle::PM_DefaultLayoutSpacing);
-    int h = margin * 2 + bh.height() + sh.height() + spacing;
+    QSize labelSize = d->label ? d->label->sizeHint() : QSize(0, 0);
+    QSize barSize = d->bar->sizeHint();
+    int marginBottom = style()->pixelMetric(QStyle::PM_LayoutBottomMargin, 0, this);
+    int spacing = style()->pixelMetric(QStyle::PM_LayoutVerticalSpacing, 0, this);
+    int marginLeft = style()->pixelMetric(QStyle::PM_LayoutLeftMargin, 0, this);
+    int marginRight = style()->pixelMetric(QStyle::PM_LayoutRightMargin, 0, this);
+
+    int height = marginBottom * 2 + barSize.height() + labelSize.height() + spacing;
     if (d->cancel)
-        h += d->cancel->sizeHint().height() + spacing;
-    return QSize(qMax(200, sh.width() + 2 * margin), h);
+        height += d->cancel->sizeHint().height() + spacing;
+    return QSize(qMax(200, labelSize.width() + marginLeft + marginRight), height);
 }
 
 /*!\reimp

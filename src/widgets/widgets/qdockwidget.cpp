@@ -55,6 +55,7 @@
 
 #include <private/qwidgetresizehandler_p.h>
 #include <private/qstylesheetstyle_p.h>
+#include <qpa/qplatformtheme.h>
 
 #include "qdockwidget_p.h"
 #include "qmainwindowlayout_p.h"
@@ -66,16 +67,19 @@ extern QString qt_setWindowTitle_helperHelper(const QString&, const QWidget*); /
 // qmainwindow.cpp
 extern QMainWindowLayout *qt_mainwindow_layout(const QMainWindow *window);
 
-static inline QMainWindowLayout *qt_mainwindow_layout_from_dock(const QDockWidget *dock)
+static const QMainWindow *mainwindow_from_dock(const QDockWidget *dock)
 {
-    const QWidget *p = dock->parentWidget();
-    while (p) {
-        const QMainWindow *window = qobject_cast<const QMainWindow*>(p);
-        if (window)
-            return qt_mainwindow_layout(window);
-        p = p->parentWidget();
+    for (const QWidget *p = dock->parentWidget(); p; p = p->parentWidget()) {
+        if (const QMainWindow *window = qobject_cast<const QMainWindow*>(p))
+            return window;
     }
     return nullptr;
+}
+
+static inline QMainWindowLayout *qt_mainwindow_layout_from_dock(const QDockWidget *dock)
+{
+    auto mainWindow = mainwindow_from_dock(dock);
+    return mainWindow ? qt_mainwindow_layout(mainWindow) : nullptr;
 }
 
 static inline bool hasFeature(const QDockWidgetPrivate *priv, QDockWidget::DockWidgetFeature feature)
@@ -263,9 +267,11 @@ QDockWidgetLayout::~QDockWidgetLayout()
 bool QDockWidgetLayout::nativeWindowDeco() const
 {
     bool floating = parentWidget()->isWindow();
+#if QT_CONFIG(tabbar)
     if (auto groupWindow =
             qobject_cast<const QDockWidgetGroupWindow *>(parentWidget()->parentWidget()))
         floating = floating || groupWindow->tabLayoutInfo();
+#endif
     return nativeWindowDeco(floating);
 }
 
@@ -375,11 +381,10 @@ QSize QDockWidgetLayout::sizeFromContent(const QSize &content, bool floating) co
     if (content.height() < 0)
         result.setHeight(-1);
 
-    int left, top, right, bottom;
-    w->getContentsMargins(&left, &top, &right, &bottom);
+    const QMargins margins = w->contentsMargins();
     //we need to subtract the contents margin (it will be added by the caller)
-    QSize min = w->minimumSize() - QSize(left + right, top + bottom);
-    QSize max = w->maximumSize() - QSize(left + right, top + bottom);
+    QSize min = w->minimumSize().shrunkBy(margins);
+    QSize max = w->maximumSize().shrunkBy(margins);
 
     /* A floating dockwidget will automatically get its minimumSize set to the layout's
        minimum size + deco. We're *not* interested in this, we only take minimumSize()
@@ -838,8 +843,9 @@ void QDockWidgetPrivate::endDrag(bool abort)
     q->releaseMouse();
 
     if (state->dragging) {
-        QMainWindowLayout *mwLayout = qt_mainwindow_layout_from_dock(q);
-        Q_ASSERT(mwLayout != 0);
+        const QMainWindow *mainWindow = mainwindow_from_dock(q);
+        Q_ASSERT(mainWindow != nullptr);
+        QMainWindowLayout *mwLayout = qt_mainwindow_layout(mainWindow);
 
         if (abort || !mwLayout->plug(state->widgetItem)) {
             if (hasFeature(this, QDockWidget::DockWidgetFloatable)) {
@@ -860,8 +866,12 @@ void QDockWidgetPrivate::endDrag(bool abort)
                 } else {
                     setResizerActive(false);
                 }
-                if (q->isFloating()) // Might not be floating when dragging a QDockWidgetGroupWindow
+                if (q->isFloating()) { // Might not be floating when dragging a QDockWidgetGroupWindow
                     undockedGeometry = q->geometry();
+#if QT_CONFIG(tabwidget)
+                    tabPosition = mwLayout->tabPosition(mainWindow->dockWidgetArea(q));
+#endif
+                }
                 q->activateWindow();
             } else {
                 // The tab was not plugged back in the QMainWindow but the QDockWidget cannot
@@ -922,7 +932,8 @@ bool QDockWidgetPrivate::mousePressEvent(QMouseEvent *event)
         initDrag(event->pos(), false);
 
         if (state)
-            state->ctrlDrag = hasFeature(this, QDockWidget::DockWidgetFloatable) && event->modifiers() & Qt::ControlModifier;
+            state->ctrlDrag = (hasFeature(this, QDockWidget::DockWidgetFloatable) && event->modifiers() & Qt::ControlModifier) ||
+                              (!hasFeature(this, QDockWidget::DockWidgetMovable) && q->isFloating());
 
         return true;
     }
@@ -965,11 +976,7 @@ bool QDockWidgetPrivate::mouseMoveEvent(QMouseEvent *event)
             && (event->pos() - state->pressPos).manhattanLength()
                 > QApplication::startDragDistance()) {
             startDrag();
-#if 0 // Used to be included in Qt4 for Q_WS_WIN
-            grabMouseWhileInWindow();
-#else
             q->grabMouse();
-#endif
             ret = true;
         }
     }
@@ -1017,13 +1024,6 @@ void QDockWidgetPrivate::nonClientAreaMouseEvent(QMouseEvent *event)
     QWidget *tl = q->topLevelWidget();
     QRect geo = tl->geometry();
     QRect titleRect = tl->frameGeometry();
-#if 0 // Used to be included in Qt4 for Q_WS_MAC
-    if ((features & QDockWidget::DockWidgetVerticalTitleBar)) {
-        titleRect.setTop(geo.top());
-        titleRect.setBottom(geo.bottom());
-        titleRect.setRight(geo.left() - 1);
-    } else
-#endif
     {
         titleRect.setLeft(geo.left());
         titleRect.setRight(geo.right());
@@ -1044,7 +1044,8 @@ void QDockWidgetPrivate::nonClientAreaMouseEvent(QMouseEvent *event)
             initDrag(event->pos(), true);
             if (state == 0)
                 break;
-            state->ctrlDrag = event->modifiers() & Qt::ControlModifier;
+            state->ctrlDrag = (event->modifiers() & Qt::ControlModifier) ||
+                              (!hasFeature(this, QDockWidget::DockWidgetMovable) && q->isFloating());
             startDrag();
             break;
         case QEvent::NonClientAreaMouseMove:
@@ -1524,10 +1525,10 @@ bool QDockWidget::event(QEvent *event)
         d->toggleViewAction->setChecked(true);
         QPoint parentTopLeft(0, 0);
         if (isWindow()) {
-            if (const QWindow *window = windowHandle())
-                parentTopLeft = window->screen()->availableVirtualGeometry().topLeft();
-            else
-                parentTopLeft = QGuiApplication::primaryScreen()->availableVirtualGeometry().topLeft();
+            const QScreen *screen = d->associatedScreen();
+            parentTopLeft = screen
+                ? screen->availableVirtualGeometry().topLeft()
+                : QGuiApplication::primaryScreen()->availableVirtualGeometry().topLeft();
         }
         emit visibilityChanged(geometry().right() >= parentTopLeft.x() && geometry().bottom() >= parentTopLeft.y());
 }
@@ -1545,8 +1546,10 @@ bool QDockWidget::event(QEvent *event)
             const QObjectList &siblings = win->children();
             onTop = siblings.count() > 0 && siblings.last() == (QObject*)this;
         }
+#if QT_CONFIG(tabbar)
         if (!isFloating() && layout != 0 && onTop)
             layout->raise(this);
+#endif
         break;
     }
     case QEvent::WindowActivate:
@@ -1573,17 +1576,6 @@ bool QDockWidget::event(QEvent *event)
         if (d->mouseMoveEvent(static_cast<QMouseEvent *>(event)))
             return true;
         break;
-#if 0 // Used to be included in Qt4 for Q_WS_WIN
-    case QEvent::Leave:
-        if (d->state != 0 && d->state->dragging && !d->state->nca) {
-            // This is a workaround for loosing the mouse on Vista.
-            QPoint pos = QCursor::pos();
-            QMouseEvent fake(QEvent::MouseMove, mapFromGlobal(pos), pos, Qt::NoButton,
-                             QApplication::mouseButtons(), QApplication::keyboardModifiers());
-            d->mouseMoveEvent(&fake);
-        }
-        break;
-#endif
     case QEvent::MouseButtonRelease:
         if (d->mouseReleaseEvent(static_cast<QMouseEvent *>(event)))
             return true;
@@ -1731,8 +1723,8 @@ void QDockWidget::setTitleBarWidget(QWidget *widget)
 
 /*!
     \since 4.3
-    Returns the custom title bar widget set on the QDockWidget, or 0 if no
-    custom title bar has been set.
+    Returns the custom title bar widget set on the QDockWidget, or
+    \nullptr if no custom title bar has been set.
 
     \sa setTitleBarWidget()
 */

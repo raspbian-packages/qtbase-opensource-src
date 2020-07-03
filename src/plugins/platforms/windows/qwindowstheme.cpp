@@ -162,25 +162,19 @@ public:
         m_init = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 
         QMutexLocker readyLocker(&m_readyMutex);
-        while (!m_cancelled.load()) {
-            if (!m_params && !m_cancelled.load()
+        while (!m_cancelled.loadRelaxed()) {
+            if (!m_params && !m_cancelled.loadRelaxed()
                 && !m_readyCondition.wait(&m_readyMutex, 1000))
                 continue;
 
             if (m_params) {
                 const QString fileName = m_params->fileName;
                 SHFILEINFO info;
-#ifndef Q_OS_WINCE
-                const UINT oldErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
-#endif
                 const bool result = SHGetFileInfo(reinterpret_cast<const wchar_t *>(fileName.utf16()),
                                                   m_params->attributes, &info, sizeof(SHFILEINFO),
                                                   m_params->flags);
-#ifndef Q_OS_WINCE
-                SetErrorMode(oldErrorMode);
-#endif
                 m_doneMutex.lock();
-                if (!m_cancelled.load()) {
+                if (!m_cancelled.loadRelaxed()) {
                     *m_params->result = result;
                     memcpy(m_params->info, &info, sizeof(SHFILEINFO));
                 }
@@ -210,7 +204,7 @@ public:
     void cancel()
     {
         QMutexLocker doneLocker(&m_doneMutex);
-        m_cancelled.store(1);
+        m_cancelled.storeRelaxed(1);
         m_readyCondition.wakeAll();
     }
 
@@ -284,24 +278,24 @@ static inline QPalette systemPalette()
     result.setColor(QPalette::Link, Qt::blue);
     result.setColor(QPalette::LinkVisited, Qt::magenta);
     result.setColor(QPalette::Inactive, QPalette::Button, result.button().color());
-    result.setColor(QPalette::Inactive, QPalette::Window, result.background().color());
+    result.setColor(QPalette::Inactive, QPalette::Window, result.window().color());
     result.setColor(QPalette::Inactive, QPalette::Light, result.light().color());
     result.setColor(QPalette::Inactive, QPalette::Dark, result.dark().color());
 
     if (result.midlight() == result.button())
         result.setColor(QPalette::Midlight, result.button().color().lighter(110));
-    if (result.background() != result.base()) {
+    if (result.window() != result.base()) {
         result.setColor(QPalette::Inactive, QPalette::Highlight, result.color(QPalette::Inactive, QPalette::Window));
         result.setColor(QPalette::Inactive, QPalette::HighlightedText, result.color(QPalette::Inactive, QPalette::Text));
     }
 
     const QColor disabled =
-        mixColors(result.foreground().color(), result.button().color());
+        mixColors(result.windowText().color(), result.button().color());
 
-    result.setColorGroup(QPalette::Disabled, result.foreground(), result.button(),
+    result.setColorGroup(QPalette::Disabled, result.windowText(), result.button(),
                          result.light(), result.dark(), result.mid(),
                          result.text(), result.brightText(), result.base(),
-                         result.background());
+                         result.window());
     result.setColor(QPalette::Disabled, QPalette::WindowText, disabled);
     result.setColor(QPalette::Disabled, QPalette::Text, disabled);
     result.setColor(QPalette::Disabled, QPalette::ButtonText, disabled);
@@ -310,7 +304,7 @@ static inline QPalette systemPalette()
     result.setColor(QPalette::Disabled, QPalette::HighlightedText,
                     getSysColor(COLOR_HIGHLIGHTTEXT));
     result.setColor(QPalette::Disabled, QPalette::Base,
-                    result.background().color());
+                    result.window().color());
     return result;
 }
 
@@ -333,7 +327,7 @@ static inline QPalette toolTipPalette(const QPalette &systemPalette)
     result.setColor(QPalette::All, QPalette::ToolTipBase, tipBgColor);
     result.setColor(QPalette::All, QPalette::ToolTipText, tipTextColor);
     const QColor disabled =
-        mixColors(result.foreground().color(), result.button().color());
+        mixColors(result.windowText().color(), result.button().color());
     result.setColor(QPalette::Disabled, QPalette::WindowText, disabled);
     result.setColor(QPalette::Disabled, QPalette::Text, disabled);
     result.setColor(QPalette::Disabled, QPalette::ToolTipText, disabled);
@@ -472,6 +466,8 @@ QVariant QWindowsTheme::themeHint(ThemeHint hint) const
             result = int(scrollLines);
         return QVariant(result);
     }
+    case MouseDoubleClickDistance:
+        return GetSystemMetrics(SM_CXDOUBLECLK);
     default:
         break;
     }
@@ -589,7 +585,7 @@ Q_GUI_EXPORT QPixmap qt_pixmapFromWinHICON(HICON icon);
 static QPixmap loadIconFromShell32(int resourceId, QSizeF size)
 {
     if (const HMODULE hmod = QSystemLibrary::load(L"shell32")) {
-        HICON iconHandle =
+        auto iconHandle =
             static_cast<HICON>(LoadImage(hmod, MAKEINTRESOURCE(resourceId),
                                          IMAGE_ICON, int(size.width()), int(size.height()), 0));
         if (iconHandle) {
@@ -858,7 +854,8 @@ QPixmap QWindowsFileIconEngine::filePixmap(const QSize &size, QIcon::Mode, QIcon
         int iIcon = (useDefaultFolderIcon && defaultFolderIIcon >= 0) ? defaultFolderIIcon
                                                                       : **dirIconEntryCache.object(filePath);
         if (iIcon) {
-            QPixmapCache::find(dirIconPixmapCacheKey(iIcon, iconSize, requestedImageListSize), pixmap);
+            QPixmapCache::find(dirIconPixmapCacheKey(iIcon, iconSize, requestedImageListSize),
+                               &pixmap);
             if (pixmap.isNull()) // Let's keep both caches in sync
                 dirIconEntryCache.remove(filePath);
             else
@@ -889,7 +886,7 @@ QPixmap QWindowsFileIconEngine::filePixmap(const QSize &size, QIcon::Mode, QIcon
 
             //using the unique icon index provided by windows save us from duplicate keys
             key = dirIconPixmapCacheKey(info.iIcon, iconSize, requestedImageListSize);
-            QPixmapCache::find(key, pixmap);
+            QPixmapCache::find(key, &pixmap);
             if (!pixmap.isNull()) {
                 QMutexLocker locker(&mx);
                 dirIconEntryCache.insert(filePath, FakePointer<int>::create(info.iIcon));

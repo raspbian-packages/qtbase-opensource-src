@@ -27,7 +27,6 @@
 ****************************************************************************/
 
 #include <private/qtexturefilereader_p.h>
-#include <private/qtguiglobal_p.h>
 #include <QtTest>
 
 class tst_qtexturefilereader : public QObject
@@ -80,7 +79,6 @@ void tst_qtexturefilereader::checkHandlers_data()
             << (QList<int>() << 68 << 5992 << 7516 << 7880 << 8004 << 8056 << 8068 << 8080)
             << (QList<int>() << 5920 << 1520 << 360 << 120 << 48 << 8 << 8 << 8);
 
-#if QT_CONFIG(texture_format_astc_experimental)
     QTest::addRow("newlogo.astc")
             << QStringLiteral(":/texturefiles/newlogo.astc")
             << QSize(111, 78)
@@ -100,7 +98,6 @@ void tst_qtexturefilereader::checkHandlers_data()
             << 1
             << (QList<int>() << 16)
             << (QList<int>() << 2496);
-#endif // QT_CONFIG(texture_format_astc_experimental)
 }
 
 void tst_qtexturefilereader::checkHandlers()

@@ -170,7 +170,7 @@ void ScribbleArea::resizeImage(QImage *image, const QSize &newSize)
 //! [21]
 void ScribbleArea::print()
 {
-#if QT_CONFIG(printdialog)
+#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printdialog)
     QPrinter printer(QPrinter::HighResolution);
 
     QPrintDialog printDialog(&printer, this);
@@ -195,9 +195,9 @@ bool ScribbleArea::event(QEvent *event)
     case QEvent::TouchUpdate:
     case QEvent::TouchEnd:
     {
-        QTouchEvent *touch = static_cast<QTouchEvent *>(event);
-        QList<QTouchEvent::TouchPoint> touchPoints = static_cast<QTouchEvent *>(event)->touchPoints();
-        foreach (const QTouchEvent::TouchPoint &touchPoint, touchPoints) {
+        const QTouchEvent *touch = static_cast<QTouchEvent *>(event);
+        const QList<QTouchEvent::TouchPoint> touchPoints = static_cast<QTouchEvent *>(event)->touchPoints();
+        for (const QTouchEvent::TouchPoint &touchPoint : touchPoints) {
             switch (touchPoint.state()) {
             case Qt::TouchPointStationary:
             case Qt::TouchPointReleased:

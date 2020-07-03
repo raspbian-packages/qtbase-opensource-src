@@ -221,18 +221,18 @@ public:
     int disconnectCount;
     bool hasSQLFetchScroll;
 
-    bool isStmtHandleValid();
+    bool isStmtHandleValid() const;
     void updateStmtHandleState();
 };
 
-bool QODBCResultPrivate::isStmtHandleValid()
+bool QODBCResultPrivate::isStmtHandleValid() const
 {
-    return disconnectCount == drv_d_func()->disconnectCount;
+    return drv_d_func() && disconnectCount == drv_d_func()->disconnectCount;
 }
 
 void QODBCResultPrivate::updateStmtHandleState()
 {
-    disconnectCount = drv_d_func()->disconnectCount;
+    disconnectCount = drv_d_func() ? drv_d_func()->disconnectCount : 0;
 }
 
 static QString qWarnODBCHandle(int handleType, SQLHANDLE handle, int *nativeCode = 0)
@@ -345,7 +345,7 @@ static QSqlError qMakeError(const QString& err, QSqlError::ErrorType type,
 {
     int nativeCode = -1;
     QString message = qODBCWarn(p, &nativeCode);
-    return QSqlError(QLatin1String("QODBC3: ") + err, qODBCWarn(p), type,
+    return QSqlError(QLatin1String("QODBC3: ") + err, message, type,
                      nativeCode != -1 ? QString::number(nativeCode) : QString());
 }
 
@@ -975,7 +975,7 @@ QODBCResult::QODBCResult(const QODBCDriver *db)
 QODBCResult::~QODBCResult()
 {
     Q_D(QODBCResult);
-    if (d->hStmt && d->isStmtHandleValid() && driver()->isOpen()) {
+    if (d->hStmt && d->isStmtHandleValid() && driver() && driver()->isOpen()) {
         SQLRETURN r = SQLFreeHandle(SQL_HANDLE_STMT, d->hStmt);
         if (r != SQL_SUCCESS)
             qSqlWarning(QLatin1String("QODBCDriver: Unable to free statement handle ")

@@ -421,7 +421,7 @@ QJsonArray QCborArray::toJsonArray() const
 }
 
 /*!
-    Recursively converts every \l QCborValue value in this array to JSON using
+    Recursively converts every \l QCborValue value in this map to JSON using
     QCborValue::toJsonValue() and creates a string key for all keys that aren't
     strings, then returns the corresponding QJsonObject composed of those
     associations.
@@ -826,7 +826,7 @@ QCborArray QCborArray::fromJsonArray(const QJsonArray &array)
 {
     QCborArray a;
     a.detach(array.size());
-    for (const QJsonValue v : array) {
+    for (const QJsonValue &v : array) {
         if (v.isString())
             a.d->append(v.toString());
         else

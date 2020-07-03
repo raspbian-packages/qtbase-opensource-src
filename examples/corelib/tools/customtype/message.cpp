@@ -50,26 +50,11 @@
 
 #include "message.h"
 
-//! [Message class implementation]
-Message::Message()
-{
-}
-
-Message::Message(const Message &other)
-{
-    m_body = other.m_body;
-    m_headers = other.m_headers;
-}
-
-Message::~Message()
-{
-}
-//! [Message class implementation]
+#include <QDebug>
 
 Message::Message(const QString &body, const QStringList &headers)
+    : m_body(body), m_headers(headers)
 {
-    m_body = body;
-    m_headers = headers;
 }
 
 //! [custom type streaming operator]

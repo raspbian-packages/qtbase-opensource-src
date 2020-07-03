@@ -206,7 +206,8 @@ QOpenGLFunctions::QOpenGLFunctions()
 
 /*!
     Constructs a function resolver for \a context.  If \a context
-    is null, then the resolver will be created for the current QOpenGLContext.
+    is \nullptr, then the resolver will be created for the current
+    QOpenGLContext.
 
     The context or another context in the group must be current.
 
@@ -387,8 +388,12 @@ static int qt_gl_resolve_extensions()
                 | QOpenGLExtensions::MapBufferRange
                 | QOpenGLExtensions::FramebufferBlit
                 | QOpenGLExtensions::FramebufferMultisample
-                | QOpenGLExtensions::Sized8Formats
-                | QOpenGLExtensions::TextureSwizzle;
+                | QOpenGLExtensions::Sized8Formats;
+#ifndef Q_OS_WASM
+            // WebGL 2.0 specification explicitly does not support texture swizzles
+            // https://www.khronos.org/registry/webgl/specs/latest/2.0/#5.19
+            extensions |= QOpenGLExtensions::TextureSwizzle;
+#endif
         } else {
             // Recognize features by extension name.
             if (extensionMatcher.match("GL_OES_packed_depth_stencil"))
@@ -5035,8 +5040,8 @@ QOpenGLExtraFunctions::QOpenGLExtraFunctions()
 }
 
 /*!
-    Constructs a function resolver for context. If \a context is null, then
-    the resolver will be created for the current QOpenGLContext.
+    Constructs a function resolver for context. If \a context is \nullptr,
+    then the resolver will be created for the current QOpenGLContext.
 
     The context or another context in the group must be current.
 

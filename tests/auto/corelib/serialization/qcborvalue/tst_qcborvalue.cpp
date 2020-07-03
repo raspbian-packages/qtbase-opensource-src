@@ -40,6 +40,7 @@
 #include <QtCore/qcborvalue.h>
 #include <QtTest>
 
+Q_DECLARE_METATYPE(QCborKnownTags)
 Q_DECLARE_METATYPE(QCborValue)
 Q_DECLARE_METATYPE(QCborValue::EncodingOptions)
 
@@ -103,6 +104,10 @@ private slots:
     void validation();
     void toDiagnosticNotation_data();
     void toDiagnosticNotation();
+
+    void datastreamSerialization_data();
+    void datastreamSerialization();
+    void streamVariantSerialization();
 };
 
 // Get the validation data from TinyCBOR (see src/3rdparty/tinycbor/tests/parser/data.cpp)
@@ -290,34 +295,77 @@ void tst_QCborValue::tagged()
 void tst_QCborValue::extendedTypes_data()
 {
     QTest::addColumn<QCborValue>("extended");
-    QTest::addColumn<QCborValue>("tagged");
+    QTest::addColumn<QCborKnownTags>("tag");
+    QTest::addColumn<QCborValue>("taggedValue");
+    QTest::addColumn<QCborValue>("correctedTaggedValue");
+    QCborValue v(QCborValue::Invalid);
     QDateTime dt = QDateTime::currentDateTimeUtc();
+    QDateTime dtTzOffset(dt.date(), dt.time(), Qt::OffsetFromUTC, dt.offsetFromUtc());
     QUuid uuid = QUuid::createUuid();
 
+    // non-correcting extended types (tagged value remains unchanged)
     QTest::newRow("DateTime") << QCborValue(dt)
-                              << QCborValue(QCborKnownTags::DateTimeString, dt.toString(Qt::ISODateWithMs));
+                              << QCborKnownTags::DateTimeString << QCborValue(dt.toString(Qt::ISODateWithMs)) << v;
+    QTest::newRow("DateTime:TzOffset") << QCborValue(dtTzOffset)
+                                       << QCborKnownTags::DateTimeString << QCborValue(dtTzOffset.toString(Qt::ISODateWithMs)) << v;
     QTest::newRow("Url:Empty") << QCborValue(QUrl())
-                               << QCborValue(QCborKnownTags::Url, QString());
+                               << QCborKnownTags::Url << QCborValue(QString()) << v;
     QTest::newRow("Url:Authority") << QCborValue(QUrl("https://example.com"))
-                                   << QCborValue(QCborKnownTags::Url, "https://example.com");
+                                   << QCborKnownTags::Url << QCborValue("https://example.com") << v;
     QTest::newRow("Url:Path") << QCborValue(QUrl("file:///tmp/none"))
-                              << QCborValue(QCborKnownTags::Url, "file:///tmp/none");
+                              << QCborKnownTags::Url << QCborValue("file:///tmp/none") << v;
     QTest::newRow("Url:QueryFragment") << QCborValue(QUrl("whatever:?a=b&c=d#e"))
-                                       << QCborValue(QCborKnownTags::Url, "whatever:?a=b&c=d#e");
+                                       << QCborKnownTags::Url << QCborValue("whatever:?a=b&c=d#e") << v;
     QTest::newRow("Regex:Empty") << QCborValue(QRegularExpression())
-                                 << QCborValue(QCborKnownTags::RegularExpression, QString());
+                                 << QCborKnownTags::RegularExpression << QCborValue(QString()) << v;
     QTest::newRow("Regex") << QCborValue(QRegularExpression("^.*$"))
-                           << QCborValue(QCborKnownTags::RegularExpression, QString("^.*$"));
+                           << QCborKnownTags::RegularExpression << QCborValue(QString("^.*$")) << v;
     QTest::newRow("Uuid") << QCborValue(uuid)
-                          << QCborValue(QCborKnownTags::Uuid, uuid.toRfc4122());
+                          << QCborKnownTags::Uuid << QCborValue(uuid.toRfc4122()) << v;
+
+    // correcting extended types
+    QDateTime dtNoMsecs = dt.fromSecsSinceEpoch(dt.toSecsSinceEpoch(), Qt::UTC);
+    QUrl url("https://example.com/\xc2\xa9 ");
+    QTest::newRow("UnixTime_t:Integer") << QCborValue(dtNoMsecs) << QCborKnownTags::UnixTime_t
+                                        << QCborValue(dtNoMsecs.toSecsSinceEpoch())
+                                        << QCborValue(dtNoMsecs.toString(Qt::ISODateWithMs));
+    QTest::newRow("UnixTime_t:Double") << QCborValue(dt) << QCborKnownTags::UnixTime_t
+                                       << QCborValue(dt.toMSecsSinceEpoch() / 1000.)
+                                       << QCborValue(dt.toString(Qt::ISODateWithMs));
+    QTest::newRow("DateTime::JustDate") << QCborValue(QDateTime({2018, 1, 1}, {}))
+                                        << QCborKnownTags::DateTimeString
+                                        << QCborValue("2018-01-01") << QCborValue("2018-01-01T00:00:00.000");
+    QTest::newRow("DateTime::TzOffset") << QCborValue(QDateTime({2018, 1, 1}, {9, 0, 0}, Qt::UTC))
+                                        << QCborKnownTags::DateTimeString
+                                        << QCborValue("2018-01-01T09:00:00.000+00:00")
+                                        << QCborValue("2018-01-01T09:00:00.000Z");
+    QTest::newRow("Url:NotNormalized") << QCborValue(url) << QCborKnownTags::Url
+                                       << QCborValue("HTTPS://EXAMPLE.COM/%c2%a9%20")
+                                       << QCborValue(url.toString());
+    QTest::newRow("Uuid:Zero") << QCborValue(QUuid()) << QCborKnownTags::Uuid
+                               << QCborValue(QByteArray())
+                               << QCborValue(QByteArray(sizeof(QUuid), 0));
+    QTest::newRow("Uuid:TooShort") << QCborValue(QUuid(0x12345678, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                                   << QCborKnownTags::Uuid
+                                   << QCborValue(raw("\x12\x34\x56\x78"))
+                                   << QCborValue(raw("\x12\x34\x56\x78" "\0\0\0\0" "\0\0\0\0" "\0\0\0\0"));
+    QTest::newRow("Uuid:TooLong") << QCborValue(uuid) << QCborKnownTags::Uuid
+                                  << QCborValue(uuid.toRfc4122() + "\1\2\3\4") << QCborValue(uuid.toRfc4122());
 }
 
 void tst_QCborValue::extendedTypes()
 {
     QFETCH(QCborValue, extended);
-    QFETCH(QCborValue, tagged);
+    QFETCH(QCborKnownTags, tag);
+    QFETCH(QCborValue, taggedValue);
+    QFETCH(QCborValue, correctedTaggedValue);
+    if (correctedTaggedValue.isInvalid())
+        correctedTaggedValue = taggedValue;
+
+    QCborValue tagged(tag, taggedValue);
     QVERIFY(extended.isTag());
     QVERIFY(tagged.isTag());
+    QCOMPARE(tagged.taggedValue(), correctedTaggedValue);
     QVERIFY(extended == tagged);
     QVERIFY(tagged == extended);
 
@@ -336,7 +384,7 @@ void tst_QCborValue::copyCompare()
     QCOMPARE(v, other);
     QVERIFY(!(v != other));
     QVERIFY(!(v < other));
-#if 0 && QT_HAS_INCLUDE(<compare>)
+#if 0 && __has_include(<compare>)
     QVERIFY(v <= other);
     QVERIFY(v >= other);
     QVERIFY(!(v > other));
@@ -386,11 +434,17 @@ void tst_QCborValue::arrayDefaultInitialization()
     QVERIFY(v.isArray());
     QVERIFY(!v.isMap());
     QVERIFY(!v.isTag());
-    QVERIFY(v[0].isUndefined());
 
     QCborArray a2 = v.toArray();
     QVERIFY(a2.isEmpty());
     QCOMPARE(a2, a);
+    auto front = v[0];
+    QVERIFY(front.isUndefined());
+    front = 1;
+    QCOMPARE(v[0], 1);
+    QVERIFY(a2.isEmpty());
+    a2 = v.toArray();
+    QCOMPARE(a2.size(), 1);
 }
 
 void tst_QCborValue::mapDefaultInitialization()
@@ -427,7 +481,7 @@ void tst_QCborValue::mapDefaultInitialization()
     QVERIFY(m == QCborMap{});
     QVERIFY(QCborMap{} == m);
 
-    QCborValue v(m);
+    const QCborValue v(m);
     QVERIFY(v.isMap());
     QVERIFY(!v.isArray());
     QVERIFY(!v.isTag());
@@ -729,6 +783,31 @@ void tst_QCborValue::arrayMutation()
     QCOMPARE(a.at(1), QCborValue(-1));
     QCOMPARE(a2.at(1), QCborValue(nullptr));
     QCOMPARE(++it, end);
+
+    // Array accessed via value:
+    QCborValue val(a);
+    val[2] = QCborArray{2, 3, 5, 7};
+    QCOMPARE(a.size(), 2); // Unchanged
+    QVERIFY(val.isArray());
+    QCOMPARE(val.toArray().size(), 3);
+    val[2][4] = 17;
+    QVERIFY(val.isArray());
+    QVERIFY(val[2].isArray());
+    QCOMPARE(val[2].toArray().size(), 5);
+    QCOMPARE(val[2][4], 17);
+    QCOMPARE(val.toArray().size(), 3);
+    val[3] = 42;
+    QVERIFY(val.isArray());
+    QCOMPARE(val.toArray().size(), 4);
+    QCOMPARE(val[3], 42);
+
+    // Coerce to map on string key:
+    const QLatin1String any("any");
+    val[any] = any;
+    QVERIFY(val.isMap());
+    QCOMPARE(val.toMap().size(), 5);
+    QVERIFY(val[2].isArray());
+    QCOMPARE(val[2].toArray().size(), 5);
 }
 
 void tst_QCborValue::mapMutation()
@@ -742,9 +821,37 @@ void tst_QCborValue::mapMutation()
         QVERIFY(v.isUndefined());
 
         // now mutate the list
+        // simple -> HasByteData
+        const QString strValue = QStringLiteral("value");
+        v = strValue;
+        QVERIFY(v.isString());
+        QCOMPARE(v, QCborValue(strValue));
+        QCOMPARE(m, QCborMap({{42, strValue}}));
+
+        // HasByteData -> HasByteData
+        const QLatin1String otherStrValue("othervalue");
+        v = otherStrValue;
+        QVERIFY(v.isString());
+        QCOMPARE(v, QCborValue(otherStrValue));
+        QCOMPARE(m, QCborMap({{42, otherStrValue}}));
+
+        // HasByteData -> simple
+        v = 42;
+        QVERIFY(v.isInteger());
+        QCOMPARE(v, QCborValue(42));
+        QCOMPARE(m, QCborMap({{42, 42}}));
+
+        // simple -> container
+        v = QCborArray{1, 2, 3};
+        QVERIFY(v.isArray());
+        QCOMPARE(v, QCborArray({1, 2, 3}));
+        QCOMPARE(m,  QCborMap({{42, QCborArray{1, 2, 3}}}));
+
+        // container -> simple
         v = true;
         QVERIFY(v.isBool());
         QVERIFY(v.isTrue());
+        QCOMPARE(m, QCborMap({{42, true}}));
         QVERIFY(m.begin()->isTrue());
         QVERIFY(m.begin().value() == v);
         QVERIFY(v == m.begin().value());
@@ -784,6 +891,30 @@ void tst_QCborValue::mapMutation()
     QCOMPARE((m.end() - 1)->toInteger(), -1);
     QVERIFY((m2.end() - 1)->isNull());
     QCOMPARE(++it, end);
+
+    // Map accessed via value:
+    QCborValue val(m);
+    val[7] = QCborMap({{0, 2}, {1, 3}, {2, 5}});
+    QCOMPARE(m.size(), 2); // Unchanged
+    QVERIFY(val.isMap());
+    QCOMPARE(val.toMap().size(), 3);
+    val[7][3] = 11;
+    QVERIFY(val.isMap());
+    QVERIFY(val[7].isMap());
+    QCOMPARE(val[7].toMap().size(), 4);
+    val[14] = 42;
+    QVERIFY(val.isMap());
+    QCOMPARE(val.toMap().size(), 4);
+
+    const QLatin1String any("any");
+    const QString hello(QStringLiteral("Hello World"));
+    val[any][3][hello] = any;
+    QVERIFY(val.isMap());
+    QCOMPARE(val.toMap().size(), 5);
+    QVERIFY(val[any].isMap());
+    QCOMPARE(val[any].toMap().size(), 1);
+    QVERIFY(val[any][3].isMap());
+    QCOMPARE(val[any][3].toMap().size(), 1);
 }
 
 void tst_QCborValue::arrayPrepend()
@@ -1165,8 +1296,11 @@ void tst_QCborValue::sorting()
     QCborValue va1(QCborValue::Array), va2(QCborArray{1}), va3(QCborArray{0, 0});
     QCborValue vm1(QCborValue::Map), vm2(QCborMap{{1, 0}}), vm3(QCborMap{{0, 0}, {1, 0}});
     QCborValue vdt1(QDateTime::fromMSecsSinceEpoch(0, Qt::UTC)), vdt2(QDateTime::currentDateTimeUtc());
-    QCborValue vtagged1(QCborKnownTags::UnixTime_t, 0), vtagged2(QCborKnownTags::UnixTime_t, 0.0),
-            vtagged3(QCborKnownTags::Signature, 0), vtagged4(QCborTag(-2), 0), vtagged5(QCborTag(-1), 0);
+    QCborValue vtagged1(QCborKnownTags::PositiveBignum, QByteArray()),
+            vtagged2(QCborKnownTags::PositiveBignum, 0.0),  // bignums are supposed to have byte arrays...
+            vtagged3(QCborKnownTags::Signature, 0),
+            vtagged4(QCborTag(-2), 0),
+            vtagged5(QCborTag(-1), 0);
     QCborValue vurl1(QUrl("https://example.net")), vurl2(QUrl("https://example.com/"));
     QCborValue vuuid1{QUuid()}, vuuid2(QUuid::createUuid());
     QCborValue vsimple1(QCborSimpleType(1)), vsimple32(QCborSimpleType(32)), vsimple255(QCborSimpleType(255));
@@ -1332,6 +1466,9 @@ static void addCommonCborData()
     QTest::newRow("Url") << QCborValue(QUrl("HTTPS://example.com/{%30%31}?q=%3Ca+b%20%C2%A9%3E&%26"))
                          << raw("\xd8\x20\x78\x27" "https://example.com/{01}?q=<a+b \xC2\xA9>&%26")
                          << noxfrm;
+    QTest::newRow("Url:NonAscii") << QCborValue(QUrl("https://example.com/\xc2\xa0"))
+                                  << raw("\xd8\x20\x76" "https://example.com/\xc2\xa0")
+                                  << noxfrm;
     QTest::newRow("Regex:Empty") << QCborValue(QRegularExpression()) << raw("\xd8\x23\x60") << noxfrm;
     QTest::newRow("Regex") << QCborValue(QRegularExpression("^.*$"))
                            << raw("\xd8\x23\x64" "^.*$") << noxfrm;
@@ -1354,10 +1491,12 @@ void tst_QCborValue::toCbor_data()
     // The rest of these tests are conversions whose decoding does not yield
     // back the same QCborValue.
 
+#if QT_CONFIG(signaling_nan)
     // Signalling NaN get normalized to quiet ones
     QTest::newRow("Double:snan") << QCborValue(qSNaN()) << raw("\xfb\x7f\xf8\0""\0\0\0\0\0") << QCborValue::EncodingOptions();
     QTest::newRow("Float:snan") << QCborValue(qSNaN()) << raw("\xfa\x7f\xc0\0\0") << QCborValue::EncodingOptions(QCborValue::UseFloat);
     QTest::newRow("Float16:snan") << QCborValue(qSNaN()) << raw("\xf9\x7e\0") << QCborValue::EncodingOptions(QCborValue::UseFloat16);
+#endif
 
     // Floating point written as integers are read back as integers
     QTest::newRow("UseInteger:0") << QCborValue(0.) << raw("\x00") << QCborValue::EncodingOptions(QCborValue::UseIntegers);
@@ -1747,6 +1886,83 @@ void tst_QCborValue::toDiagnosticNotation()
 
     QString result = v.toDiagnosticNotation(QCborValue::DiagnosticNotationOptions(opts));
     QCOMPARE(result, expected);
+}
+
+
+void tst_QCborValue::datastreamSerialization_data()
+{
+    addCommonCborData();
+}
+
+void tst_QCborValue::datastreamSerialization()
+{
+    QFETCH(QCborValue, v);
+    QByteArray buffer;
+    {
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << v;
+        QDataStream load(buffer);
+        QCborValue output;
+        load >> output;
+        QCOMPARE(output, v);
+    }
+    if (v.isArray()) {
+        QCborArray array = v.toArray();
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << array;
+        QDataStream load(buffer);
+        QCborValue output;
+        load >> output;
+        QCOMPARE(output, array);
+    } else if (v.isMap()) {
+        QCborMap map = v.toMap();
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << map;
+        QDataStream load(buffer);
+        QCborValue output;
+        load >> output;
+        QCOMPARE(output, map);
+    }
+}
+
+void tst_QCborValue::streamVariantSerialization()
+{
+    // Check interface only, implementation is tested through to and from
+    // cbor functions.
+    QByteArray buffer;
+    {
+        QCborArray array{665, 666, 667};
+        QVariant output;
+        QVariant variant = QVariant::fromValue(array);
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << variant;
+        QDataStream load(buffer);
+        load >> output;
+        QCOMPARE(output.userType(), QMetaType::QCborArray);
+        QCOMPARE(qvariant_cast<QCborArray>(output), array);
+    }
+    {
+        QCborMap obj{{"foo", 42}};
+        QVariant output;
+        QVariant variant = QVariant::fromValue(obj);
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << variant;
+        QDataStream load(buffer);
+        load >> output;
+        QCOMPARE(output.userType(), QMetaType::QCborMap);
+        QCOMPARE(qvariant_cast<QCborMap>(output), obj);
+    }
+    {
+        QCborValue value{42};
+        QVariant output;
+        QVariant variant = QVariant::fromValue(value);
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << variant;
+        QDataStream load(buffer);
+        load >> output;
+        QCOMPARE(output.userType(), QMetaType::QCborValue);
+        QCOMPARE(qvariant_cast<QCborValue>(output), value);
+    }
 }
 
 QTEST_MAIN(tst_QCborValue)

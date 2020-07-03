@@ -955,11 +955,9 @@ void QFtpPI::readyRead()
                 }
             }
         }
-        QString endOfMultiLine;
-        endOfMultiLine[0] = '0' + replyCode[0];
-        endOfMultiLine[1] = '0' + replyCode[1];
-        endOfMultiLine[2] = '0' + replyCode[2];
-        endOfMultiLine[3] = QLatin1Char(' ');
+        const char count[4] = { char('0' + replyCode[0]), char('0' + replyCode[1]),
+                                char('0' + replyCode[2]), char(' ') };
+        QString endOfMultiLine(QLatin1String(count, 4));
         QString lineCont(endOfMultiLine);
         lineCont[3] = QLatin1Char('-');
         QStringRef lineLeft4 = line.leftRef(4);
@@ -1826,8 +1824,8 @@ int QFtp::cd(const QString &dir)
     is data available to read. You can then read the data with the
     read() or readAll() functions.
 
-    If \a dev is not 0, the data is written directly to the device \a
-    dev. Make sure that the \a dev pointer is valid for the duration
+    If \a dev is not \nullptr, the data is written directly to the device
+    \a dev. Make sure that the \a dev pointer is valid for the duration
     of the operation (it is safe to delete it when the
     commandFinished() signal is emitted). In this case the readyRead()
     signal is \e not emitted and you cannot read data with the
@@ -2120,6 +2118,17 @@ void QFtp::abort()
 
     clearPendingCommands();
     d_func()->pi.abort();
+}
+
+/*!
+    \internal
+    Clears the last error.
+
+    \sa currentCommand()
+*/
+void QFtp::clearError()
+{
+    d_func()->error = NoError;
 }
 
 /*!

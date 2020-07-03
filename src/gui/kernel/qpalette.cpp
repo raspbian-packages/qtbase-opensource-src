@@ -830,7 +830,7 @@ bool QPalette::isBrushSet(ColorGroup cg, ColorRole cr) const
 */
 void QPalette::detach()
 {
-    if (d->ref.load() != 1) {
+    if (d->ref.loadRelaxed() != 1) {
         QPalettePrivate *x = new QPalettePrivate;
         for(int grp = 0; grp < (int)NColorGroups; grp++) {
             for(int role = 0; role < (int)NColorRoles; role++)
@@ -941,7 +941,8 @@ qint64 QPalette::cacheKey() const
 }
 
 /*!
-    Returns a new QPalette that has attributes copied from \a other.
+    Returns a new QPalette that is a union of this instance and \a other.
+    Color roles set in this instance take precedence.
 */
 QPalette QPalette::resolve(const QPalette &other) const
 {
@@ -959,6 +960,7 @@ QPalette QPalette::resolve(const QPalette &other) const
         if (!(data.resolve_mask & (1<<role)))
             for(int grp = 0; grp < (int)NColorGroups; grp++)
                 palette.d->br[grp][role] = other.d->br[grp][role];
+    palette.data.resolve_mask |= other.data.resolve_mask;
 
     return palette;
 }
@@ -981,7 +983,7 @@ QPalette QPalette::resolve(const QPalette &other) const
 #ifndef QT_NO_DATASTREAM
 
 static const int NumOldRoles = 7;
-static const int oldRoles[7] = { QPalette::Foreground, QPalette::Background, QPalette::Light,
+static const int oldRoles[7] = { QPalette::WindowText, QPalette::Window, QPalette::Light,
                                  QPalette::Dark, QPalette::Mid, QPalette::Text, QPalette::Base };
 
 /*!
@@ -1207,7 +1209,7 @@ QDebug operator<<(QDebug dbg, const QPalette &p)
     QDebugStateSaver saver(dbg);
     QDebug nospace = dbg.nospace();
     const uint mask = p.resolve();
-    nospace << "QPalette(resolve=" << hex << showbase << mask << ',';
+    nospace << "QPalette(resolve=" << Qt::hex << Qt::showbase << mask << ',';
     for (int role = 0; role < (int)QPalette::NColorRoles; ++role) {
         if (mask & (1<<role)) {
             if (role)
@@ -1223,7 +1225,7 @@ QDebug operator<<(QDebug dbg, const QPalette &p)
             nospace << ']';
         }
     }
-    nospace << ')' << noshowbase << dec;
+    nospace << ')' << Qt::noshowbase << Qt::dec;
     return dbg;
 }
 #endif

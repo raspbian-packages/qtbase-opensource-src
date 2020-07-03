@@ -1086,7 +1086,7 @@ QString QDirModel::filePath(const QModelIndex &index) const
     if (d->indexValid(index)) {
         QFileInfo fi = fileInfo(index);
         if (d->resolveSymlinks && fi.isSymLink())
-            fi = d->resolvedInfo(fi);
+            fi = QDirModelPrivate::resolvedInfo(fi);
         return QDir::cleanPath(fi.absoluteFilePath());
     }
     return QString(); // root path
@@ -1108,7 +1108,7 @@ QString QDirModel::fileName(const QModelIndex &index) const
     if (QFileSystemEntry::isRootPath(path))
         return path;
     if (d->resolveSymlinks && info.isSymLink())
-        info = d->resolvedInfo(info);
+        info = QDirModelPrivate::resolvedInfo(info);
     return info.fileName();
 }
 
@@ -1252,11 +1252,10 @@ void QDirModelPrivate::restorePersistentIndexes()
     for (const SavedPersistent &sp : qAsConst(savedPersistent)) {
         QPersistentModelIndexData *data = sp.data;
         QModelIndex idx = q->index(sp.path, sp.column);
-        if (idx != data->index || data->model == 0) {
+        if (idx != data->index || data->index.model() == nullptr) {
             //data->model may be equal to 0 if the model is getting destroyed
             persistent.indexes.remove(data->index);
             data->index = idx;
-            data->model = q;
             if (idx.isValid())
                 persistent.indexes.insert(idx, data);
         }
@@ -1320,7 +1319,7 @@ QString QDirModelPrivate::type(const QModelIndex &index) const
 QString QDirModelPrivate::time(const QModelIndex &index) const
 {
 #if QT_CONFIG(datestring)
-    return node(index)->info.lastModified().toString(Qt::LocalDate);
+    return QLocale::system().toString(node(index)->info.lastModified(), QLocale::ShortFormat);
 #else
     Q_UNUSED(index);
     return QString();

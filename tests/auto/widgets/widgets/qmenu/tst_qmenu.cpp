@@ -610,7 +610,7 @@ void tst_QMenu::widgetActionFocus()
 
 static QMenu *getTornOffMenu()
 {
-    foreach (QWidget *w, QApplication::allWidgets()) {
+    for (QWidget *w : QApplication::allWidgets()) {
         if (w->isVisible() && w->inherits("QTornOffMenu"))
             return static_cast<QMenu *>(w);
     }
@@ -948,30 +948,28 @@ void tst_QMenu::menuSizeHint()
 {
     QMenu menu;
     //this is a list of arbitrary strings so that we check the geometry
-    QStringList list = QStringList() << "trer" << "ezrfgtgvqd" << "sdgzgzerzerzer" << "eerzertz"  << "er";
-    foreach (QString str, list)
+    for (auto str : {"trer", "ezrfgtgvqd", "sdgzgzerzerzer", "eerzertz", "er"})
         menu.addAction(str);
 
-    int left, top, right, bottom;
-    menu.getContentsMargins(&left, &top, &right, &bottom);
+    const QMargins cm = menu.contentsMargins();
     const int panelWidth = menu.style()->pixelMetric(QStyle::PM_MenuPanelWidth, 0, &menu);
     const int hmargin = menu.style()->pixelMetric(QStyle::PM_MenuHMargin, 0, &menu),
     vmargin = menu.style()->pixelMetric(QStyle::PM_MenuVMargin, 0, &menu);
 
     int maxWidth =0;
     QRect result;
-    foreach (QAction *action, menu.actions()) {
+    for (QAction *action : menu.actions()) {
         maxWidth = qMax(maxWidth, menu.actionGeometry(action).width());
         result |= menu.actionGeometry(action);
-        QCOMPARE(result.x(), left + hmargin + panelWidth);
-        QCOMPARE(result.y(), top + vmargin + panelWidth);
+        QCOMPARE(result.x(), cm.left() + hmargin + panelWidth);
+        QCOMPARE(result.y(), cm.top() + vmargin + panelWidth);
     }
 
     QStyleOption opt(0);
     opt.rect = menu.rect();
     opt.state = QStyle::State_None;
 
-    QSize resSize = QSize(result.x(), result.y()) + result.size() + QSize(hmargin + right + panelWidth, vmargin + top + panelWidth);
+    QSize resSize = QSize(result.x(), result.y()) + result.size() + QSize(hmargin + cm.right() + panelWidth, vmargin + cm.top() + panelWidth);
 
     resSize = menu.style()->sizeFromContents(QStyle::CT_Menu, &opt,
                                     resSize.expandedTo(QApplication::globalStrut()), &menu);
@@ -1001,7 +999,7 @@ void tst_QMenu::task258920_mouseBorder()
     menu.setMouseTracking(true);
     QAction *action = menu.addAction("test");
 
-    const QPoint center = QApplication::desktop()->availableGeometry().center();
+    const QPoint center = QGuiApplication::primaryScreen()->availableGeometry().center();
     menu.popup(center);
     QVERIFY(QTest::qWaitForWindowExposed(&menu));
     QRect actionRect = menu.actionGeometry(action);
@@ -1068,14 +1066,18 @@ static inline QByteArray msgGeometryIntersects(const QRect &r1, const QRect &r2)
 
 void tst_QMenu::pushButtonPopulateOnAboutToShow()
 {
+#ifdef Q_OS_MACOS
+    QSKIP("Popup menus may partially overlap the button on macOS, and that's okey");
+#endif
+
     QPushButton b("Test PushButton");
     b.setWindowFlags(Qt::FramelessWindowHint | Qt::X11BypassWindowManagerHint);
 
     QMenu *buttonMenu= new PopulateOnAboutToShowTestMenu(&b);
     b.setMenu(buttonMenu);
-    const int scrNumber = QApplication::desktop()->screenNumber(&b);
+    const QScreen *scr = QGuiApplication::screenAt(b.pos());
     b.show();
-    const QRect screen = QApplication::desktop()->screenGeometry(scrNumber);
+    const QRect screen = scr->geometry();
 
     QRect desiredGeometry = b.geometry();
     desiredGeometry.moveTopLeft(QPoint(screen.x() + 10, screen.bottom() - b.height() - 5));
@@ -1143,8 +1145,16 @@ void tst_QMenu::QTBUG7411_submenus_activate()
     QTRY_VERIFY(sub1.isVisible());
 }
 
+static bool isPlatformWayland()
+{
+    return !QGuiApplication::platformName().compare(QLatin1String("wayland"), Qt::CaseInsensitive);
+}
+
 void tst_QMenu::QTBUG30595_rtl_submenu()
 {
+    if (isPlatformWayland())
+        QSKIP("Creating xdg_popups on Wayland requires real input events. Positions would be off.");
+
     QMenu menu("Test Menu");
     menu.setLayoutDirection(Qt::RightToLeft);
     QMenu sub("&sub");
@@ -1179,6 +1189,9 @@ void tst_QMenu::QTBUG20403_nested_popup_on_shortcut_trigger()
 #ifndef Q_OS_MACOS
 void tst_QMenu::click_while_dismissing_submenu()
 {
+    if (isPlatformWayland())
+        QSKIP("Wayland: Creating (grabbing) popups requires real mouse events.");
+
     QMenu menu("Test Menu");
     QAction *action = menu.addAction("action");
     QMenu sub("&sub");
@@ -1439,13 +1452,14 @@ void tst_QMenu::QTBUG_56917_wideMenuScreenNumber()
     QString longString;
     longString.fill(QLatin1Char('Q'), 3000);
 
-    for (int i = 0; i < QApplication::desktop()->screenCount(); i++) {
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    for (QScreen *screen : screens) {
         QMenu menu;
         menu.addAction(longString);
-        menu.popup(QApplication::desktop()->screen(i)->geometry().center());
+        menu.popup(screen->geometry().center());
         QVERIFY(QTest::qWaitForWindowExposed(&menu));
         QVERIFY(menu.isVisible());
-        QCOMPARE(QApplication::desktop()->screenNumber(&menu), i);
+        QCOMPARE(QGuiApplication::screenAt(menu.pos()), screen);
     }
 }
 
@@ -1457,19 +1471,20 @@ void tst_QMenu::QTBUG_56917_wideSubmenuScreenNumber()
     QString longString;
     longString.fill(QLatin1Char('Q'), 3000);
 
-    for (int i = 0; i < QApplication::desktop()->screenCount(); i++) {
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    for (QScreen *screen : screens) {
         QMenu menu;
         QMenu submenu("Submenu");
         submenu.addAction(longString);
         QAction *action = menu.addMenu(&submenu);
-        menu.popup(QApplication::desktop()->screen(i)->geometry().center());
+        menu.popup(screen->geometry().center());
         QVERIFY(QTest::qWaitForWindowExposed(&menu));
         QVERIFY(menu.isVisible());
         QTest::mouseClick(&menu, Qt::LeftButton, 0, menu.actionGeometry(action).center());
         QTest::qWait(100);
         QVERIFY(QTest::qWaitForWindowExposed(&submenu));
         QVERIFY(submenu.isVisible());
-        QCOMPARE(QApplication::desktop()->screenNumber(&submenu), i);
+        QCOMPARE(QGuiApplication::screenAt(submenu.pos()), screen);
     }
 }
 
@@ -1559,14 +1574,20 @@ void tst_QMenu::menuSize_Scrolling()
 
             int hmargin = style()->pixelMetric(QStyle::PM_MenuHMargin, nullptr, this);
             int fw = style()->pixelMetric(QStyle::PM_MenuPanelWidth, nullptr, this);
-            int leftMargin, topMargin, rightMargin, bottomMargin;
-            getContentsMargins(&leftMargin, &topMargin, &rightMargin, &bottomMargin);
+            const QMargins cm = contentsMargins();
             QRect lastItem = actionGeometry(actions().at(actions().length() - 1));
             QSize s = size();
 #ifdef Q_OS_WINRT
             QEXPECT_FAIL("", "Broken on WinRT - QTBUG-68297", Abort);
 #endif
-            QCOMPARE( s.width(), lastItem.right() + fw + hmargin + rightMargin + 1);
+            if (!QGuiApplication::platformName().compare(QLatin1String("minimal"), Qt::CaseInsensitive)
+                || !QGuiApplication::platformName().compare(QLatin1String("offscreen"), Qt::CaseInsensitive)) {
+                QWARN("Skipping test on minimal/offscreen platforms - QTBUG-73522");
+                QMenu::showEvent(e);
+                return;
+            }
+
+            QCOMPARE( s.width(), lastItem.right() + fw + hmargin + cm.right() + 1);
             QMenu::showEvent(e);
         }
 

@@ -132,7 +132,7 @@ QT_BEGIN_NAMESPACE
     Creates an empty array.
  */
 QJsonArray::QJsonArray()
-    : d(0), a(0)
+    : d(nullptr), a(nullptr)
 {
 }
 
@@ -168,8 +168,8 @@ QJsonArray::QJsonArray(QJsonPrivate::Data *data, QJsonPrivate::Array *array)
  */
 void QJsonArray::initialize()
 {
-    d = 0;
-    a = 0;
+    d = nullptr;
+    a = nullptr;
 }
 
 /*!
@@ -675,6 +675,14 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     \sa begin(), constEnd()
 */
 
+/*! \fn QJsonArray::const_iterator QJsonArray::cbegin() const
+
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the first item
+    in the array.
+
+    \sa begin(), cend()
+*/
+
 /*! \fn QJsonArray::iterator QJsonArray::end()
 
     Returns an \l{STL-style iterators}{STL-style iterator} pointing to the imaginary item
@@ -694,6 +702,14 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     item after the last item in the array.
 
     \sa constBegin(), end()
+*/
+
+/*! \fn QJsonArray::const_iterator QJsonArray::cend() const
+
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the imaginary
+    item after the last item in the array.
+
+    \sa cbegin(), end()
 */
 
 /*! \fn void QJsonArray::push_back(const QJsonValue &value)
@@ -829,7 +845,7 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     The return value is of type QJsonValueRef, a helper class for QJsonArray
     and QJsonObject. When you get an object of type QJsonValueRef, you can
     use it as if it were a reference to a QJsonValue. If you assign to it,
-    the assignment will apply to the character in the QJsonArray of QJsonObject
+    the assignment will apply to the element in the QJsonArray or QJsonObject
     from which you got the reference.
 
     \sa operator+()
@@ -1210,7 +1226,7 @@ bool QJsonArray::detach2(uint reserve)
         d->ref.ref();
         return true;
     }
-    if (reserve == 0 && d->ref.load() == 1)
+    if (reserve == 0 && d->ref.loadRelaxed() == 1)
         return true;
 
     QJsonPrivate::Data *x = d->clone(a, reserve);
@@ -1256,6 +1272,23 @@ QDebug operator<<(QDebug dbg, const QJsonArray &a)
                   << json.constData() // print as utf-8 string without extra quotation marks
                   << ")";
     return dbg;
+}
+#endif
+
+#ifndef QT_NO_DATASTREAM
+QDataStream &operator<<(QDataStream &stream, const QJsonArray &array)
+{
+    QJsonDocument doc{array};
+    stream << doc.toJson(QJsonDocument::Compact);
+    return stream;
+}
+
+QDataStream &operator>>(QDataStream &stream, QJsonArray &array)
+{
+    QJsonDocument doc;
+    stream >> doc;
+    array = doc.array();
+    return stream;
 }
 #endif
 

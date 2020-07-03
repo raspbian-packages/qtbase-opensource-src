@@ -45,6 +45,7 @@
 #include <qmimedata.h>
 #include <qdebug.h>
 #include <qvector.h>
+#include <qregexp.h>
 #include <qstack.h>
 #include <qbitarray.h>
 #include <qdatetime.h>
@@ -76,8 +77,8 @@ QPersistentModelIndexData *QPersistentModelIndexData::create(const QModelIndex &
 void QPersistentModelIndexData::destroy(QPersistentModelIndexData *data)
 {
     Q_ASSERT(data);
-    Q_ASSERT(data->ref.load() == 0);
-    QAbstractItemModel *model = const_cast<QAbstractItemModel *>(data->model);
+    Q_ASSERT(data->ref.loadRelaxed() == 0);
+    QAbstractItemModel *model = const_cast<QAbstractItemModel *>(data->index.model());
     // a valid persistent model index with a null model pointer can only happen if the model was destroyed
     if (model) {
         QAbstractItemModelPrivate *p = model->d_func();
@@ -105,6 +106,9 @@ void QPersistentModelIndexData::destroy(QPersistentModelIndexData *data)
 
   It is good practice to check that persistent model indexes are valid
   before using them.
+
+  \note You cannot store a QStandardItemModel's  QPersistentModelIndex
+  in one of the model's items.
 
   \sa {Model/View Programming}, QModelIndex, QAbstractItemModel
 */
@@ -512,10 +516,8 @@ QAbstractItemModel *QAbstractItemModelPrivate::staticEmptyModel()
 
 void QAbstractItemModelPrivate::invalidatePersistentIndexes()
 {
-    for (QPersistentModelIndexData *data : qAsConst(persistent.indexes)) {
+    for (QPersistentModelIndexData *data : qAsConst(persistent.indexes))
         data->index = QModelIndex();
-        data->model = 0;
-    }
     persistent.indexes.clear();
 }
 
@@ -530,25 +532,19 @@ void QAbstractItemModelPrivate::invalidatePersistentIndex(const QModelIndex &ind
         QPersistentModelIndexData *data = *it;
         persistent.indexes.erase(it);
         data->index = QModelIndex();
-        data->model = 0;
     }
 }
 
-namespace {
-    struct DefaultRoleNames : public QHash<int, QByteArray>
+using DefaultRoleNames = QHash<int, QByteArray>;
+Q_GLOBAL_STATIC_WITH_ARGS(DefaultRoleNames, qDefaultRoleNames, (
     {
-        DefaultRoleNames() {
-            (*this)[Qt::DisplayRole] = "display";
-            (*this)[Qt::DecorationRole] = "decoration";
-            (*this)[Qt::EditRole] = "edit";
-            (*this)[Qt::ToolTipRole] = "toolTip";
-            (*this)[Qt::StatusTipRole] = "statusTip";
-            (*this)[Qt::WhatsThisRole] = "whatsThis";
-        }
-    };
-}
-
-Q_GLOBAL_STATIC(DefaultRoleNames, qDefaultRoleNames)
+        { Qt::DisplayRole,    "display"    },
+        { Qt::DecorationRole, "decoration" },
+        { Qt::EditRole,       "edit"       },
+        { Qt::ToolTipRole,    "toolTip"    },
+        { Qt::StatusTipRole,  "statusTip"  },
+        { Qt::WhatsThisRole,  "whatsThis"  },
+    }))
 
 const QHash<int,QByteArray> &QAbstractItemModelPrivate::defaultRoleNames()
 {
@@ -863,7 +859,6 @@ void QAbstractItemModelPrivate::rowsRemoved(const QModelIndex &parent,
         QPersistentModelIndexData *data = *it;
         persistent.indexes.erase(persistent.indexes.constFind(data->index));
         data->index = QModelIndex();
-        data->model = 0;
     }
 }
 
@@ -958,7 +953,6 @@ void QAbstractItemModelPrivate::columnsRemoved(const QModelIndex &parent,
         QPersistentModelIndexData *data = *it;
         persistent.indexes.erase(persistent.indexes.constFind(data->index));
         data->index = QModelIndex();
-        data->model = 0;
     }
 }
 
@@ -1907,10 +1901,17 @@ bool QAbstractItemModel::clearItemData(const QModelIndex &index)
 */
 bool QAbstractItemModel::setItemData(const QModelIndex &index, const QMap<int, QVariant> &roles)
 {
-    bool b = true;
-    for (QMap<int, QVariant>::ConstIterator it = roles.begin(); it != roles.end(); ++it)
-        b = b && setData(index, it.value(), it.key());
-    return b;
+    // ### Qt 6: Consider change the semantics of this function,
+    // or deprecating/removing it altogether.
+    //
+    // For instance, it should try setting *all* the data
+    // in \a roles, and not bail out at the first setData that returns
+    // false. It should also have a transactional approach.
+    for (auto it = roles.begin(), e = roles.end(); it != e; ++it) {
+        if (!setData(index, it.value(), it.key()))
+            return false;
+    }
+    return true;
 }
 
 /*!
@@ -2334,7 +2335,7 @@ QModelIndex QAbstractItemModel::buddy(const QModelIndex &index) const
     The way the search is performed is defined by the \a flags given. The list
     that is returned may be empty. Note also that the order of results in the
     list may not correspond to the order in the model, if for example a proxy
-    model is used. The order of the results can not be relied upon.
+    model is used. The order of the results cannot be relied upon.
 
     The search begins from the \a start index, and continues until the number
     of matching data items equals \a hits, the search reaches the last row, or
@@ -2912,7 +2913,7 @@ bool QAbstractItemModelPrivate::allowMove(const QModelIndex &srcParent, int star
 
             Note that other rows may be displaced accordingly. Note also that when moving
             items within the same parent you should not attempt invalid or no-op moves. In
-            the above example, item 2 is at row 2 before the move, so it can not be moved
+            the above example, item 2 is at row 2 before the move, so it cannot be moved
             to row 2 (where it is already) or row 3 (no-op as row 3 means above row 3, where
             it is already)
 
@@ -3298,8 +3299,6 @@ void QAbstractItemModel::changePersistentIndex(const QModelIndex &from, const QM
         data->index = to;
         if (to.isValid())
             d->persistent.insertMultiAtEnd(to, data);
-        else
-            data->model = 0;
     }
 }
 
@@ -3332,8 +3331,6 @@ void QAbstractItemModel::changePersistentIndexList(const QModelIndexList &from,
             data->index = to.at(i);
             if (data->index.isValid())
                 toBeReinserted << data;
-            else
-                data->model = 0;
         }
     }
 
@@ -3627,7 +3624,7 @@ QModelIndex QAbstractTableModel::sibling(int row, int column, const QModelIndex 
 
 bool QAbstractTableModel::hasChildren(const QModelIndex &parent) const
 {
-    if (parent.model() == this || !parent.isValid())
+    if (!parent.isValid())
         return rowCount(parent) > 0 && columnCount(parent) > 0;
     return false;
 }
@@ -3963,7 +3960,7 @@ bool QAbstractListModel::dropMimeData(const QMimeData *data, Qt::DropAction acti
 
 /*!
     \internal
-    QHash::insertMulti insert the value before the old value. and find() return the new value.
+    QMultiHash::insert inserts the value before the old value. and find() return the new value.
     We need insertMultiAtEnd because we don't want to overwrite the old one, which should be removed later
 
     There should be only one instance QPersistentModelIndexData per index, but in some intermediate state there may be
@@ -3973,9 +3970,9 @@ bool QAbstractListModel::dropMimeData(const QMimeData *data, Qt::DropAction acti
  */
 void QAbstractItemModelPrivate::Persistent::insertMultiAtEnd(const QModelIndex& key, QPersistentModelIndexData *data)
 {
-    QHash<QModelIndex,QPersistentModelIndexData *>::iterator newIt =
-            indexes.insertMulti(key, data);
-    QHash<QModelIndex,QPersistentModelIndexData *>::iterator it = newIt + 1;
+    QHash<QModelIndex,QPersistentModelIndexData *>::iterator newIt = indexes.insert(key, data);
+    QHash<QModelIndex,QPersistentModelIndexData *>::iterator it = newIt;
+    ++it;
     while (it != indexes.end() && it.key() == key) {
         qSwap(*newIt,*it);
         newIt = it;

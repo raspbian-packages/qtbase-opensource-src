@@ -47,6 +47,7 @@
 #include "qjsonwriter_p.h"
 #include "qjsonparser_p.h"
 #include "qjson_p.h"
+#include "qdatastream.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -83,7 +84,7 @@ QT_BEGIN_NAMESPACE
  * Constructs an empty and invalid document.
  */
 QJsonDocument::QJsonDocument()
-    : d(0)
+    : d(nullptr)
 {
 }
 
@@ -91,7 +92,7 @@ QJsonDocument::QJsonDocument()
  * Creates a QJsonDocument from \a object.
  */
 QJsonDocument::QJsonDocument(const QJsonObject &object)
-    : d(0)
+    : d(nullptr)
 {
     setObject(object);
 }
@@ -100,7 +101,7 @@ QJsonDocument::QJsonDocument(const QJsonObject &object)
  * Constructs a QJsonDocument from \a array.
  */
 QJsonDocument::QJsonDocument(const QJsonArray &array)
-    : d(0)
+    : d(nullptr)
 {
     setArray(array);
 }
@@ -235,7 +236,7 @@ const char *QJsonDocument::rawData(int *size) const
 {
     if (!d) {
         *size = 0;
-        return 0;
+        return nullptr;
     }
     *size = d->alloc;
     return d->rawData;
@@ -331,7 +332,7 @@ QVariant QJsonDocument::toVariant() const
 }
 
 /*!
- Converts the QJsonDocument to a UTF-8 encoded JSON document.
+ Converts the QJsonDocument to an indented, UTF-8 encoded JSON document.
 
  \sa fromJson()
  */
@@ -543,6 +544,7 @@ void QJsonDocument::setArray(const QJsonArray &array)
     d->ref.ref();
 }
 
+#if QT_STRINGVIEW_LEVEL < 2
 /*!
     Returns a QJsonValue representing the value for the key \a key.
 
@@ -556,6 +558,16 @@ void QJsonDocument::setArray(const QJsonArray &array)
     \sa QJsonValue, QJsonValue::isUndefined(), QJsonObject
  */
 const QJsonValue QJsonDocument::operator[](const QString &key) const
+{
+    return (*this)[QStringView(key)];
+}
+#endif
+
+/*!
+    \overload
+    \since 5.14
+*/
+const QJsonValue QJsonDocument::operator[](QStringView key) const
 {
     if (!isObject())
         return QJsonValue(QJsonValue::Undefined);
@@ -634,7 +646,7 @@ bool QJsonDocument::operator==(const QJsonDocument &other) const
  */
 bool QJsonDocument::isNull() const
 {
-    return (d == 0);
+    return (d == nullptr);
 }
 
 #if !defined(QT_NO_DEBUG_STREAM) && !defined(QT_JSON_READONLY)
@@ -654,6 +666,25 @@ QDebug operator<<(QDebug dbg, const QJsonDocument &o)
                   << json.constData() // print as utf-8 string without extra quotation marks
                   << ')';
     return dbg;
+}
+#endif
+
+#ifndef QT_NO_DATASTREAM
+QDataStream &operator<<(QDataStream &stream, const QJsonDocument &doc)
+{
+    stream << doc.toJson(QJsonDocument::Compact);
+    return stream;
+}
+
+QDataStream &operator>>(QDataStream &stream, QJsonDocument &doc)
+{
+    QByteArray buffer;
+    stream >> buffer;
+    QJsonParseError parseError{};
+    doc = QJsonDocument::fromJson(buffer, &parseError);
+    if (parseError.error && !buffer.isEmpty())
+        stream.setStatus(QDataStream::ReadCorruptData);
+    return stream;
 }
 #endif
 

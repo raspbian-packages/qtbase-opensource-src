@@ -132,6 +132,14 @@ QXcbConnection::QXcbConnection(QXcbNativeInterface *nativeInterface, bool canGra
     if (!m_startupId.isNull())
         qunsetenv("DESKTOP_STARTUP_ID");
 
+    const int focusInDelay = 100;
+    m_focusInTimer.setSingleShot(true);
+    m_focusInTimer.setInterval(focusInDelay);
+    m_focusInTimer.callOnTimeout([]() {
+        // No FocusIn events for us, proceed with FocusOut normally.
+        QWindowSystemInterface::handleWindowActivated(nullptr, Qt::ActiveWindowFocusReason);
+    });
+
     sync();
 }
 
@@ -432,7 +440,11 @@ const char *xcb_protocol_request_codes[] =
 
 void QXcbConnection::handleXcbError(xcb_generic_error_t *error)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    qintptr result = 0;
+#else
     long result = 0;
+#endif
     QAbstractEventDispatcher* dispatcher = QAbstractEventDispatcher::instance();
     if (dispatcher && dispatcher->filterNativeEvent(m_nativeInterface->nativeEventType(), error, &result))
         return;
@@ -529,7 +541,11 @@ void QXcbConnection::handleXcbEvent(xcb_generic_event_t *event)
     if (Q_UNLIKELY(lcQpaEvents().isDebugEnabled()))
         printXcbEvent(lcQpaEvents(), "Event", event);
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    qintptr result = 0; // Used only by MS Windows
+#else
     long result = 0; // Used only by MS Windows
+#endif
     if (QAbstractEventDispatcher *dispatcher = QAbstractEventDispatcher::instance()) {
         if (dispatcher->filterNativeEvent(m_nativeInterface->nativeEventType(), event, &result))
             return;
@@ -729,11 +745,6 @@ void QXcbConnection::handleXcbEvent(xcb_generic_event_t *event)
 
     if (m_glIntegration)
         m_glIntegration->handleXcbEvent(event, response_type);
-}
-
-void QXcbConnection::addPeekFunc(PeekFunc f)
-{
-    m_peekFuncs.append(f);
 }
 
 void QXcbConnection::setFocusWindow(QWindow *w)
@@ -1015,15 +1026,6 @@ void QXcbConnection::processXcbEvents(QEventLoop::ProcessEventsFlags flags)
         if (compressEvent(event))
             continue;
 
-        auto isWaitingFor = [=](PeekFunc peekFunc) {
-            // These callbacks return true if the event is what they were
-            // waiting for, remove them from the list in that case.
-            return peekFunc(this, event);
-        };
-        m_peekFuncs.erase(std::remove_if(m_peekFuncs.begin(), m_peekFuncs.end(),
-                                         isWaitingFor),
-                          m_peekFuncs.end());
-
         handleXcbEvent(event);
 
         // The lock-based solution used to free the lock inside this loop,
@@ -1031,12 +1033,6 @@ void QXcbConnection::processXcbEvents(QEventLoop::ProcessEventsFlags flags)
         // this flush here after QTBUG-70095
         m_eventQueue->flushBufferedEvents();
     }
-
-    // Indicate with a null event that the event the callbacks are waiting for
-    // is not in the queue currently.
-    for (PeekFunc f : qAsConst(m_peekFuncs))
-        f(this, nullptr);
-    m_peekFuncs.clear();
 
     xcb_flush(xcb_connection());
 }

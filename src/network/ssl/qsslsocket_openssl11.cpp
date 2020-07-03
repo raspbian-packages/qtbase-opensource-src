@@ -68,10 +68,11 @@
 #include <QtCore/qfile.h>
 #include <QtCore/qmutex.h>
 #include <QtCore/qlibrary.h>
+#include <QtCore/qoperatingsystemversion.h>
 
 QT_BEGIN_NAMESPACE
 
-Q_GLOBAL_STATIC_WITH_ARGS(QMutex, qt_opensslInitMutex, (QMutex::Recursive))
+Q_GLOBAL_STATIC(QRecursiveMutex, qt_opensslInitMutex)
 
 void QSslSocketPrivate::deinitialize()
 {
@@ -122,21 +123,7 @@ void QSslSocketPrivate::ensureCiphersAndCertsLoaded()
 
 #if QT_CONFIG(library)
     //load symbols needed to receive certificates from system store
-#if defined(Q_OS_WIN)
-    HINSTANCE hLib = LoadLibraryW(L"Crypt32");
-    if (hLib) {
-        ptrCertOpenSystemStoreW = reinterpret_cast<PtrCertOpenSystemStoreW>(
-            reinterpret_cast<QFunctionPointer>(GetProcAddress(hLib, "CertOpenSystemStoreW")));
-        ptrCertFindCertificateInStore = reinterpret_cast<PtrCertFindCertificateInStore>(
-            reinterpret_cast<QFunctionPointer>(GetProcAddress(hLib, "CertFindCertificateInStore")));
-        ptrCertCloseStore = reinterpret_cast<PtrCertCloseStore>(
-            reinterpret_cast<QFunctionPointer>(GetProcAddress(hLib, "CertCloseStore")));
-        if (!ptrCertOpenSystemStoreW || !ptrCertFindCertificateInStore || !ptrCertCloseStore)
-            qCWarning(lcSsl, "could not resolve symbols in crypt32 library"); // should never happen
-    } else {
-        qCWarning(lcSsl, "could not load crypt32 library"); // should never happen
-    }
-#elif defined(Q_OS_QNX)
+#if defined(Q_OS_QNX)
     s_loadRootCertsOnDemand = true;
 #elif defined(Q_OS_UNIX) && !defined(Q_OS_DARWIN)
     // check whether we can enable on-demand root-cert loading (i.e. check whether the sym links are there)
@@ -156,13 +143,12 @@ void QSslSocketPrivate::ensureCiphersAndCertsLoaded()
     if (!s_loadRootCertsOnDemand)
         setDefaultCaCertificates(systemCaCertificates());
 #ifdef Q_OS_WIN
-    //Enabled for fetching additional root certs from windows update on windows 6+
+    //Enabled for fetching additional root certs from windows update on windows.
     //This flag is set false by setDefaultCaCertificates() indicating the app uses
     //its own cert bundle rather than the system one.
     //Same logic that disables the unix on demand cert loading.
     //Unlike unix, we do preload the certificates from the cert store.
-    if ((QSysInfo::windowsVersion() & QSysInfo::WV_NT_based) >= QSysInfo::WV_6_0)
-        s_loadRootCertsOnDemand = true;
+    s_loadRootCertsOnDemand = true;
 #endif
 }
 

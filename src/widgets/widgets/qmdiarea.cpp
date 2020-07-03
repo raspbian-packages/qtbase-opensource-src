@@ -954,14 +954,6 @@ void QMdiAreaPrivate::rearrange(Rearranger *rearranger)
         }
     }
 
-    if (active && rearranger->type() == Rearranger::RegularTiler && !tileCalledFromResizeEvent) {
-        // Move active window in front if necessary. That's the case if we
-        // have any windows with staysOnTopHint set.
-        int indexToActive = widgets.indexOf((QWidget *)active);
-        if (indexToActive > 0)
-            widgets.move(indexToActive, 0);
-    }
-
     QRect domain = viewport->rect();
     if (rearranger->type() == Rearranger::RegularTiler && !widgets.isEmpty())
         domain = resizeToMinimumTileSize(minSubWindowSize, widgets.count());
@@ -1296,7 +1288,11 @@ QRect QMdiAreaPrivate::resizeToMinimumTileSize(const QSize &minSubWindowSize, in
             minAreaHeight += 2 * frame;
         }
         const QSize diff = QSize(minAreaWidth, minAreaHeight).expandedTo(q->size()) - q->size();
-        topLevel->resize(topLevel->size() + diff);
+        // Only resize topLevel widget if scroll bars are disabled.
+        if (hbarpolicy == Qt::ScrollBarAlwaysOff)
+            topLevel->resize(topLevel->size().width() + diff.width(), topLevel->size().height());
+        if (vbarpolicy == Qt::ScrollBarAlwaysOff)
+            topLevel->resize(topLevel->size().width(), topLevel->size().height() + diff.height());
     }
 
     QRect domain = viewport->rect();
@@ -1778,7 +1774,7 @@ QSize QMdiArea::minimumSizeHint() const
 }
 
 /*!
-    Returns a pointer to the current subwindow, or 0 if there is
+    Returns a pointer to the current subwindow, or \nullptr if there is
     no current subwindow.
 
     This function will return the same as activeSubWindow() if
@@ -1790,13 +1786,13 @@ QMdiSubWindow *QMdiArea::currentSubWindow() const
 {
     Q_D(const QMdiArea);
     if (d->childWindows.isEmpty())
-        return 0;
+        return nullptr;
 
     if (d->active)
         return d->active;
 
     if (d->isActivated && !window()->isMinimized())
-        return 0;
+        return nullptr;
 
     Q_ASSERT(d->indicesToActivatedChildren.count() > 0);
     int index = d->indicesToActivatedChildren.at(0);
@@ -1808,7 +1804,7 @@ QMdiSubWindow *QMdiArea::currentSubWindow() const
 
 /*!
     Returns a pointer to the current active subwindow. If no
-    window is currently active, 0 is returned.
+    window is currently active, \nullptr is returned.
 
     Subwindows are treated as top-level windows with respect to
     window state, i.e., if a widget outside the MDI area is the active
@@ -1825,7 +1821,7 @@ QMdiSubWindow *QMdiArea::activeSubWindow() const
 }
 
 /*!
-    Activates the subwindow \a window. If \a window is 0, any
+    Activates the subwindow \a window. If \a window is \nullptr, any
     current active window is deactivated.
 
     \sa activeSubWindow()
@@ -1834,7 +1830,7 @@ void QMdiArea::setActiveSubWindow(QMdiSubWindow *window)
 {
     Q_D(QMdiArea);
     if (!window) {
-        d->activateWindow(0);
+        d->activateWindow(nullptr);
         return;
     }
 
@@ -1992,9 +1988,11 @@ QMdiSubWindow *QMdiArea::addSubWindow(QWidget *widget, Qt::WindowFlags windowFla
         Q_ASSERT(child->testAttribute(Qt::WA_DeleteOnClose));
     }
 
+    d->appendChild(child);
+
     if (childFocus)
         childFocus->setFocus();
-    d->appendChild(child);
+
     return child;
 }
 
@@ -2002,9 +2000,9 @@ QMdiSubWindow *QMdiArea::addSubWindow(QWidget *widget, Qt::WindowFlags windowFla
     Removes \a widget from the MDI area. The \a widget must be
     either a QMdiSubWindow or a widget that is the internal widget of
     a subwindow. Note \a widget is never actually deleted by QMdiArea.
-    If a QMdiSubWindow is passed in its parent is set to 0 and it is
-    removed, but if an internal widget is passed in the child widget
-    is set to 0 but the QMdiSubWindow is not removed.
+    If a QMdiSubWindow is passed in, its parent is set to \nullptr and it is
+    removed; but if an internal widget is passed in, the child widget
+    is set to \nullptr and the QMdiSubWindow is \e not removed.
 
     \sa addSubWindow()
 */
@@ -2495,13 +2493,6 @@ bool QMdiArea::event(QEvent *event)
 {
     Q_D(QMdiArea);
     switch (event->type()) {
-#if 0 // Used to be included in Qt4 for Q_WS_WIN
-    // QWidgetPrivate::hide_helper activates another sub-window when closing a
-    // modal dialog on Windows (see activateWindow() inside the ifdef).
-    case QEvent::WindowUnblocked:
-        d->activateCurrentWindow();
-        break;
-#endif
     case QEvent::WindowActivate: {
         d->isActivated = true;
         if (d->childWindows.isEmpty())
@@ -2527,7 +2518,7 @@ bool QMdiArea::event(QEvent *event)
     case QEvent::WindowIconChange:
         foreach (QMdiSubWindow *window, d->childWindows) {
             if (sanityCheck(window, "QMdiArea::WindowIconChange"))
-                QApplication::sendEvent(window, event);
+                QCoreApplication::sendEvent(window, event);
         }
         break;
     case QEvent::Hide:
@@ -2559,11 +2550,7 @@ bool QMdiArea::eventFilter(QObject *object, QEvent *event)
 
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
         // Ingore key events without a Ctrl modifier (except for press/release on the modifier itself).
-#if 0 // Used to be included in Qt4 for Q_WS_MAC
-        if (!(keyEvent->modifiers() & Qt::MetaModifier) && keyEvent->key() != Qt::Key_Meta)
-#else
         if (!(keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() != Qt::Key_Control)
-#endif
             return QAbstractScrollArea::eventFilter(object, event);
 
         // Find closest mdi area (in case we have a nested workspace).
@@ -2578,11 +2565,7 @@ bool QMdiArea::eventFilter(QObject *object, QEvent *event)
         // 3) Ctrl-Shift-Tab (Tab, Tab, ...) -> iterate through all windows in the opposite
         //    direction (activatePreviousSubWindow())
         switch (keyEvent->key()) {
-#if 0 // Used to be included in Qt4 for Q_WS_MAC
-        case Qt::Key_Meta:
-#else
         case Qt::Key_Control:
-#endif
             if (keyPress)
                 area->d_func()->startTabToPreviousTimer();
             else
@@ -2640,7 +2623,11 @@ bool QMdiArea::eventFilter(QObject *object, QEvent *event)
 #endif // QT_CONFIG(tabbar)
         Q_FALLTHROUGH();
     case QEvent::Hide:
-        d->isSubWindowsTiled = false;
+        // Do not reset the isSubWindowsTiled flag if the event is a spontaneous system window event.
+        // This ensures that tiling will be performed during the resizeEvent after an application
+        // window minimize (hide) and then restore (show).
+        if (!event->spontaneous())
+            d->isSubWindowsTiled = false;
         break;
 #if QT_CONFIG(rubberband)
     case QEvent::Close:

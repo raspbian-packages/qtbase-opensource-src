@@ -57,6 +57,11 @@
 #include "qpainter.h"
 #include "qpixmap.h"
 #include "qpushbutton.h"
+#if QT_CONFIG(regularexpression)
+#include <qregularexpression.h>
+#else
+#include <qregexp.h>
+#endif
 #if QT_CONFIG(settings)
 #include "qsettings.h"
 #endif
@@ -341,7 +346,8 @@ void QWellArray::paintCell(QPainter* p, int row, int col, const QRect &rect)
 
     const QPalette & g = palette();
     QStyleOptionFrame opt;
-    int dfw = style()->pixelMetric(QStyle::PM_DefaultFrameWidth);
+    opt.initFrom(this);
+    int dfw = style()->pixelMetric(QStyle::PM_DefaultFrameWidth, &opt);
     opt.lineWidth = dfw;
     opt.midLineWidth = 1;
     opt.rect = rect.adjusted(b, b, -b, -b);
@@ -499,7 +505,7 @@ void QWellArray::keyPressEvent(QKeyEvent* e)
 // Event filter to be installed on the dialog while in color-picking mode.
 class QColorPickingEventFilter : public QObject {
 public:
-    explicit QColorPickingEventFilter(QColorDialogPrivate *dp, QObject *parent = 0) : QObject(parent), m_dp(dp) {}
+    explicit QColorPickingEventFilter(QColorDialogPrivate *dp, QObject *parent) : QObject(parent), m_dp(dp) {}
 
     bool eventFilter(QObject *, QEvent *event) override
     {
@@ -646,7 +652,7 @@ void QColorWell::mouseMoveEvent(QMouseEvent *e)
         drg->setMimeData(mime);
         drg->setPixmap(pix);
         mousePressed = false;
-        drg->start();
+        drg->exec(Qt::CopyAction);
     }
 #endif
 }
@@ -842,8 +848,8 @@ void QColorLuminancePicker::paintEvent(QPaintEvent *)
     p.drawPixmap(1, coff, *pix);
     const QPalette &g = palette();
     qDrawShadePanel(&p, r, g, true);
-    p.setPen(g.foreground().color());
-    p.setBrush(g.foreground());
+    p.setPen(g.windowText().color());
+    p.setBrush(g.windowText());
     QPolygon a;
     int y = val2y(val);
     a.setPoints(3, w, y, w+5, y+5, w+5, y-5);
@@ -1131,7 +1137,7 @@ void QColorShowLabel::mouseMoveEvent(QMouseEvent *e)
         drg->setMimeData(mime);
         drg->setPixmap(pix);
         mousePressed = false;
-        drg->start();
+        drg->exec(Qt::CopyAction);
     }
 #endif
 }
@@ -1179,7 +1185,8 @@ QColorShower::QColorShower(QColorDialog *parent)
     curQColor = Qt::white;
 
     gl = new QGridLayout(this);
-    gl->setMargin(gl->spacing());
+    const int s = gl->spacing();
+    gl->setContentsMargins(s, s, s, s);
     lab = new QColorShowLabel(this);
 
 #ifdef QT_SMALL_COLORDIALOG
@@ -1605,7 +1612,7 @@ void QColorDialogPrivate::_q_pickScreenColor()
 {
     Q_Q(QColorDialog);
     if (!colorPickingEventFilter)
-        colorPickingEventFilter = new QColorPickingEventFilter(this);
+        colorPickingEventFilter = new QColorPickingEventFilter(this, q);
     q->installEventFilter(colorPickingEventFilter);
     // If user pushes Escape, the last color before picking will be restored.
     beforeScreenColorPicking = cs->currentColor();
@@ -1615,7 +1622,7 @@ void QColorDialogPrivate::_q_pickScreenColor()
     q->grabMouse();
 #endif
 
-#ifdef Q_OS_WIN32 // excludes WinCE and WinRT
+#ifdef Q_OS_WIN32 // excludes WinRT
     // On Windows mouse tracking doesn't work over other processes's windows
     updateTimer->start(30);
 
@@ -1807,7 +1814,7 @@ void QColorDialogPrivate::initWidgets()
     rightLay->addStretch();
 
     cs = new QColorShower(q);
-    pickLay->setMargin(cs->gl->margin());
+    pickLay->setContentsMargins(cs->gl->contentsMargins());
     QObject::connect(cs, SIGNAL(newCol(QRgb)), q, SLOT(_q_newColorTypedIn(QRgb)));
     QObject::connect(cs, SIGNAL(currentColorChanged(QColor)),
                      q, SIGNAL(currentColorChanged(QColor)));
@@ -1816,7 +1823,7 @@ void QColorDialogPrivate::initWidgets()
 #else
     rightLay->addWidget(cs);
     if (leftLay)
-        leftLay->addSpacing(cs->gl->margin());
+        leftLay->addSpacing(cs->gl->contentsMargins().right());
 #endif
 
     buttons = new QDialogButtonBox(q);

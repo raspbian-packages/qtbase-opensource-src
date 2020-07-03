@@ -92,7 +92,7 @@ public:
     QJsonValue(const QJsonValue &other);
     QJsonValue &operator =(const QJsonValue &other);
 
-    QJsonValue(QJsonValue &&other) Q_DECL_NOTHROW
+    QJsonValue(QJsonValue &&other) noexcept
         : ui(other.ui),
           d(other.d),
           t(other.t)
@@ -102,13 +102,13 @@ public:
         other.t = Null;
     }
 
-    QJsonValue &operator =(QJsonValue &&other) Q_DECL_NOTHROW
+    QJsonValue &operator =(QJsonValue &&other) noexcept
     {
         swap(other);
         return *this;
     }
 
-    void swap(QJsonValue &other) Q_DECL_NOTHROW
+    void swap(QJsonValue &other) noexcept
     {
         qSwap(ui, other.ui);
         qSwap(d, other.d);
@@ -137,7 +137,10 @@ public:
     QJsonObject toObject() const;
     QJsonObject toObject(const QJsonObject &defaultValue) const;
 
+#if QT_STRINGVIEW_LEVEL < 2
     const QJsonValue operator[](const QString &key) const;
+#endif
+    const QJsonValue operator[](QStringView key) const;
     const QJsonValue operator[](QLatin1String key) const;
     const QJsonValue operator[](int i) const;
 
@@ -152,6 +155,7 @@ private:
     friend class QJsonObject;
     friend class QCborValue;
     friend Q_CORE_EXPORT QDebug operator<<(QDebug, const QJsonValue &);
+    friend Q_CORE_EXPORT QDataStream &operator<<(QDataStream &, const QJsonValue &);
 
     QJsonValue(QJsonPrivate::Data *d, QJsonPrivate::Base *b, const QJsonPrivate::Value& v);
     void stringDataFromQStringHelper(const QString &string);
@@ -249,6 +253,11 @@ Q_CORE_EXPORT uint qHash(const QJsonValue &value, uint seed = 0);
 
 #if !defined(QT_NO_DEBUG_STREAM) && !defined(QT_JSON_READONLY)
 Q_CORE_EXPORT QDebug operator<<(QDebug, const QJsonValue &);
+#endif
+
+#ifndef QT_NO_DATASTREAM
+Q_CORE_EXPORT QDataStream &operator<<(QDataStream &, const QJsonValue &);
+Q_CORE_EXPORT QDataStream &operator>>(QDataStream &, QJsonValue &);
 #endif
 
 QT_END_NAMESPACE

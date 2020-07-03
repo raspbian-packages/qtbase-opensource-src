@@ -43,6 +43,7 @@
 #include <xcb/xcb.h>
 #include <xcb/randr.h>
 
+#include <QtCore/QTimer>
 #include <QtGui/private/qtguiglobal_p.h>
 #include "qxcbexport.h"
 #include <QHash>
@@ -107,7 +108,7 @@ public:
     virtual void handleXIMouseEvent(xcb_ge_event_t *, Qt::MouseEventSource = Qt::MouseEventNotSynthesized) {}
     virtual void handleXIEnterLeave(xcb_ge_event_t *) {}
 #endif
-    virtual QXcbWindow *toWindow() { return 0; }
+    virtual QXcbWindow *toWindow() { return nullptr; }
 };
 
 typedef QHash<xcb_window_t, QXcbWindowEventListener *> WindowMapper;
@@ -183,9 +184,6 @@ public:
     QXcbWindowEventListener *windowEventListenerFromId(xcb_window_t id);
     QXcbWindow *platformWindowFromId(xcb_window_t id);
 
-    typedef bool (*PeekFunc)(QXcbConnection *, xcb_generic_event_t *);
-    void addPeekFunc(PeekFunc f);
-
     inline xcb_timestamp_t time() const { return m_time; }
     inline void setTime(xcb_timestamp_t t) { if (timeGreaterThan(t, m_time)) m_time = t; }
 
@@ -246,6 +244,8 @@ public:
 
     void flush() { xcb_flush(xcb_connection()); }
     void processXcbEvents(QEventLoop::ProcessEventsFlags flags);
+
+    QTimer &focusInTimer() { return m_focusInTimer; }
 
 protected:
     bool event(QEvent *e) override;
@@ -366,9 +366,7 @@ private:
 
     WindowMapper m_mapper;
 
-    QVector<PeekFunc> m_peekFuncs;
-
-    Qt::MouseButtons m_buttonState = 0;
+    Qt::MouseButtons m_buttonState = nullptr;
     Qt::MouseButton m_button = Qt::NoButton;
 
     QXcbWindow *m_focusWindow = nullptr;
@@ -388,6 +386,8 @@ private:
     friend class QXcbEventQueue;
 
     QByteArray m_xdgCurrentDesktop;
+    QTimer m_focusInTimer;
+
 };
 #if QT_CONFIG(xcb_xinput)
 #if QT_CONFIG(tabletevent)

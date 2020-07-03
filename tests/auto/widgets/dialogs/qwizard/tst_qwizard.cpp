@@ -417,7 +417,7 @@ void tst_QWizard::setPixmap()
     QVERIFY(wizard.pixmap(QWizard::BannerPixmap).isNull());
     QVERIFY(wizard.pixmap(QWizard::LogoPixmap).isNull());
     QVERIFY(wizard.pixmap(QWizard::WatermarkPixmap).isNull());
-    if (QSysInfo::macVersion() <= Q_MV_OSX(10, 13))
+    if (QOperatingSystemVersion::current() <= QOperatingSystemVersion::MacOSHighSierra)
         QVERIFY(!wizard.pixmap(QWizard::BackgroundPixmap).isNull());
     else
         QVERIFY(wizard.pixmap(QWizard::BackgroundPixmap).isNull());
@@ -425,7 +425,7 @@ void tst_QWizard::setPixmap()
     QVERIFY(page->pixmap(QWizard::BannerPixmap).isNull());
     QVERIFY(page->pixmap(QWizard::LogoPixmap).isNull());
     QVERIFY(page->pixmap(QWizard::WatermarkPixmap).isNull());
-    if (QSysInfo::macVersion() <= Q_MV_OSX(10, 13))
+    if (QOperatingSystemVersion::current() <= QOperatingSystemVersion::MacOSHighSierra)
         QVERIFY(!wizard.pixmap(QWizard::BackgroundPixmap).isNull());
     else
         QVERIFY(page->pixmap(QWizard::BackgroundPixmap).isNull());
@@ -2712,13 +2712,8 @@ void tst_QWizard::taskQTBUG_46894_nextButtonShortcut()
         wizard.show();
         QVERIFY(QTest::qWaitForWindowExposed(&wizard));
 
-        if (wizard.button(QWizard::NextButton)->text() == "&Next") {
-            QCOMPARE(wizard.button(QWizard::NextButton)->shortcut(),
-                     QKeySequence(Qt::ALT | Qt::Key_Right));
-        } else {
-            QCOMPARE(wizard.button(QWizard::NextButton)->shortcut(),
-                     QKeySequence::mnemonic(wizard.button(QWizard::NextButton)->text()));
-        }
+        QCOMPARE(wizard.button(QWizard::NextButton)->shortcut(),
+                 QKeySequence::mnemonic(wizard.button(QWizard::NextButton)->text()));
     }
 }
 

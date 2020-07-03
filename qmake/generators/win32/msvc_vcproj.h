@@ -57,16 +57,19 @@ public:
     ~VcprojGenerator();
 
     QString defaultMakefile() const;
-    QString precompH, precompHFilename, precompCPP,
+    QString precompH, precompHFilename, precompSource,
             precompObj, precompPch;
-    bool autogenPrecompCPP;
+    bool autogenPrecompSource;
     static bool hasBuiltinCompiler(const QString &file);
 
     QHash<QString, QStringList> extraCompilerSources;
     QHash<QString, QString> extraCompilerOutputs;
     const QString customBuildToolFilterFileSuffix;
     bool usePCH;
+    bool pchIsCFile = false;
     VCProjectWriter *projectWriter;
+
+    using Win32MakefileGenerator::callExtraCompilerDependCommand;
 
 protected:
     virtual VCProjectWriter *createProjectWriter();

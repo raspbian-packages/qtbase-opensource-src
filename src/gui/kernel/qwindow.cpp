@@ -166,7 +166,7 @@ QWindow::QWindow(QScreen *targetScreen)
 static QWindow *nonDesktopParent(QWindow *parent)
 {
     if (parent && parent->type() == Qt::Desktop) {
-        qWarning("QWindows can not be reparented into desktop windows");
+        qWarning("QWindows cannot be reparented into desktop windows");
         return nullptr;
     }
 
@@ -694,7 +694,8 @@ QWindow *QWindow::parent() const
     Sets the \a parent Window. This will lead to the windowing system managing
     the clip of the window, so it will be clipped to the \a parent window.
 
-    Setting \a parent to be 0 will make the window become a top level window.
+    Setting \a parent to be \nullptr will make the window become a top level
+    window.
 
     If \a parent is a window created by fromWinId(), then the current window
     will be embedded inside \a parent, if the platform supports it.
@@ -1336,16 +1337,18 @@ Qt::WindowStates QWindow::windowStates() const
 */
 
 /*!
-    Sets the transient \a parent
+    \property QWindow::transientParent
+    \brief the window for which this window is a transient pop-up
+    \since 5.13
 
     This is a hint to the window manager that this window is a dialog or pop-up
-    on behalf of the given window.
+    on behalf of the transient parent.
 
-    In order to cause the window to be centered above its transient parent by
+    In order to cause the window to be centered above its transient \a parent by
     default, depending on the window manager, it may also be necessary to call
     setFlags() with a suitable \l Qt::WindowType (such as \c Qt::Dialog).
 
-    \sa transientParent(), parent()
+    \sa parent()
 */
 void QWindow::setTransientParent(QWindow *parent)
 {
@@ -1355,24 +1358,33 @@ void QWindow::setTransientParent(QWindow *parent)
         return;
     }
     if (parent == this) {
-        qWarning() << "transient parent" << parent << "can not be same as window";
+        qWarning() << "transient parent" << parent << "cannot be same as window";
         return;
     }
 
     d->transientParent = parent;
 
     QGuiApplicationPrivate::updateBlockedStatus(this);
+    emit transientParentChanged(parent);
 }
 
-/*!
-    Returns the transient parent of the window.
-
-    \sa setTransientParent(), parent()
-*/
 QWindow *QWindow::transientParent() const
 {
     Q_D(const QWindow);
     return d->transientParent.data();
+}
+
+/*
+    The setter for the QWindow::transientParent property.
+    The only reason this exists is to set the transientParentPropertySet flag
+    so that Qt Quick knows whether it was set programmatically (because of
+    Window declaration context) or because the user set the property.
+*/
+void QWindowPrivate::setTransientParent(QWindow *parent)
+{
+    Q_Q(QWindow);
+    q->setTransientParent(parent);
+    transientParentPropertySet = true;
 }
 
 /*!
@@ -1654,7 +1666,7 @@ void QWindow::setGeometry(const QRect &rect)
         if (newScreen && isTopLevel())
             nativeRect = QHighDpi::toNativePixels(rect, newScreen);
         else
-            nativeRect = QHighDpi::toNativePixels(rect, this);
+            nativeRect = QHighDpi::toNativeLocalPosition(rect, newScreen);
         d->platformWindow->setGeometry(nativeRect);
     } else {
         d->geometry = rect;
@@ -1705,8 +1717,12 @@ QScreen *QWindowPrivate::screenForGeometry(const QRect &newGeometry) const
 QRect QWindow::geometry() const
 {
     Q_D(const QWindow);
-    if (d->platformWindow)
-        return QHighDpi::fromNativePixels(d->platformWindow->geometry(), this);
+    if (d->platformWindow) {
+        const auto nativeGeometry = d->platformWindow->geometry();
+        return isTopLevel()
+            ? QHighDpi::fromNativePixels(nativeGeometry, this)
+            : QHighDpi::fromNativeLocalPosition(nativeGeometry, this);
+    }
     return d->geometry;
 }
 
@@ -2523,7 +2539,12 @@ void QWindow::tabletEvent(QTabletEvent *ev)
 
     Should return true only if the event was handled.
 */
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+bool QWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
+#else
 bool QWindow::nativeEvent(const QByteArray &eventType, void *message, long *result)
+#endif
 {
     Q_UNUSED(eventType);
     Q_UNUSED(message);
@@ -2673,7 +2694,6 @@ QOpenGLContext *QWindowPrivate::shareContext() const
     platform dependent and untested.
 
     \sa setParent()
-    \sa setTransientParent()
 */
 QWindow *QWindow::fromWinId(WId id)
 {
@@ -2832,13 +2852,13 @@ QDebug operator<<(QDebug debug, const QWindow *window)
             if (window->isTopLevel())
                 debug << ", toplevel";
             debug << ", " << geometry.width() << 'x' << geometry.height()
-                << forcesign << geometry.x() << geometry.y() << noforcesign;
+                << Qt::forcesign << geometry.x() << geometry.y() << Qt::noforcesign;
             const QMargins margins = window->frameMargins();
             if (!margins.isNull())
                 debug << ", margins=" << margins;
             debug << ", devicePixelRatio=" << window->devicePixelRatio();
             if (const QPlatformWindow *platformWindow = window->handle())
-                debug << ", winId=0x" << hex << platformWindow->winId() << dec;
+                debug << ", winId=0x" << Qt::hex << platformWindow->winId() << Qt::dec;
             if (const QScreen *screen = window->screen())
                 debug << ", on " << screen->name();
         }
@@ -2864,7 +2884,7 @@ void QWindow::setVulkanInstance(QVulkanInstance *instance)
 }
 
 /*!
-    \return the associated Vulkan instance or \c null if there is none.
+    \return the associated Vulkan instance if any was set, otherwise \nullptr.
  */
 QVulkanInstance *QWindow::vulkanInstance() const
 {

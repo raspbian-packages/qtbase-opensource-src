@@ -73,7 +73,7 @@ public:
     Q_DECLARE_FLAGS(ShaderType, ShaderTypeBit)
 
     explicit QOpenGLShader(QOpenGLShader::ShaderType type, QObject *parent = nullptr);
-    virtual ~QOpenGLShader();
+    ~QOpenGLShader();
 
     QOpenGLShader::ShaderType shaderType() const;
 
@@ -108,7 +108,7 @@ class Q_GUI_EXPORT QOpenGLShaderProgram : public QObject
     Q_OBJECT
 public:
     explicit QOpenGLShaderProgram(QObject *parent = nullptr);
-    virtual ~QOpenGLShaderProgram();
+    ~QOpenGLShaderProgram();
 
     bool addShader(QOpenGLShader *shader);
     void removeShader(QOpenGLShader *shader);

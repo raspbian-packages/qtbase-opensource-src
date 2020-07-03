@@ -304,7 +304,7 @@ QPlatformNativeInterface::NativeResourceForWindowFunction QXcbNativeInterface::n
 QPlatformNativeInterface::NativeResourceForBackingStoreFunction QXcbNativeInterface::nativeResourceFunctionForBackingStore(const QByteArray &resource)
 {
     const QByteArray lowerCaseResource = resource.toLower();
-    NativeResourceForBackingStoreFunction func = handlerNativeResourceFunctionForBackingStore(resource);
+    NativeResourceForBackingStoreFunction func = handlerNativeResourceFunctionForBackingStore(lowerCaseResource);
     return func;
 }
 
@@ -636,13 +636,13 @@ static void dumpNativeWindowsRecursion(const QXcbConnection *connection, xcb_win
     const QChar oldPadChar =str.padChar();
     str.setFieldWidth(8);
     str.setPadChar(QLatin1Char('0'));
-    str << hex << window;
+    str << Qt::hex << window;
     str.setFieldWidth(oldFieldWidth);
     str.setPadChar(oldPadChar);
-    str << dec << " \""
+    str << Qt::dec << " \""
         << QXcbWindow::windowTitle(connection, window) << "\" "
-        << geom.width() << 'x' << geom.height() << forcesign << geom.x() << geom.y()
-        << noforcesign << '\n';
+        << geom.width() << 'x' << geom.height() << Qt::forcesign << geom.x() << geom.y()
+        << Qt::noforcesign << '\n';
 
     auto reply = Q_XCB_REPLY(xcb_query_tree, conn, window);
     if (reply) {

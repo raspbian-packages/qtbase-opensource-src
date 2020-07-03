@@ -78,10 +78,14 @@ class WidgetGallery : public QDialog
     Q_OBJECT
 
 public:
-    WidgetGallery(QWidget *parent = 0);
+    WidgetGallery(QWidget *parent = nullptr);
+
+protected:
+    void changeEvent(QEvent *) override;
 
 private slots:
     void changeStyle(const QString &styleName);
+    void styleChanged();
     void changePalette();
     void advanceProgressBar();
 

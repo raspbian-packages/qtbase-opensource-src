@@ -620,13 +620,13 @@ void tst_QFiledialog::acceptMode()
 void tst_QFiledialog::confirmOverwrite()
 {
     QFileDialog fd;
-    QCOMPARE(fd.confirmOverwrite(), true);
-    fd.setConfirmOverwrite(true);
-    QCOMPARE(fd.confirmOverwrite(), true);
-    fd.setConfirmOverwrite(false);
-    QCOMPARE(fd.confirmOverwrite(), false);
-    fd.setConfirmOverwrite(true);
-    QCOMPARE(fd.confirmOverwrite(), true);
+    QCOMPARE(fd.testOption(QFileDialog::DontConfirmOverwrite), false);
+    fd.setOption(QFileDialog::DontConfirmOverwrite, false);
+    QCOMPARE(fd.testOption(QFileDialog::DontConfirmOverwrite), false);
+    fd.setOption(QFileDialog::DontConfirmOverwrite, true);
+    QCOMPARE(fd.testOption(QFileDialog::DontConfirmOverwrite), true);
+    fd.setOption(QFileDialog::DontConfirmOverwrite, false);
+    QCOMPARE(fd.testOption(QFileDialog::DontConfirmOverwrite), false);
 }
 
 void tst_QFiledialog::defaultSuffix()
@@ -800,7 +800,10 @@ void tst_QFiledialog::isReadOnly()
     QAction* renameAction = fd.findChild<QAction*>("qt_rename_action");
     QAction* deleteAction = fd.findChild<QAction*>("qt_delete_action");
 
+#if QT_DEPRECATED_SINCE(5, 13)
     QCOMPARE(fd.isReadOnly(), false);
+#endif
+    QCOMPARE(fd.testOption(QFileDialog::ReadOnly), false);
 
     // This is dependent upon the file/dir, find cross platform way to test
     //fd.setDirectory(QDir::home());
@@ -808,8 +811,8 @@ void tst_QFiledialog::isReadOnly()
     //QCOMPARE(renameAction && renameAction->isEnabled(), true);
     //QCOMPARE(deleteAction && deleteAction->isEnabled(), true);
 
-    fd.setReadOnly(true);
-    QCOMPARE(fd.isReadOnly(), true);
+    fd.setOption(QFileDialog::ReadOnly, true);
+    QCOMPARE(fd.testOption(QFileDialog::ReadOnly), true);
 
     QCOMPARE(newButton && newButton->isEnabled(), false);
     QCOMPARE(renameAction && renameAction->isEnabled(), false);
@@ -853,11 +856,11 @@ void tst_QFiledialog::resolveSymlinks()
     QFileDialog fd;
 
     // default
-    QCOMPARE(fd.resolveSymlinks(), true);
-    fd.setResolveSymlinks(false);
-    QCOMPARE(fd.resolveSymlinks(), false);
-    fd.setResolveSymlinks(true);
-    QCOMPARE(fd.resolveSymlinks(), true);
+    QCOMPARE(fd.testOption(QFileDialog::DontResolveSymlinks), false);
+    fd.setOption(QFileDialog::DontResolveSymlinks, true);
+    QCOMPARE(fd.testOption(QFileDialog::DontResolveSymlinks), true);
+    fd.setOption(QFileDialog::DontResolveSymlinks, false);
+    QCOMPARE(fd.testOption(QFileDialog::DontResolveSymlinks), false);
 
     // the file dialog doesn't do anything based upon this, just passes it to the model
     // the model should fully test it, don't test it here
@@ -1119,7 +1122,7 @@ void tst_QFiledialog::setNameFilter()
 
     QFileDialog fd;
     fd.setNameFilters(filters);
-    fd.setNameFilterDetailsVisible(nameFilterDetailsVisible);
+    fd.setOption(QFileDialog::HideNameFilterDetails, !nameFilterDetailsVisible);
     fd.selectNameFilter(selectFilter);
     QCOMPARE(fd.selectedNameFilter(), expectedSelectedFilter);
 }
@@ -1374,6 +1377,7 @@ void tst_QFiledialog::clearLineEdit()
     fd.setFileMode(QFileDialog::AnyFile);
     fd.show();
 
+    QVERIFY(QTest::qWaitForWindowExposed(&fd));
     QLineEdit *lineEdit = fd.findChild<QLineEdit*>("fileNameEdit");
     QVERIFY(lineEdit);
     QCOMPARE(lineEdit->text(), QLatin1String("foo"));
@@ -1421,6 +1425,16 @@ void tst_QFiledialog::clearLineEdit()
 
     QTRY_VERIFY(fd.directory().absolutePath() != workDirPath);
     QVERIFY(lineEdit->text().isEmpty());
+
+    // QTBUG-71415: When pressing back, the selection (activated
+    // directory) should be restored.
+    QToolButton *backButton = fd.findChild<QToolButton*>("backButton");
+    QVERIFY(backButton);
+    QTreeView *treeView = fd.findChildren<QTreeView*>("treeView").value(0);
+    QVERIFY(treeView);
+    backButton->click();
+    QTRY_COMPARE(treeView->selectionModel()->selectedIndexes().value(0).data().toString(),
+                 dirName);
 }
 
 void tst_QFiledialog::enableChooseButton()

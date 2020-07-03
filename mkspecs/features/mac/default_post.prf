@@ -71,7 +71,8 @@ qt {
 # Add the same default rpaths as Xcode does for new projects.
 # This is especially important for iOS/tvOS/watchOS where no other option is possible.
 !no_default_rpath {
-    QMAKE_RPATHDIR += @executable_path/../Frameworks
+    uikit: QMAKE_RPATHDIR += @executable_path/Frameworks
+    else: QMAKE_RPATHDIR += @executable_path/../Frameworks
     equals(TEMPLATE, lib):!plugin:lib_bundle: QMAKE_RPATHDIR += @loader_path/Frameworks
 }
 
@@ -97,21 +98,22 @@ macx-xcode {
         qmake_pkginfo_typeinfo.value = "????"
     QMAKE_MAC_XCODE_SETTINGS += qmake_pkginfo_typeinfo
 
-    !isEmpty(VERSION) {
-        l = $$split(VERSION, '.') 0 0  # make sure there are at least three
-        VER_MAJ = $$member(l, 0, 0)
-        VER_MIN = $$member(l, 1, 1)
-        VER_PAT = $$member(l, 2, 2)
-        unset(l)
+    bundle_version = $$VERSION
+    isEmpty(bundle_version): bundle_version = 1.0.0
 
-        qmake_full_version.name = QMAKE_FULL_VERSION
-        qmake_full_version.value = $${VER_MAJ}.$${VER_MIN}.$${VER_PAT}
-        QMAKE_MAC_XCODE_SETTINGS += qmake_full_version
+    l = $$split(bundle_version, '.') 0 0  # make sure there are at least three
+    VER_MAJ = $$member(l, 0, 0)
+    VER_MIN = $$member(l, 1, 1)
+    VER_PAT = $$member(l, 2, 2)
+    unset(l)
 
-        qmake_short_version.name = QMAKE_SHORT_VERSION
-        qmake_short_version.value = $${VER_MAJ}.$${VER_MIN}
-        QMAKE_MAC_XCODE_SETTINGS += qmake_short_version
-    }
+    qmake_full_version.name = QMAKE_FULL_VERSION
+    qmake_full_version.value = $${VER_MAJ}.$${VER_MIN}.$${VER_PAT}
+    QMAKE_MAC_XCODE_SETTINGS += qmake_full_version
+
+    qmake_short_version.name = QMAKE_SHORT_VERSION
+    qmake_short_version.value = $${VER_MAJ}.$${VER_MIN}
+    QMAKE_MAC_XCODE_SETTINGS += qmake_short_version
 
     !isEmpty(QMAKE_XCODE_DEBUG_INFORMATION_FORMAT) {
         debug_information_format.name = DEBUG_INFORMATION_FORMAT
@@ -210,14 +212,17 @@ macx-xcode {
         QMAKE_CXXFLAGS += $(EXPORT_QMAKE_XARCH_CFLAGS)
         QMAKE_LFLAGS += $(EXPORT_QMAKE_XARCH_LFLAGS)
     } else {
-        simulator: \
+        simulator {
             version_identifier = $$simulator.deployment_identifier
-        else: \
+            sysroot_path  = $$xcodeSDKInfo(Path, $$simulator.sdk)
+        } else {
             version_identifier = $$device.deployment_identifier
+            sysroot_path  = $$xcodeSDKInfo(Path, $$device.sdk)
+        }
         version_min_flag = -m$${version_identifier}-version-min=$$deployment_target
-        QMAKE_CFLAGS += -isysroot $$QMAKE_MAC_SDK_PATH $$version_min_flag
-        QMAKE_CXXFLAGS += -isysroot $$QMAKE_MAC_SDK_PATH $$version_min_flag
-        QMAKE_LFLAGS += -Wl,-syslibroot,$$QMAKE_MAC_SDK_PATH $$version_min_flag
+        QMAKE_CFLAGS += -isysroot $$sysroot_path $$version_min_flag
+        QMAKE_CXXFLAGS += -isysroot $$sysroot_path $$version_min_flag
+        QMAKE_LFLAGS += -Wl,-syslibroot,$$sysroot_path $$version_min_flag
     }
 
     # Enable precompiled headers for multiple architectures

@@ -42,6 +42,7 @@
 
 #include <qdebug.h>
 #include <qdir.h>
+#include <qscopedvaluerollback.h>
 #if defined(Q_OS_WIN)
 #include <qtimer.h>
 #endif
@@ -99,7 +100,7 @@ QT_END_NAMESPACE
 #include <private/qcore_unix_p.h>
 #endif
 
-#if QT_HAS_INCLUDE(<paths.h>)
+#if __has_include(<paths.h>)
 #include <paths.h>
 #endif
 
@@ -201,6 +202,7 @@ void QProcessEnvironmentPrivate::insert(const QProcessEnvironmentPrivate &other)
         vars.insert(it.key(), it.value());
 
 #ifdef Q_OS_UNIX
+    const OrderedNameMapMutexLocker locker(this, &other);
     auto nit = other.nameMap.constBegin();
     const auto nend = other.nameMap.constEnd();
     for ( ; nit != nend; ++nit)
@@ -274,7 +276,6 @@ bool QProcessEnvironment::operator==(const QProcessEnvironment &other) const
         return true;
     if (d) {
         if (other.d) {
-            QProcessEnvironmentPrivate::OrderedMutexLocker locker(d, other.d);
             return d->vars == other.d->vars;
         } else {
             return isEmpty();
@@ -321,7 +322,6 @@ bool QProcessEnvironment::contains(const QString &name) const
 {
     if (!d)
         return false;
-    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->vars.contains(d->prepareName(name));
 }
 
@@ -372,7 +372,6 @@ QString QProcessEnvironment::value(const QString &name, const QString &defaultVa
     if (!d)
         return defaultValue;
 
-    QProcessEnvironmentPrivate::MutexLocker locker(d);
     const auto it = d->vars.constFind(d->prepareName(name));
     if (it == d->vars.constEnd())
         return defaultValue;
@@ -397,7 +396,6 @@ QStringList QProcessEnvironment::toStringList() const
 {
     if (!d)
         return QStringList();
-    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->toList();
 }
 
@@ -411,7 +409,6 @@ QStringList QProcessEnvironment::keys() const
 {
     if (!d)
         return QStringList();
-    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->keys();
 }
 
@@ -428,7 +425,6 @@ void QProcessEnvironment::insert(const QProcessEnvironment &e)
         return;
 
     // our re-impl of detach() detaches from null
-    QProcessEnvironmentPrivate::MutexLocker locker(e.d);
     d->insert(*e.d);
 }
 
@@ -814,6 +810,7 @@ void QProcessPrivate::Channel::clear()
     \a newState argument is the state QProcess changed to.
 */
 
+#if QT_DEPRECATED_SINCE(5, 13)
 /*!
     \fn void QProcess::finished(int exitCode)
     \obsolete
@@ -821,6 +818,7 @@ void QProcessPrivate::Channel::clear()
 
     Use finished(int exitCode, QProcess::ExitStatus status) instead.
 */
+#endif
 
 /*!
     \fn void QProcess::finished(int exitCode, QProcess::ExitStatus exitStatus)
@@ -996,12 +994,17 @@ void QProcessPrivate::setErrorAndEmit(QProcess::ProcessError error, const QStrin
     Q_ASSERT(error != QProcess::UnknownError);
     setError(error, description);
     emit q->errorOccurred(processError);
+#if QT_DEPRECATED_SINCE(5, 6)
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
     emit q->error(processError);
+QT_WARNING_POP
+#endif
 }
 
 /*!
     \internal
-    Returns true if we emitted readyRead().
+    Returns \c true if we emitted readyRead().
 */
 bool QProcessPrivate::tryReadFromChannel(Channel *channel)
 {
@@ -1061,9 +1064,8 @@ bool QProcessPrivate::tryReadFromChannel(Channel *channel)
     if (currentReadChannel == channelIdx) {
         didRead = true;
         if (!emittedReadyRead) {
-            emittedReadyRead = true;
+            QScopedValueRollback<bool> guard(emittedReadyRead, true);
             emit q->readyRead();
-            emittedReadyRead = false;
         }
     }
     emit q->channelReadyRead(int(channelIdx));
@@ -1173,7 +1175,12 @@ bool QProcessPrivate::_q_processDied()
         //emit q->standardOutputClosed();
         //emit q->standardErrorClosed();
 
+#if QT_DEPRECATED_SINCE(5, 13)
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
         emit q->finished(exitCode);
+QT_WARNING_POP
+#endif
         emit q->finished(exitCode, exitStatus);
     }
 #if defined QPROCESS_DEBUG
@@ -1265,6 +1272,7 @@ QProcess::~QProcess()
     d->cleanup();
 }
 
+#if QT_DEPRECATED_SINCE(5, 13)
 /*!
     \obsolete
     Returns the read channel mode of the QProcess. This function is
@@ -1288,6 +1296,7 @@ void QProcess::setReadChannelMode(ProcessChannelMode mode)
 {
     setProcessChannelMode(mode);
 }
+#endif
 
 /*!
     \since 4.2
@@ -2178,6 +2187,8 @@ bool QProcess::startDetached(qint64 *pid)
     This method is an alias for start(), and exists only to fully implement
     the interface defined by QIODevice.
 
+    Returns \c true if the program has been started.
+
     \sa start(), setProgram(), setArguments()
 */
 bool QProcess::open(OpenMode mode)
@@ -2474,7 +2485,7 @@ QProcess::ExitStatus QProcess::exitStatus() const
 int QProcess::execute(const QString &program, const QStringList &arguments)
 {
     QProcess process;
-    process.setReadChannelMode(ForwardedChannels);
+    process.setProcessChannelMode(ForwardedChannels);
     process.start(program, arguments);
     if (!process.waitForFinished(-1) || process.error() == FailedToStart)
         return -2;
@@ -2497,7 +2508,7 @@ int QProcess::execute(const QString &program, const QStringList &arguments)
 int QProcess::execute(const QString &command)
 {
     QProcess process;
-    process.setReadChannelMode(ForwardedChannels);
+    process.setProcessChannelMode(ForwardedChannels);
     process.start(command);
     if (!process.waitForFinished(-1) || process.error() == FailedToStart)
         return -2;

@@ -41,6 +41,8 @@
 
 %merged_output qxmlstream_p.h
 
+%expect 4
+
 %token NOTOKEN
 %token SPACE " "
 %token LANGLE "<"
@@ -144,7 +146,12 @@
 
 %start document
 
+
+
 /.
+
+#include <QtCore/private/qglobal_p.h>
+
 template <typename T> class QXmlStreamSimpleStack {
     T *data;
     int tos, cap;
@@ -155,7 +162,8 @@ public:
     inline void reserve(int extraCapacity) {
         if (tos + extraCapacity + 1 > cap) {
             cap = qMax(tos + extraCapacity + 1, cap << 1 );
-            data = reinterpret_cast<T *>(realloc(data, cap * sizeof(T)));
+            void *ptr = realloc(static_cast<void *>(data), cap * sizeof(T));
+            data = reinterpret_cast<T *>(ptr);
             Q_CHECK_PTR(data);
         }
     }
@@ -508,7 +516,7 @@ public:
     int fastScanLiteralContent();
     int fastScanSpace();
     int fastScanContentCharList();
-    int fastScanName(int *prefix = 0);
+    int fastScanName(int *prefix = nullptr);
     inline int fastScanNMTOKEN();
 
 
@@ -763,7 +771,7 @@ bool QXmlStreamReaderPrivate::parse()
             state_stack[tos] = 0;
             return true;
         } else if (act > 0) {
-            if (++tos == stack_size-1)
+            if (++tos >= stack_size-1)
                 reallocateStack();
 
             Value &val = sym_stack[tos];
@@ -902,7 +910,7 @@ doctype_decl ::= langle_bang DOCTYPE qname markup space_opt RANGLE;
 /.
         case $rule_number:
             dtdName = symString(3);
-            // fall through
+            Q_FALLTHROUGH();
 ./
 doctype_decl ::= doctype_decl_start external_id space_opt markup space_opt RANGLE;
 /.

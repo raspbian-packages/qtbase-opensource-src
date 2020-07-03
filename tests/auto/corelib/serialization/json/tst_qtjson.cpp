@@ -153,6 +153,18 @@ private Q_SLOTS:
     void implicitValueType();
     void implicitDocumentType();
 
+    void streamSerializationQJsonDocument_data();
+    void streamSerializationQJsonDocument();
+    void streamSerializationQJsonArray_data();
+    void streamSerializationQJsonArray();
+    void streamSerializationQJsonObject_data();
+    void streamSerializationQJsonObject();
+    void streamSerializationQJsonValue_data();
+    void streamSerializationQJsonValue();
+    void streamSerializationQJsonValueEmpty();
+    void streamVariantSerialization();
+    void escapeSurrogateCodePoints_data();
+    void escapeSurrogateCodePoints();
 private:
     QString testDataDir;
 };
@@ -424,6 +436,8 @@ void tst_QtJson::testObjectSimple()
     object.insert("boolean", true);
     QCOMPARE(object.value("boolean").toBool(), true);
     QCOMPARE(object.value(QLatin1String("boolean")).toBool(), true);
+    QJsonObject object2 = object;
+    QJsonObject object3 = object;
 
     QStringList keys = object.keys();
     QVERIFY2(keys.contains("number"), "key number not found");
@@ -448,6 +462,40 @@ void tst_QtJson::testObjectSimple()
     QString before = object.value("string").toString();
     object.insert("string", QString::fromLatin1("foo"));
     QVERIFY2(object.value(QLatin1String("string")).toString() != before, "value should have been updated");
+
+    // same tests again but with QStringView keys
+    object2.insert(QStringView(u"value"), value);
+    QCOMPARE(object2.value("value"), value);
+
+    size = object2.size();
+    object2.remove(QStringView(u"boolean"));
+    QCOMPARE(object2.size(), size - 1);
+    QVERIFY2(!object2.contains(QStringView(u"boolean")), "key boolean should have been removed");
+
+    taken = object2.take(QStringView(u"value"));
+    QCOMPARE(taken, value);
+    QVERIFY2(!object2.contains("value"), "key value should have been removed");
+
+    before = object2.value("string").toString();
+    object2.insert(QStringView(u"string"), QString::fromLatin1("foo"));
+    QVERIFY2(object2.value(QStringView(u"string")).toString() != before, "value should have been updated");
+
+    // same tests again but with QLatin1String keys
+    object3.insert(QLatin1String("value"), value);
+    QCOMPARE(object3.value("value"), value);
+
+    size = object3.size();
+    object3.remove(QLatin1String("boolean"));
+    QCOMPARE(object3.size(), size - 1);
+    QVERIFY2(!object3.contains("boolean"), "key boolean should have been removed");
+
+    taken = object3.take(QLatin1String("value"));
+    QCOMPARE(taken, value);
+    QVERIFY2(!object3.contains("value"), "key value should have been removed");
+
+    before = object3.value("string").toString();
+    object3.insert(QLatin1String("string"), QString::fromLatin1("foo"));
+    QVERIFY2(object3.value(QLatin1String("string")).toString() != before, "value should have been updated");
 
     size = object.size();
     QJsonObject subobject;
@@ -1083,6 +1131,8 @@ void tst_QtJson::undefinedValues()
 {
     QJsonObject object;
     object.insert("Key", QJsonValue(QJsonValue::Undefined));
+    QCOMPARE(object.size(), 0);
+    object["Key"] = QJsonValue(QJsonValue::Undefined);
     QCOMPARE(object.size(), 0);
 
     object.insert("Key", QLatin1String("Value"));
@@ -2686,6 +2736,8 @@ void tst_QtJson::longStrings()
     // test around 15 and 16 bit boundaries, as these are limits
     // in the data structures (for Latin1String in qjson_p.h)
     QString s(0x7ff0, 'a');
+    QByteArray ba(0x7ff0, 'a');
+    ba.append(0x8010 - 0x7ff0, 'c');
     for (int i = 0x7ff0; i < 0x8010; i++) {
         s.append(QLatin1Char('c'));
 
@@ -2702,9 +2754,21 @@ void tst_QtJson::longStrings()
         /* ... and a QByteArray from the QJsonDocument */
         QByteArray a2 = d2.toJson();
         QCOMPARE(a1, a2);
+
+        // Test long keys
+        QJsonObject o1, o2;
+        o1[s] = 42;
+        o2[QLatin1String(ba.data(), i + 1)] = 42;
+        d1.setObject(o1);
+        d2.setObject(o2);
+        a1 = d1.toJson();
+        a2 = d2.toJson();
+        QCOMPARE(a1, a2);
     }
 
     s = QString(0xfff0, 'a');
+    ba = QByteArray(0xfff0, 'a');
+    ba.append(0x10010 - 0xfff0, 'c');
     for (int i = 0xfff0; i < 0x10010; i++) {
         s.append(QLatin1Char('c'));
 
@@ -2720,6 +2784,16 @@ void tst_QtJson::longStrings()
         QJsonDocument d2 = QJsonDocument::fromJson(a1);
         /* ... and a QByteArray from the QJsonDocument */
         QByteArray a2 = d2.toJson();
+        QCOMPARE(a1, a2);
+
+        // Test long keys
+        QJsonObject o1, o2;
+        o1[s] = 42;
+        o2[QLatin1String(ba.data(), i + 1)] = 42;
+        d1.setObject(o1);
+        d2.setObject(o2);
+        a1 = d1.toJson();
+        a2 = d2.toJson();
         QCOMPARE(a1, a2);
     }
 }
@@ -2743,9 +2817,6 @@ void tst_QtJson::testJsonValueRefDefault()
 
 void tst_QtJson::arrayInitializerList()
 {
-#ifndef Q_COMPILER_INITIALIZER_LISTS
-    QSKIP("initializer_list is enabled only with c++11 support");
-#else
     QVERIFY(QJsonArray{}.isEmpty());
     QCOMPARE(QJsonArray{"one"}.count(), 1);
     QCOMPARE(QJsonArray{1}.count(), 1);
@@ -2791,14 +2862,10 @@ void tst_QtJson::arrayInitializerList()
             QCOMPARE(QJsonValue(a43["one"]), QJsonValue(1));
         }
     }
-#endif
 }
 
 void tst_QtJson::objectInitializerList()
 {
-#ifndef Q_COMPILER_INITIALIZER_LISTS
-    QSKIP("initializer_list is enabled only with c++11 support");
-#else
     QVERIFY(QJsonObject{}.isEmpty());
 
     {   // one property
@@ -2838,7 +2905,6 @@ void tst_QtJson::objectInitializerList()
         QCOMPARE(QJsonValue(nested[0]), QJsonValue("innerValue"));
         QCOMPARE(QJsonValue(nested[1]), QJsonValue(2.1));
     }
-#endif
 }
 
 void tst_QtJson::unicodeKeys()
@@ -3009,6 +3075,189 @@ void tst_QtJson::implicitDocumentType()
     QCOMPARE(arrayDocument[-1], QJsonValue(QJsonValue::Undefined));
     QCOMPARE(arrayDocument["asObject"], QJsonValue(QJsonValue::Undefined));
     QCOMPARE(arrayDocument[-1].toInt(123), 123);
+}
+
+void tst_QtJson::streamSerializationQJsonDocument_data()
+{
+    QTest::addColumn<QJsonDocument>("document");
+    QTest::newRow("empty") << QJsonDocument();
+    QTest::newRow("object") << QJsonDocument(QJsonObject{{"value", 42}});
+}
+
+void tst_QtJson::streamSerializationQJsonDocument()
+{
+    // Check interface only, implementation is tested through to and from
+    // json functions.
+    QByteArray buffer;
+    QFETCH(QJsonDocument, document);
+    QJsonDocument output;
+    QDataStream save(&buffer, QIODevice::WriteOnly);
+    save << document;
+    QDataStream load(buffer);
+    load >> output;
+    QCOMPARE(output, document);
+}
+
+void tst_QtJson::streamSerializationQJsonArray_data()
+{
+    QTest::addColumn<QJsonArray>("array");
+    QTest::newRow("empty") << QJsonArray();
+    QTest::newRow("values") << QJsonArray{665, 666, 667};
+}
+
+void tst_QtJson::streamSerializationQJsonArray()
+{
+    // Check interface only, implementation is tested through to and from
+    // json functions.
+    QByteArray buffer;
+    QFETCH(QJsonArray, array);
+    QJsonArray output;
+    QDataStream save(&buffer, QIODevice::WriteOnly);
+    save << array;
+    QDataStream load(buffer);
+    load >> output;
+    QCOMPARE(output, array);
+}
+
+void tst_QtJson::streamSerializationQJsonObject_data()
+{
+    QTest::addColumn<QJsonObject>("object");
+    QTest::newRow("empty") << QJsonObject();
+    QTest::newRow("non-empty") << QJsonObject{{"foo", 665}, {"bar", 666}};
+}
+
+void tst_QtJson::streamSerializationQJsonObject()
+{
+    // Check interface only, implementation is tested through to and from
+    // json functions.
+    QByteArray buffer;
+    QFETCH(QJsonObject, object);
+    QJsonObject output;
+    QDataStream save(&buffer, QIODevice::WriteOnly);
+    save << object;
+    QDataStream load(buffer);
+    load >> output;
+    QCOMPARE(output, object);
+}
+
+void tst_QtJson::streamSerializationQJsonValue_data()
+{
+    QTest::addColumn<QJsonValue>("value");
+    QTest::newRow("double") << QJsonValue{665};
+    QTest::newRow("bool") << QJsonValue{true};
+    QTest::newRow("string") << QJsonValue{QStringLiteral("bum")};
+    QTest::newRow("array") << QJsonValue{QJsonArray{12,1,5,6,7}};
+    QTest::newRow("object") << QJsonValue{QJsonObject{{"foo", 665}, {"bar", 666}}};
+    // test json escape sequence
+    QTest::newRow("array with 0xD800") << QJsonValue(QJsonArray{QString(0xD800)});
+    QTest::newRow("array with 0xDF06,0xD834") << QJsonValue(QJsonArray{QString(0xDF06).append(0xD834)});
+}
+
+void tst_QtJson::streamSerializationQJsonValue()
+{
+    QByteArray buffer;
+    QFETCH(QJsonValue, value);
+    QJsonValue output;
+    QDataStream save(&buffer, QIODevice::WriteOnly);
+    save << value;
+    QDataStream load(buffer);
+    load >> output;
+    QCOMPARE(output, value);
+}
+
+void tst_QtJson::streamSerializationQJsonValueEmpty()
+{
+    QByteArray buffer;
+    {
+        QJsonValue undef{QJsonValue::Undefined};
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << undef;
+        QDataStream load(buffer);
+        QJsonValue output;
+        load >> output;
+        QVERIFY(output.isUndefined());
+    }
+    {
+        QJsonValue null{QJsonValue::Null};
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << null;
+        QDataStream load(buffer);
+        QJsonValue output;
+        load >> output;
+        QVERIFY(output.isNull());
+    }
+}
+
+void tst_QtJson::streamVariantSerialization()
+{
+    // Check interface only, implementation is tested through to and from
+    // json functions.
+    QByteArray buffer;
+    {
+        QJsonDocument objectDoc(QJsonArray{665, 666, 667});
+        QVariant output;
+        QVariant variant(objectDoc);
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << variant;
+        QDataStream load(buffer);
+        load >> output;
+        QCOMPARE(output.userType(), QMetaType::QJsonDocument);
+        QCOMPARE(output.toJsonDocument(), objectDoc);
+    }
+    {
+        QJsonArray array{665, 666, 667};
+        QVariant output;
+        QVariant variant(array);
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << variant;
+        QDataStream load(buffer);
+        load >> output;
+        QCOMPARE(output.userType(), QMetaType::QJsonArray);
+        QCOMPARE(output.toJsonArray(), array);
+    }
+    {
+        QJsonObject obj{{"foo", 42}};
+        QVariant output;
+        QVariant variant(obj);
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << variant;
+        QDataStream load(buffer);
+        load >> output;
+        QCOMPARE(output.userType(), QMetaType::QJsonObject);
+        QCOMPARE(output.toJsonObject(), obj);
+    }
+    {
+        QJsonValue value{42};
+        QVariant output;
+        QVariant variant(value);
+        QDataStream save(&buffer, QIODevice::WriteOnly);
+        save << variant;
+        QDataStream load(buffer);
+        load >> output;
+        QCOMPARE(output.userType(), QMetaType::QJsonValue);
+        QCOMPARE(output.toJsonValue(), value);
+    }
+}
+
+void tst_QtJson::escapeSurrogateCodePoints_data()
+{
+    QTest::addColumn<QString>("str");
+    QTest::addColumn<QByteArray>("escStr");
+    QTest::newRow("0xD800") << QString(0xD800) << QByteArray("\\ud800");
+    QTest::newRow("0xDF06,0xD834") << QString(0xDF06).append(0xD834) << QByteArray("\\udf06\\ud834");
+}
+
+void tst_QtJson::escapeSurrogateCodePoints()
+{
+    QFETCH(QString, str);
+    QFETCH(QByteArray, escStr);
+    QJsonArray array;
+    array.append(str);
+    QByteArray buffer;
+    QDataStream save(&buffer, QIODevice::WriteOnly);
+    save << array;
+    // verify the buffer has escaped values
+    QVERIFY(buffer.contains(escStr));
 }
 
 QTEST_MAIN(tst_QtJson)

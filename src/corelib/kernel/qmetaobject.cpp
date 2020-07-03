@@ -223,8 +223,8 @@ private:
 
     Constructs a new instance of this class. You can pass up to ten arguments
     (\a val0, \a val1, \a val2, \a val3, \a val4, \a val5, \a val6, \a val7,
-    \a val8, and \a val9) to the constructor. Returns the new object, or 0 if
-    no suitable constructor is available.
+    \a val8, and \a val9) to the constructor. Returns the new object, or
+    \nullptr if no suitable constructor is available.
 
     Note that only constructors that are declared with the Q_INVOKABLE
     modifier are made available through the meta-object system.
@@ -334,8 +334,8 @@ const char *QMetaObject::className() const
 /*!
     \fn QMetaObject *QMetaObject::superClass() const
 
-    Returns the meta-object of the superclass, or 0 if there is no
-    such object.
+    Returns the meta-object of the superclass, or \nullptr if there is
+    no such object.
 
     \sa className()
 */
@@ -348,7 +348,7 @@ const char *QMetaObject::className() const
 
     \since 5.7
 */
-bool QMetaObject::inherits(const QMetaObject *metaObject) const Q_DECL_NOEXCEPT
+bool QMetaObject::inherits(const QMetaObject *metaObject) const noexcept
 {
     const QMetaObject *m = this;
     do {
@@ -821,6 +821,7 @@ int QMetaObjectPrivate::indexOfConstructor(const QMetaObject *m, const QByteArra
 }
 
 /*!
+    \fn int QMetaObjectPrivate::signalOffset(const QMetaObject *m)
     \internal
     \since 5.0
 
@@ -830,14 +831,6 @@ int QMetaObjectPrivate::indexOfConstructor(const QMetaObject *m, const QByteArra
     Similar to QMetaObject::methodOffset(), but non-signal methods are
     excluded.
 */
-int QMetaObjectPrivate::signalOffset(const QMetaObject *m)
-{
-    Q_ASSERT(m != 0);
-    int offset = 0;
-    for (m = m->d.superdata; m; m = m->d.superdata)
-        offset += priv(m->d.data)->signalCount;
-    return offset;
-}
 
 /*!
     \internal
@@ -960,7 +953,7 @@ static const QMetaObject *QMetaObject_findMetaObject(const QMetaObject *self, co
             return self;
         if (self->d.relatedMetaObjects) {
             Q_ASSERT(priv(self->d.data)->revision >= 2);
-            const QMetaObject * const *e = self->d.relatedMetaObjects;
+            const auto *e = self->d.relatedMetaObjects;
             if (e) {
                 while (*e) {
                     if (const QMetaObject *m =QMetaObject_findMetaObject((*e), name))
@@ -1549,21 +1542,14 @@ bool QMetaObject::invokeMethodImpl(QObject *object, QtPrivate::QSlotObjectBase *
             return false;
         }
 
-        // args and typesCopy will be deallocated by ~QMetaCallEvent() using free()
-        void **args = static_cast<void **>(calloc(1, sizeof(void *)));
-        Q_CHECK_PTR(args);
-
-        int *types = static_cast<int *>(calloc(1, sizeof(int)));
-        Q_CHECK_PTR(types);
-
-        QCoreApplication::postEvent(object, new QMetaCallEvent(slot, 0, -1, 1, types, args));
+        QCoreApplication::postEvent(object, new QMetaCallEvent(slot, 0, -1, 1));
     } else if (type == Qt::BlockingQueuedConnection) {
 #if QT_CONFIG(thread)
         if (currentThread == objectThread)
             qWarning("QMetaObject::invokeMethod: Dead lock detected");
 
         QSemaphore semaphore;
-        QCoreApplication::postEvent(object, new QMetaCallEvent(slot, 0, -1, 0, 0, argv, &semaphore));
+        QCoreApplication::postEvent(object, new QMetaCallEvent(slot, 0, -1, argv, &semaphore));
         semaphore.acquire();
 #endif // QT_CONFIG(thread)
     } else {
@@ -2270,9 +2256,9 @@ bool QMetaMethod::invoke(QObject *object,
         return false;
 
     // check connection type
-    QThread *currentThread = QThread::currentThread();
-    QThread *objectThread = object->thread();
     if (connectionType == Qt::AutoConnection) {
+        QThread *currentThread = QThread::currentThread();
+        QThread *objectThread = object->thread();
         connectionType = currentThread == objectThread
                          ? Qt::DirectConnection
                          : Qt::QueuedConnection;
@@ -2317,44 +2303,35 @@ bool QMetaMethod::invoke(QObject *object,
             return false;
         }
 
-        int nargs = 1; // include return type
-        void **args = (void **) malloc(paramCount * sizeof(void *));
-        Q_CHECK_PTR(args);
-        int *types = (int *) malloc(paramCount * sizeof(int));
-        Q_CHECK_PTR(types);
-        types[0] = 0; // return type
-        args[0] = 0;
+        QScopedPointer<QMetaCallEvent> event(new QMetaCallEvent(idx_offset, idx_relative, callFunction, 0, -1, paramCount));
+        int *types = event->types();
+        void **args = event->args();
 
+        int argIndex = 0;
         for (int i = 1; i < paramCount; ++i) {
             types[i] = QMetaType::type(typeNames[i]);
             if (types[i] == QMetaType::UnknownType && param[i]) {
                 // Try to register the type and try again before reporting an error.
-                int index = nargs - 1;
-                void *argv[] = { &types[i], &index };
+                void *argv[] = { &types[i], &argIndex };
                 QMetaObject::metacall(object, QMetaObject::RegisterMethodArgumentMetaType,
                                       idx_relative + idx_offset, argv);
                 if (types[i] == -1) {
                     qWarning("QMetaMethod::invoke: Unable to handle unregistered datatype '%s'",
                             typeNames[i]);
-                    for (int x = 1; x < i; ++x) {
-                        if (types[x] && args[x])
-                            QMetaType::destroy(types[x], args[x]);
-                    }
-                    free(types);
-                    free(args);
                     return false;
                 }
             }
             if (types[i] != QMetaType::UnknownType) {
                 args[i] = QMetaType::create(types[i], param[i]);
-                ++nargs;
+                ++argIndex;
             }
         }
 
-        QCoreApplication::postEvent(object, new QMetaCallEvent(idx_offset, idx_relative, callFunction,
-                                                        0, -1, nargs, types, args));
+        QCoreApplication::postEvent(object, event.take());
     } else { // blocking queued connection
 #if QT_CONFIG(thread)
+        QThread *currentThread = QThread::currentThread();
+        QThread *objectThread = object->thread();
         if (currentThread == objectThread) {
             qWarning("QMetaMethod::invoke: Dead lock detected in "
                         "BlockingQueuedConnection: Receiver is %s(%p)",
@@ -2363,7 +2340,7 @@ bool QMetaMethod::invoke(QObject *object,
 
         QSemaphore semaphore;
         QCoreApplication::postEvent(object, new QMetaCallEvent(idx_offset, idx_relative, callFunction,
-                                                        0, -1, 0, 0, param, &semaphore));
+                                                        0, -1, param, &semaphore));
         semaphore.acquire();
 #endif // QT_CONFIG(thread)
     }
@@ -2626,7 +2603,7 @@ int QMetaEnum::keyCount() const
 }
 
 /*!
-    Returns the key with the given \a index, or 0 if no such key exists.
+    Returns the key with the given \a index, or \nullptr if no such key exists.
 
     \sa keyCount(), value(), valueToKey()
 */
@@ -2748,7 +2725,7 @@ int QMetaEnum::keyToValue(const char *key, bool *ok) const
 
 /*!
     Returns the string that is used as the name of the given
-    enumeration \a value, or 0 if \a value is not defined.
+    enumeration \a value, or \nullptr if \a value is not defined.
 
     For flag types, use valueToKeys().
 
@@ -3025,6 +3002,18 @@ int QMetaProperty::propertyIndex() const
     if (!mobj)
         return -1;
     return idx + mobj->propertyOffset();
+}
+
+/*!
+  \since 5.14
+
+  Returns this property's index relative within the enclosing meta object.
+*/
+int QMetaProperty::relativePropertyIndex() const
+{
+    if (!mobj)
+        return -1;
+    return idx;
 }
 
 /*!
@@ -3533,7 +3522,7 @@ bool QMetaProperty::isStored(const QObject *object) const
     false. e.g., the \c text property is the \c USER editable property
     of a QLineEdit.
 
-    If \a object is null, the function returns \c false if the \c
+    If \a object is \nullptr, the function returns \c false if the \c
     {Q_PROPERTY()}'s \c USER attribute is false. Otherwise it returns
     true.
 

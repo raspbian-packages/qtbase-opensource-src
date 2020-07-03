@@ -322,8 +322,8 @@ public:
 protected:
     void timerEvent(QTimerEvent * event) override;
 
-    QMutex mutex;
-    int sweepTimerId;
+    QRecursiveMutex mutex;
+    int sweepTimerId = -1;
     //socket descriptor, data, timestamp
     QHash<int, QSocks5BindData *> store;
 };
@@ -331,8 +331,6 @@ protected:
 Q_GLOBAL_STATIC(QSocks5BindStore, socks5BindStore)
 
 QSocks5BindStore::QSocks5BindStore()
-    : mutex(QMutex::Recursive)
-    , sweepTimerId(-1)
 {
     QCoreApplication *app = QCoreApplication::instance();
     if (app && app->thread() != thread())
@@ -372,7 +370,7 @@ QSocks5BindData *QSocks5BindStore::retrieve(qintptr socketDescriptor)
     store.erase(it);
     if (bindData) {
         if (bindData->controlSocket->thread() != QThread::currentThread()) {
-            qWarning("Can not access socks5 bind data from different thread");
+            qWarning("Cannot access socks5 bind data from different thread");
             return 0;
         }
     } else {
@@ -706,7 +704,7 @@ void QSocks5SocketEnginePrivate::reauthenticate()
 
     // we require authentication
     QAuthenticator auth;
-    emit q->proxyAuthenticationRequired(proxyInfo, &auth);
+    q->proxyAuthenticationRequired(proxyInfo, &auth);
 
     if (!auth.user().isEmpty() || !auth.password().isEmpty()) {
         // we have new credentials, let's try again
@@ -801,9 +799,9 @@ void QSocks5SocketEnginePrivate::sendRequestMethod()
 
     QByteArray buf;
     buf.reserve(270); // big enough for domain name;
-    buf[0] = S5_VERSION_5;
-    buf[1] = command;
-    buf[2] = 0x00;
+    buf.append(char(S5_VERSION_5));
+    buf.append(command);
+    buf.append('\0');
     if (peerName.isEmpty() && !qt_socks5_set_host_address_and_port(address, port, &buf)) {
         QSOCKS5_DEBUG << "error setting address" << address << " : " << port;
         //### set error code ....
@@ -915,7 +913,7 @@ void QSocks5SocketEnginePrivate::_q_emitPendingReadNotification()
     if (readNotificationEnabled) {
         QSOCKS5_D_DEBUG << "emitting readNotification";
         QPointer<QSocks5SocketEngine> qq = q;
-        emit q->readNotification();
+        q->readNotification();
         if (!qq)
             return;
         // check if there needs to be a new zero read notification
@@ -944,7 +942,7 @@ void QSocks5SocketEnginePrivate::_q_emitPendingWriteNotification()
     Q_Q(QSocks5SocketEngine);
     if (writeNotificationEnabled) {
         QSOCKS5_D_DEBUG << "emitting writeNotification";
-        emit q->writeNotification();
+        q->writeNotification();
     }
 }
 
@@ -964,7 +962,7 @@ void QSocks5SocketEnginePrivate::_q_emitPendingConnectionNotification()
     connectionNotificationPending = false;
     Q_Q(QSocks5SocketEngine);
     QSOCKS5_D_DEBUG << "emitting connectionNotification";
-    emit q->connectionNotification();
+    q->connectionNotification();
 }
 
 void QSocks5SocketEnginePrivate::emitConnectionNotification()

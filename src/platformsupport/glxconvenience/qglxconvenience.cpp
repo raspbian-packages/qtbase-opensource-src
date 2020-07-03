@@ -224,13 +224,18 @@ GLXFBConfig qglx_findConfig(Display *display, int screen , QSurfaceFormat format
             }
 
             QXlibPointer<XVisualInfo> visual(glXGetVisualFromFBConfig(display, candidate));
-            if (visual.isNull())
+            if (!visual)
                 continue;
-
-            const int actualRed = qPopulationCount(visual->red_mask);
-            const int actualGreen = qPopulationCount(visual->green_mask);
-            const int actualBlue = qPopulationCount(visual->blue_mask);
-            const int actualAlpha = visual->depth - actualRed - actualGreen - actualBlue;
+            int actualRed;
+            int actualGreen;
+            int actualBlue;
+            int actualAlpha;
+            glXGetFBConfigAttrib(display, candidate, GLX_RED_SIZE, &actualRed);
+            glXGetFBConfigAttrib(display, candidate, GLX_GREEN_SIZE, &actualGreen);
+            glXGetFBConfigAttrib(display, candidate, GLX_BLUE_SIZE, &actualBlue);
+            glXGetFBConfigAttrib(display, candidate, GLX_ALPHA_SIZE, &actualAlpha);
+            // Sometimes the visuals don't have a depth that includes the alpha channel.
+            actualAlpha = qMin(actualAlpha, visual->depth - actualRed - actualGreen - actualBlue);
 
             if (requestedRed && actualRed < requestedRed)
                 continue;
@@ -314,7 +319,7 @@ void qglx_surfaceFormatFromGLXFBConfig(QSurfaceFormat *format, Display *display,
     glXGetFBConfigAttrib(display, config, GLX_ALPHA_SIZE,   &alphaSize);
     glXGetFBConfigAttrib(display, config, GLX_DEPTH_SIZE,   &depthSize);
     glXGetFBConfigAttrib(display, config, GLX_STENCIL_SIZE, &stencilSize);
-    glXGetFBConfigAttrib(display, config, GLX_SAMPLES_ARB,  &sampleBuffers);
+    glXGetFBConfigAttrib(display, config, GLX_SAMPLE_BUFFERS_ARB, &sampleBuffers);
     glXGetFBConfigAttrib(display, config, GLX_STEREO,       &stereo);
     if (flags & QGLX_SUPPORTS_SRGB)
         glXGetFBConfigAttrib(display, config, GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, &srgbCapable);
@@ -353,7 +358,7 @@ void qglx_surfaceFormatFromVisualInfo(QSurfaceFormat *format, Display *display, 
     glXGetConfig(display, visualInfo, GLX_ALPHA_SIZE,   &alphaSize);
     glXGetConfig(display, visualInfo, GLX_DEPTH_SIZE,   &depthSize);
     glXGetConfig(display, visualInfo, GLX_STENCIL_SIZE, &stencilSize);
-    glXGetConfig(display, visualInfo, GLX_SAMPLES_ARB,  &sampleBuffers);
+    glXGetConfig(display, visualInfo, GLX_SAMPLE_BUFFERS_ARB, &sampleBuffers);
     glXGetConfig(display, visualInfo, GLX_STEREO,       &stereo);
     if (flags & QGLX_SUPPORTS_SRGB)
         glXGetConfig(display, visualInfo, GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, &srgbCapable);

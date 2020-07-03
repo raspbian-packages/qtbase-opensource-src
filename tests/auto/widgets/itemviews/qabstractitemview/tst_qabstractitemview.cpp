@@ -502,11 +502,6 @@ void tst_QAbstractItemView::basic_tests(QAbstractItemView *view)
     view->commitData(0);
     view->editorDestroyed(0);
 
-    view->setHorizontalStepsPerItem(2);
-    view->horizontalStepsPerItem();
-    view->setVerticalStepsPerItem(2);
-    view->verticalStepsPerItem();
-
     // Will assert as it should
     // view->setIndexWidget(QModelIndex(), 0);
 
@@ -1029,9 +1024,6 @@ void tst_QAbstractItemView::setItemDelegate()
     centerOnScreen(&v);
     moveCursorAway(&v);
     v.show();
-#if 0 // Used to be included in Qt4 for Q_WS_X11
-    QCursor::setPos(v.geometry().center());
-#endif
     QApplication::setActiveWindow(&v);
     QVERIFY(QTest::qWaitForWindowActive(&v));
 

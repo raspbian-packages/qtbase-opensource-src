@@ -59,7 +59,7 @@
 #  undef False
 #endif
 
-#if 0 && QT_HAS_INCLUDE(<compare>)
+#if 0 && __has_include(<compare>)
 #  include <compare>
 #endif
 
@@ -69,6 +69,7 @@ class QCborArray;
 class QCborMap;
 class QCborStreamReader;
 class QCborStreamWriter;
+class QDataStream;
 
 struct QCborParserError
 {
@@ -78,6 +79,7 @@ struct QCborParserError
     QString errorString() const { return error.toString(); }
 };
 
+class QCborValueRef;
 class QCborContainerPrivate;
 class Q_CORE_EXPORT QCborValue
 {
@@ -141,7 +143,10 @@ public:
     QCborValue(QCborSimpleType st) : t(type_helper(st)) {}
 
     QCborValue(const QByteArray &ba);
+#if QT_STRINGVIEW_LEVEL < 2
     QCborValue(const QString &s);
+#endif
+    QCborValue(QStringView s);
     QCborValue(QLatin1String s);
 #ifndef QT_NO_CAST_FROM_ASCII
     QT_ASCII_CAST_WARN QCborValue(const char *s) : QCborValue(QString::fromUtf8(s)) {}
@@ -251,9 +256,12 @@ public:
     const QCborValue operator[](const QString &key) const;
     const QCborValue operator[](QLatin1String key) const;
     const QCborValue operator[](qint64 key) const;
+    QCborValueRef operator[](qint64 key);
+    QCborValueRef operator[](QLatin1String key);
+    QCborValueRef operator[](const QString & key);
 
     int compare(const QCborValue &other) const;
-#if 0 && QT_HAS_INCLUDE(<compare>)
+#if 0 && __has_include(<compare>)
     std::strong_ordering operator<=>(const QCborValue &other) const
     {
         int c = compare(other);
@@ -312,9 +320,9 @@ private:
         return Type(quint8(st) | SimpleType);
     }
 
-    Q_DECL_CONSTEXPR static bool isTag_helper(Type t)
+    Q_DECL_CONSTEXPR static bool isTag_helper(Type tt)
     {
-        return t == Tag || t >= 0x10000;
+        return tt == Tag || tt >= 0x10000;
     }
 };
 Q_DECLARE_SHARED(QCborValue)
@@ -394,9 +402,16 @@ public:
     QCborMap toMap() const;
     QCborMap toMap(const QCborMap &m) const;
 
+    const QCborValue operator[](const QString &key) const;
+    const QCborValue operator[](QLatin1String key) const;
+    const QCborValue operator[](qint64 key) const;
+    QCborValueRef operator[](qint64 key);
+    QCborValueRef operator[](QLatin1String key);
+    QCborValueRef operator[](const QString & key);
+
     int compare(const QCborValue &other) const
     { return concrete().compare(other); }
-#if 0 && QT_HAS_INCLUDE(<compare>)
+#if 0 && __has_include(<compare>)
     std::strong_ordering operator<=>(const QCborValue &other) const
     {
         int c = compare(other);
@@ -424,6 +439,7 @@ public:
     { return concrete().toDiagnosticNotation(opt); }
 
 private:
+    friend class QCborValue;
     friend class QCborArray;
     friend class QCborMap;
     friend class QCborContainerPrivate;
@@ -453,6 +469,11 @@ Q_CORE_EXPORT uint qHash(const QCborValue &value, uint seed = 0);
 
 #if !defined(QT_NO_DEBUG_STREAM)
 Q_CORE_EXPORT QDebug operator<<(QDebug, const QCborValue &v);
+#endif
+
+#ifndef QT_NO_DATASTREAM
+Q_CORE_EXPORT QDataStream &operator<<(QDataStream &, const QCborValue &);
+Q_CORE_EXPORT QDataStream &operator>>(QDataStream &, QCborValue &);
 #endif
 
 QT_END_NAMESPACE

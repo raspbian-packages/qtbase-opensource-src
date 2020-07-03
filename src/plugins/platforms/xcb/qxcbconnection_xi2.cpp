@@ -641,7 +641,7 @@ void QXcbConnection::xi2ProcessTouch(void *xiDevEvent, QXcbWindow *platformWindo
     qreal nx = -1.0, ny = -1.0;
     qreal w = 0.0, h = 0.0;
     bool majorAxisIsY = touchPoint.area.height() > touchPoint.area.width();
-    for (const TouchDeviceData::ValuatorClassInfo vci : dev->valuatorInfo) {
+    for (const TouchDeviceData::ValuatorClassInfo &vci : qAsConst(dev->valuatorInfo)) {
         double value;
         if (!xi2GetValuatorValueIfSet(xiDeviceEvent, vci.number, &value))
             continue;
@@ -827,7 +827,7 @@ bool QXcbConnection::xi2SetMouseGrabEnabled(xcb_window_t w, bool grab)
                 | XCB_INPUT_XI_EVENT_MASK_TOUCH_UPDATE
                 | XCB_INPUT_XI_EVENT_MASK_TOUCH_END;
 
-        for (int id : m_xiMasterPointerIds) {
+        for (int id : qAsConst(m_xiMasterPointerIds)) {
             xcb_generic_error_t *error = nullptr;
             auto cookie = xcb_input_xi_grab_device(xcb_connection(), w, XCB_CURRENT_TIME, XCB_CURSOR_NONE, id,
                                                    XCB_INPUT_GRAB_MODE_22_ASYNC, XCB_INPUT_GRAB_MODE_22_ASYNC,
@@ -845,7 +845,7 @@ bool QXcbConnection::xi2SetMouseGrabEnabled(xcb_window_t w, bool grab)
             free(reply);
         }
     } else { // ungrab
-        for (int id : m_xiMasterPointerIds) {
+        for (int id : qAsConst(m_xiMasterPointerIds)) {
             auto cookie = xcb_input_xi_ungrab_device_checked(xcb_connection(), XCB_CURRENT_TIME, id);
             xcb_generic_error_t *error = xcb_request_check(xcb_connection(), cookie);
             if (error) {
@@ -997,8 +997,8 @@ void QXcbConnection::xi2HandleScrollEvent(void *event, ScrollingDevice &scrollin
                 QPoint global(fixed1616ToReal(xiDeviceEvent->root_x), fixed1616ToReal(xiDeviceEvent->root_y));
                 Qt::KeyboardModifiers modifiers = keyboard()->translateModifiers(xiDeviceEvent->mods.effective);
                 if (modifiers & Qt::AltModifier) {
-                    std::swap(angleDelta.rx(), angleDelta.ry());
-                    std::swap(rawDelta.rx(), rawDelta.ry());
+                    angleDelta = angleDelta.transposed();
+                    rawDelta = rawDelta.transposed();
                 }
                 qCDebug(lcQpaXInputEvents) << "scroll wheel @ window pos" << local << "delta px" << rawDelta << "angle" << angleDelta;
                 QWindowSystemInterface::handleWheelEvent(platformWindow->window(), xiDeviceEvent->time, local, global, rawDelta, angleDelta, modifiers);
@@ -1024,7 +1024,7 @@ void QXcbConnection::xi2HandleScrollEvent(void *event, ScrollingDevice &scrollin
                 QPoint global(fixed1616ToReal(xiDeviceEvent->root_x), fixed1616ToReal(xiDeviceEvent->root_y));
                 Qt::KeyboardModifiers modifiers = keyboard()->translateModifiers(xiDeviceEvent->mods.effective);
                 if (modifiers & Qt::AltModifier)
-                    std::swap(angleDelta.rx(), angleDelta.ry());
+                    angleDelta = angleDelta.transposed();
                 qCDebug(lcQpaXInputEvents) << "scroll wheel (button" << xiDeviceEvent->detail << ") @ window pos" << local << "delta angle" << angleDelta;
                 QWindowSystemInterface::handleWheelEvent(platformWindow->window(), xiDeviceEvent->time, local, global, QPoint(), angleDelta, modifiers);
             }
@@ -1252,14 +1252,16 @@ void QXcbConnection::xi2ReportTabletEvent(const void *event, TabletData *tabletD
             if (Q_LIKELY(useValuators)) {
                 const qreal value = scaleOneValuator(normalizedValue, physicalScreenArea.x(), physicalScreenArea.width());
                 global.setX(value);
-                local.setX(value - window->handle()->geometry().x());
+                // mapFromGlobal is ok for nested/embedded windows, but works only with whole-number QPoint;
+                // so map it first, then add back the sub-pixel position
+                local.setX(window->mapFromGlobal(QPoint(int(value), 0)).x() + (value - int(value)));
             }
             break;
         case QXcbAtom::AbsY:
             if (Q_LIKELY(useValuators)) {
                 qreal value = scaleOneValuator(normalizedValue, physicalScreenArea.y(), physicalScreenArea.height());
                 global.setY(value);
-                local.setY(value - window->handle()->geometry().y());
+                local.setY(window->mapFromGlobal(QPoint(0, int(value))).y() + (value - int(value)));
             }
             break;
         case QXcbAtom::AbsPressure:

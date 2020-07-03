@@ -180,7 +180,6 @@ void tst_QHostInfo::staticInformation()
 
 void tst_QHostInfo::initTestCase()
 {
-    QVERIFY(QtNetworkSettings::verifyTestNetworkSettings());
 #ifndef QT_NO_BEARERMANAGEMENT
     //start the default network
     netConfMan = new QNetworkConfigurationManager(this);
@@ -241,8 +240,6 @@ void tst_QHostInfo::lookupIPv4_data()
     QTest::addColumn<QString>("addresses");
     QTest::addColumn<int>("err");
 
-    // Test server lookup
-    QTest::newRow("lookup_01") << QtNetworkSettings::serverName() << QtNetworkSettings::serverIP().toString() << int(QHostInfo::NoError);
     QTest::newRow("empty") << "" << "" << int(QHostInfo::HostNotFound);
 
     QTest::newRow("single_ip4") << "a-single" TEST_DOMAIN << "192.0.2.1" << int(QHostInfo::NoError);
@@ -479,7 +476,9 @@ void tst_QHostInfo::reverseLookup_data()
 
     QTest::newRow("dns.google") << QString("8.8.8.8") << reverseLookupHelper("8.8.8.8") << 0 << false;
     QTest::newRow("one.one.one.one") << QString("1.1.1.1") << reverseLookupHelper("1.1.1.1") << 0 << false;
-    QTest::newRow("bogus-name") << QString("1::2::3::4") << QStringList() << 1 << true;
+    QTest::newRow("dns.google IPv6") << QString("2001:4860:4860::8888") << reverseLookupHelper("2001:4860:4860::8888") << 0 << true;
+    QTest::newRow("cloudflare IPv6") << QString("2606:4700:4700::1111") << reverseLookupHelper("2606:4700:4700::1111") << 0 << true;
+    QTest::newRow("bogus-name IPv6") << QString("1::2::3::4") << QStringList() << 1 << true;
 }
 
 void tst_QHostInfo::reverseLookup()

@@ -85,7 +85,8 @@ class XResetModel : public QStandardItemModel
         blockSignals(true);
         bool r = QStandardItemModel::removeRows(row, count, parent);
         blockSignals(false);
-        emit reset();
+        beginResetModel();
+        endResetModel();
         return r;
     }
     virtual bool insertRows(int row, int count, const QModelIndex &parent = QModelIndex())
@@ -93,7 +94,8 @@ class XResetModel : public QStandardItemModel
         blockSignals(true);
         bool r = QStandardItemModel::insertRows(row, count, parent);
         blockSignals(false);
-        emit reset();
+        beginResetModel();
+        endResetModel();
         return r;
     }
 };
@@ -104,6 +106,7 @@ class tst_QHeaderView : public QObject
 
 public:
     tst_QHeaderView();
+    static void initMain();
 
 private slots:
     void initTestCase();
@@ -213,6 +216,7 @@ private slots:
     void QTBUG14242_hideSectionAutoSize();
     void QTBUG50171_visualRegionForSwappedItems();
     void QTBUG53221_assertShiftHiddenRow();
+    void QTBUG75615_sizeHintWithStylesheet();
     void ensureNoIndexAtLength();
     void offsetConsistent();
 
@@ -246,6 +250,7 @@ private slots:
     void sizeHintCrash();
     void testResetCachedSizeHint();
     void statusTips();
+    void testRemovingColumnsViaLayoutChanged();
 
 protected:
     void setupTestData(bool use_reset_model = false);
@@ -253,13 +258,22 @@ protected:
     void calculateAndCheck(int cppline, const int precalced_comparedata[]);
     void testMinMaxSectionSize(bool stretchLastSection);
 
-    QWidget *topLevel;
-    QHeaderView *view;
-    QStandardItemModel *model;
-    QTableView *m_tableview;
-    bool m_using_reset_model;
+    QWidget *topLevel = nullptr;
+    QHeaderView *view = nullptr;
+    QStandardItemModel *model = nullptr;
+    QTableView *m_tableview = nullptr;
+    bool m_using_reset_model = false;
+    bool m_special_prepare = false;
     QElapsedTimer timer;
 };
+
+void tst_QHeaderView::initMain()
+{
+#ifdef Q_OS_WIN
+    // Ensure minimum size constraints of framed windows on High DPI screens
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+#endif
+}
 
 class QtTestModel: public QAbstractTableModel
 {
@@ -350,6 +364,7 @@ public:
 
     void cleanup()
     {
+        emit layoutAboutToBeChanged();
         cols = 3;
         rows = 3;
         emit layoutChanged();
@@ -620,6 +635,27 @@ void tst_QHeaderView::hidden()
     view->setSectionHidden(1, false);
     QCOMPARE(view->isSectionHidden(0), false);
     QCOMPARE(view->sectionSize(0), view->defaultSectionSize());
+
+    // d->hiddenSectionSize could go out of sync when a new model
+    // was set which has fewer sections than before and some of them
+    // were hidden
+    QStandardItemModel model2(model->rowCount() - 1, model->columnCount());
+
+    for (int i = 0; i < model->rowCount(); ++i)
+        view->setSectionHidden(i, true);
+    view->setModel(&model2);
+    QVERIFY(view->sectionsHidden());
+    for (int i = 0; i < model2.rowCount(); ++i) {
+        QVERIFY(view->isSectionHidden(i));
+    }
+
+    view->setModel(model);
+    for (int i = 0; i < model2.rowCount(); ++i) {
+        QVERIFY(view->isSectionHidden(i));
+    }
+    QCOMPARE(view->isSectionHidden(model->rowCount() - 1), false);
+    for (int i = 0; i < model->rowCount(); ++i)
+        view->setSectionHidden(i, false);
 }
 
 void tst_QHeaderView::stretch()
@@ -2571,6 +2607,26 @@ void tst_QHeaderView::QTBUG53221_assertShiftHiddenRow()
     QCOMPARE(tableView.verticalHeader()->isSectionHidden(2), true);
 }
 
+void tst_QHeaderView::QTBUG75615_sizeHintWithStylesheet()
+{
+    QTableView tableView;
+    QStandardItemModel model(1, 1);
+    tableView.setModel(&model);
+    tableView.show();
+
+    const auto headerView = tableView.horizontalHeader();
+    const auto oldSizeHint = headerView->sizeHint();
+    QVERIFY(oldSizeHint.isValid());
+
+    tableView.setStyleSheet("QTableView QHeaderView::section { height: 100px;}");
+    QCOMPARE(headerView->sizeHint().width(), oldSizeHint.width());
+    QCOMPARE(headerView->sizeHint().height(), 100);
+
+    tableView.setStyleSheet("QTableView QHeaderView::section { width: 100px;}");
+    QCOMPARE(headerView->sizeHint().height(), oldSizeHint.height());
+    QCOMPARE(headerView->sizeHint().width(), 100);
+}
+
 void protected_QHeaderView::testVisualRegionForSelection()
 {
     QRegion r = visualRegionForSelection(QItemSelection(model()->index(1, 0), model()->index(1, 2)));
@@ -2833,6 +2889,7 @@ void tst_QHeaderView::additionalInit()
     QFETCH(bool, reset_model);
 
     m_using_reset_model = reset_model;
+    m_special_prepare = special_prepare;
 
     if (m_using_reset_model) {
         XResetModel *m = new XResetModel();
@@ -3046,18 +3103,34 @@ void tst_QHeaderView::mixedTests()
     view->moveSection(0, 5);
 
     for (int u = model->rowCount(); u >= 0; --u) {
-        if (u % 5 != 0)
+        if (u % 5 != 0) {
             view->hideSection(u);
-        if (u % 3 != 0)
+            QVERIFY(view->isSectionHidden(u));
+        }
+        if (u % 3 != 0) {
             view->showSection(u);
+            QVERIFY(!view->isSectionHidden(u));
+        }
     }
 
     model->insertRows(3, 7);
     model->removeRows(8, 3);
     model->setRowCount(model->rowCount() - 10);
 
+    // the upper is not visible (when m_using_reset_model is true)
+    // the lower 11 are modified due to insert/removeRows
+    for (int u = model->rowCount() - 1; u >= 11; --u) {
+        // when using reset, the hidden rows will *not* move
+        const int calcMod = m_using_reset_model ? u : u - 4;    // 7 added, 3 removed
+        if (calcMod % 5 != 0 && calcMod % 3 == 0) {
+            QVERIFY(view->isSectionHidden(u));
+        }
+        if (calcMod % 3 != 0) {
+            QVERIFY(!view->isSectionHidden(u));
+        }
+    }
     if (m_using_reset_model) {
-        const int precalced_results[] = { 898296472, 337096378, -543340640, 1, -1251526424, -568618976, 9250 };
+        const int precalced_results[] = { 898296472, 337096378, -543340640, -1964432121, -1251526424, -568618976, 9250 };
         calculateAndCheck(__LINE__, precalced_results);
     } else {
         const int precalced_results[] = { 1911338224, 1693514365, -613398968, -1912534953, 1582159424, -1851079000, 9300 };
@@ -3446,6 +3519,21 @@ void tst_QHeaderView::statusTips()
     QTest::mouseMove(headerView.windowHandle(), centerPoint);
     QTRY_VERIFY(headerView.gotStatusTipEvent);
     QCOMPARE(headerView.statusTipText, QLatin1String("[0,1,0] -- Header"));
+}
+
+void tst_QHeaderView::testRemovingColumnsViaLayoutChanged()
+{
+    const int persistentSectionSize = 101;
+
+    QtTestModel model;
+    model.rows = model.cols = 5;
+    view->setModel(&model);
+    for (int i = 0; i < model.cols; ++i)
+        view->resizeSection(i, persistentSectionSize + i);
+    model.cleanup(); // down to 3 via layoutChanged (not columnsRemoved)
+    for (int j = 0; j < model.cols; ++j)
+        QCOMPARE(view->sectionSize(j), persistentSectionSize + j);
+    // The main point of this test is that the section-size restoring code didn't go out of bounds.
 }
 
 QTEST_MAIN(tst_QHeaderView)

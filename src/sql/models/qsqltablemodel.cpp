@@ -222,7 +222,7 @@ bool QSqlTableModelPrivate::exec(const QString &stmt, bool prepStatement,
     QSqlTableModel can also be used to access a database
     programmatically, without binding it to a view:
 
-    \snippet sqldatabase/sqldatabase.cpp 21
+    \snippet sqldatabase/sqldatabase.cpp 25
 
     The code snippet above extracts the \c salary field from record 4 in
     the result set of the query \c{SELECT * from employee}.
@@ -606,6 +606,16 @@ bool QSqlTableModel::setData(const QModelIndex &index, const QVariant &value, in
 
     return true;
 }
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+/*!
+    \reimp
+ */
+bool QSqlTableModel::clearItemData(const QModelIndex &index)
+{
+    return setData(index, QVariant(), Qt::EditRole);
+}
+#endif
 
 /*!
     This function simply calls QSqlQueryModel::setQuery(\a query).

@@ -140,7 +140,7 @@ QDebug Q_GUI_EXPORT &operator<<(QDebug &s, const QVectorPath &path)
     QDebugStateSaver saver(s);
     QRectF rf = path.controlPointRect();
     s << "QVectorPath(size:" << path.elementCount()
-      << " hints:" << hex << path.hints()
+      << " hints:" << Qt::hex << path.hints()
       << rf << ')';
     return s;
 }
@@ -438,6 +438,9 @@ void QPaintEngineEx::stroke(const QVectorPath &path, const QPen &pen)
             d->activeStroker->setClipRect(clipRect);
         }
     }
+
+    if (d->activeStroker == &d->stroker)
+        d->stroker.setForceOpen(path.hasExplicitOpen());
 
     const QPainterPath::ElementType *types = path.elements();
     const qreal *points = path.points();
@@ -1097,7 +1100,7 @@ bool QPaintEngineEx::shouldDrawCachedGlyphs(QFontEngine *fontEngine, const QTran
     }(), 2);
 
     qreal pixelSize = fontEngine->fontDef.pixelSize;
-    return (pixelSize * pixelSize * qAbs(m.determinant())) < maxCachedGlyphSizeSquared;
+    return (pixelSize * pixelSize * qAbs(m.determinant())) <= maxCachedGlyphSizeSquared;
 }
 
 QT_END_NAMESPACE

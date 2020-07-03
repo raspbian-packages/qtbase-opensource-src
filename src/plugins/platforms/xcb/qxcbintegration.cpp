@@ -317,8 +317,7 @@ bool QXcbIntegration::hasCapability(QPlatformIntegration::Capability cap) const
     case OpenGL:
     case ThreadedOpenGL:
     {
-        const auto *connection = qAsConst(m_connections).first();
-        if (const auto *integration = connection->glIntegration())
+        if (const auto *integration = defaultConnection()->glIntegration())
             return cap != ThreadedOpenGL || integration->supportsThreadedOpenGL();
         return false;
     }
@@ -357,6 +356,8 @@ void QXcbIntegration::initialize()
     m_inputContext.reset(QPlatformInputContextFactory::create(icStr));
     if (!m_inputContext && icStr != defaultInputContext && icStr != QLatin1String("none"))
         m_inputContext.reset(QPlatformInputContextFactory::create(defaultInputContext));
+
+    defaultConnection()->keyboard()->initialize();
 }
 
 void QXcbIntegration::moveToScreen(QWindow *window, int screen)
@@ -548,6 +549,7 @@ void QXcbIntegration::beep() const
         return;
     xcb_connection_t *connection = static_cast<QXcbScreen *>(screen)->xcb_connection();
     xcb_bell(connection, 0);
+    xcb_flush(connection);
 }
 
 bool QXcbIntegration::nativePaintingEnabled() const

@@ -160,6 +160,7 @@ private slots:
     void selectionChanged();
 #ifndef QT_NO_CLIPBOARD
     void copyPasteBackgroundImage();
+    void copyPasteForegroundImage();
 #endif
     void setText();
     void cursorRect();
@@ -197,6 +198,12 @@ private slots:
     void findWithRegExp();
     void findBackwardWithRegExp();
     void findWithRegExpReturnsFalseIfNoMoreResults();
+#endif
+
+#if QT_CONFIG(regularexpression)
+    void findWithRegularExpression();
+    void findBackwardWithRegularExpression();
+    void findWithRegularExpressionReturnsFalseIfNoMoreResults();
 #endif
 
 #if QT_CONFIG(wheelevent)
@@ -276,12 +283,12 @@ void tst_QTextEdit::getSetCheck()
 
     // int QTextEdit::tabStopWidth()
     // void QTextEdit::setTabStopWidth(int)
-    obj1.setTabStopWidth(0);
-    QCOMPARE(0, obj1.tabStopWidth());
-    obj1.setTabStopWidth(INT_MIN);
-    QCOMPARE(0, obj1.tabStopWidth()); // Makes no sense to set a negative tabstop value
-    obj1.setTabStopWidth(INT_MAX);
-    QCOMPARE(INT_MAX, obj1.tabStopWidth());
+    obj1.setTabStopDistance(0);
+    QCOMPARE(0, obj1.tabStopDistance());
+    obj1.setTabStopDistance(-1);
+    QCOMPARE(0, obj1.tabStopDistance()); // Makes no sense to set a negative tabstop value
+    obj1.setTabStopDistance(std::numeric_limits<qreal>::max());
+    QCOMPARE(std::numeric_limits<qreal>::max(), obj1.tabStopDistance());
 
     // bool QTextEdit::acceptRichText()
     // void QTextEdit::setAcceptRichText(bool)
@@ -1898,6 +1905,36 @@ void tst_QTextEdit::copyPasteBackgroundImage()
             ba.texture().cacheKey() == bb.texture().cacheKey());
     QFile::remove(QLatin1String("foo.png"));
 }
+
+void tst_QTextEdit::copyPasteForegroundImage()
+{
+    ed->clear();
+
+    QPixmap pix(20, 20);
+    pix.fill(Qt::blue);
+
+    QTextCharFormat fmt;
+    {
+        QBrush textureBrush;
+        {
+            textureBrush.setTexture(pix);
+        }
+        textureBrush.setStyle(Qt::TexturePattern);
+        fmt.setForeground(textureBrush);
+    }
+    ed->textCursor().insertText("Foobar", fmt);
+
+    ed->moveCursor(QTextCursor::Start);
+    ed->moveCursor(QTextCursor::End, QTextCursor::KeepAnchor);
+
+    ed->copy();
+    ed->clear();
+    ed->paste();
+
+    QBrush brush = ed->textCursor().charFormat().foreground();
+    QCOMPARE(brush.style(), Qt::TexturePattern);
+    QCOMPARE(brush.texture().cacheKey(), pix.cacheKey());
+}
 #endif
 
 void tst_QTextEdit::setText()
@@ -1941,8 +1978,23 @@ void tst_QTextEdit::fullWidthSelection_data()
 #endif
 
 #ifdef QT_BUILD_INTERNAL
+
+// With the fix for QTBUG-78318 scaling of documentMargin is added. The testing framework
+// forces qt_defaultDpi() to always return 96 DPI. For systems where the actual DPI differs
+// (typically 72 DPI) this would now cause scaling of the documentMargin when
+// drawing QTextEdit into QImage. In order to avoid the need of multiple reference PNGs
+// for comparison we disable the Qt::AA_Use96Dpi attribute for these tests.
+
+struct ForceSystemDpiHelper {
+  ForceSystemDpiHelper() { QCoreApplication::setAttribute(Qt::AA_Use96Dpi, false); }
+  ~ForceSystemDpiHelper() { QCoreApplication::setAttribute(Qt::AA_Use96Dpi, old); }
+  bool old = QCoreApplication::testAttribute(Qt::AA_Use96Dpi);
+};
+
 void tst_QTextEdit::fullWidthSelection()
 {
+    ForceSystemDpiHelper useSystemDpi;
+
     QFETCH(int, cursorFrom);
     QFETCH(int, cursorTo);
     QFETCH(QString, imageFileName);
@@ -2011,6 +2063,8 @@ void tst_QTextEdit::fullWidthSelection()
 #ifdef QT_BUILD_INTERNAL
 void tst_QTextEdit::fullWidthSelection2()
 {
+    ForceSystemDpiHelper useSystemDpi;
+
     QPalette myPalette;
     myPalette.setColor(QPalette::All, QPalette::HighlightedText, QColor(0,0,0,0));
     myPalette.setColor(QPalette::All, QPalette::Highlight, QColor(239,221,85));
@@ -2572,6 +2626,45 @@ void tst_QTextEdit::findWithRegExpReturnsFalseIfNoMoreResults()
 }
 #endif
 
+#if QT_CONFIG(regularexpression)
+void tst_QTextEdit::findWithRegularExpression()
+{
+    ed->setHtml(QStringLiteral("arbitrary te<span style=\"color:#ff0000\">xt</span>"));
+    QRegularExpression rx("\\w{2}xt");
+
+    bool found = ed->find(rx);
+
+    QVERIFY(found);
+    QCOMPARE(ed->textCursor().selectedText(), QStringLiteral("text"));
+}
+
+void tst_QTextEdit::findBackwardWithRegularExpression()
+{
+    ed->setPlainText(QStringLiteral("arbitrary text"));
+    QTextCursor cursor = ed->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    ed->setTextCursor(cursor);
+    QRegularExpression rx("a\\w*t");
+
+    bool found = ed->find(rx, QTextDocument::FindBackward);
+
+    QVERIFY(found);
+    QCOMPARE(ed->textCursor().selectedText(), QStringLiteral("arbit"));
+}
+
+void tst_QTextEdit::findWithRegularExpressionReturnsFalseIfNoMoreResults()
+{
+    ed->setPlainText(QStringLiteral("arbitrary text"));
+    QRegularExpression rx("t.xt");
+    ed->find(rx);
+
+    bool found = ed->find(rx);
+
+    QVERIFY(!found);
+    QCOMPARE(ed->textCursor().selectedText(), QStringLiteral("text"));
+}
+#endif
+
 #if QT_CONFIG(wheelevent)
 
 class TextEdit : public QTextEdit
@@ -2593,12 +2686,14 @@ void tst_QTextEdit::wheelEvent()
     ed.setReadOnly(true);
 
     float defaultFontSize = ed.font().pointSizeF();
-    QWheelEvent wheelUp(QPointF(), QPointF(), QPoint(), QPoint(0, 120), 120, Qt::Vertical, Qt::NoButton, Qt::ControlModifier);
+    QWheelEvent wheelUp(QPointF(), QPointF(), QPoint(), QPoint(0, 120),
+                        Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, Qt::MouseEventNotSynthesized);
     ed.wheelEvent(&wheelUp);
 
     QCOMPARE(defaultFontSize + 1, ed.font().pointSizeF());
 
-    QWheelEvent wheelHalfDown(QPointF(), QPointF(), QPoint(), QPoint(0, -60), -60, Qt::Vertical, Qt::NoButton, Qt::ControlModifier);
+    QWheelEvent wheelHalfDown(QPointF(), QPointF(), QPoint(), QPoint(0, -60),
+                              Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, Qt::MouseEventNotSynthesized);
     ed.wheelEvent(&wheelHalfDown);
 
     QCOMPARE(defaultFontSize + 0.5, ed.font().pointSizeF());

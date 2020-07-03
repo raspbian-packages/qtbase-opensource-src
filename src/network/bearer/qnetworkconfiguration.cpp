@@ -414,34 +414,7 @@ bool QNetworkConfiguration::isRoamingAvailable() const
 */
 QList<QNetworkConfiguration> QNetworkConfiguration::children() const
 {
-    QList<QNetworkConfiguration> results;
-
-    if (!d)
-        return results;
-
-    QMutexLocker locker(&d->mutex);
-
-    if (d->type != QNetworkConfiguration::ServiceNetwork || !d->isValid)
-        return results;
-
-    for (auto it = d->serviceNetworkMembers.begin(), end = d->serviceNetworkMembers.end(); it != end;) {
-        QNetworkConfigurationPrivatePointer p = it.value();
-        //if we have an invalid member get rid of it -> was deleted earlier on
-        {
-            QMutexLocker childLocker(&p->mutex);
-
-            if (!p->isValid) {
-                it = d->serviceNetworkMembers.erase(it);
-                continue;
-            }
-        }
-        QNetworkConfiguration item;
-        item.d = p;
-        results << item;
-        ++it;
-    }
-
-    return results;
+    return {};
 }
 
 /*!
@@ -518,7 +491,7 @@ QNetworkConfiguration::BearerType QNetworkConfiguration::bearerTypeFamily() cons
 /*!
     Returns the type of bearer used by this network configuration as a string.
 
-    The string is not translated and therefore can not be shown to the user. The subsequent table
+    The string is not translated and therefore cannot be shown to the user. The subsequent table
     shows the fixed mappings between BearerType and the bearer type name for known types.  If the
     BearerType is unknown this function may return additional information if it is available;
     otherwise an empty string will be returned.

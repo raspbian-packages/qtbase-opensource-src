@@ -288,13 +288,6 @@ static inline bool isHoverControl(QStyle::SubControl control)
     return control != QStyle::SC_None && control != QStyle::SC_TitleBarLabel;
 }
 
-#if 0 // Used to be included in Qt4 for Q_WS_WIN
-static inline QRgb colorref2qrgb(COLORREF col)
-{
-    return qRgb(GetRValue(col),GetGValue(col),GetBValue(col));
-}
-#endif
-
 #ifndef QT_NO_TOOLTIP
 static void showToolTip(QHelpEvent *helpEvent, QWidget *widget, const QStyleOptionComplex &opt,
                         QStyle::ComplexControl complexControl, QStyle::SubControl subControl)
@@ -1826,7 +1819,7 @@ void QMdiSubWindowPrivate::showButtonsInMenuBar(QMenuBar *menuBar)
         // Make sure topLevelWindow->contentsRect returns correct geometry.
         // topLevelWidget->updateGeoemtry will not do the trick here since it will post the event.
         QEvent event(QEvent::LayoutRequest);
-        QApplication::sendEvent(topLevelWindow, &event);
+        QCoreApplication::sendEvent(topLevelWindow, &event);
     }
 }
 
@@ -1926,43 +1919,7 @@ QPalette QMdiSubWindowPrivate::desktopPalette() const
     QPalette newPalette = q->palette();
 
     bool colorsInitialized = false;
-#if 0 // Used to be included in Qt4 for Q_WS_WIN // ask system properties on windows
-#ifndef SPI_GETGRADIENTCAPTIONS
-#define SPI_GETGRADIENTCAPTIONS 0x1008
-#endif
-#ifndef COLOR_GRADIENTACTIVECAPTION
-#define COLOR_GRADIENTACTIVECAPTION 27
-#endif
-#ifndef COLOR_GRADIENTINACTIVECAPTION
-#define COLOR_GRADIENTINACTIVECAPTION 28
-#endif
-    if (QApplication::desktopSettingsAware()) {
-        newPalette.setColor(QPalette::Active, QPalette::Highlight,
-                            colorref2qrgb(GetSysColor(COLOR_ACTIVECAPTION)));
-        newPalette.setColor(QPalette::Inactive, QPalette::Highlight,
-                            colorref2qrgb(GetSysColor(COLOR_INACTIVECAPTION)));
-        newPalette.setColor(QPalette::Active, QPalette::HighlightedText,
-                            colorref2qrgb(GetSysColor(COLOR_CAPTIONTEXT)));
-        newPalette.setColor(QPalette::Inactive, QPalette::HighlightedText,
-                            colorref2qrgb(GetSysColor(COLOR_INACTIVECAPTIONTEXT)));
 
-        colorsInitialized = true;
-        BOOL hasGradient = false;
-        SystemParametersInfo(SPI_GETGRADIENTCAPTIONS, 0, &hasGradient, 0);
-
-        if (hasGradient) {
-            newPalette.setColor(QPalette::Active, QPalette::Base,
-                                colorref2qrgb(GetSysColor(COLOR_GRADIENTACTIVECAPTION)));
-            newPalette.setColor(QPalette::Inactive, QPalette::Base,
-                                colorref2qrgb(GetSysColor(COLOR_GRADIENTINACTIVECAPTION)));
-        } else {
-            newPalette.setColor(QPalette::Active, QPalette::Base,
-                                newPalette.color(QPalette::Active, QPalette::Highlight));
-            newPalette.setColor(QPalette::Inactive, QPalette::Base,
-                                newPalette.color(QPalette::Inactive, QPalette::Highlight));
-        }
-    }
-#endif
     if (!colorsInitialized) {
         newPalette.setColor(QPalette::Active, QPalette::Highlight,
                             newPalette.color(QPalette::Active, QPalette::Highlight));
@@ -1986,7 +1943,7 @@ void QMdiSubWindowPrivate::updateActions()
     for (int i = 0; i < NumWindowStateActions; ++i)
         setVisible(WindowStateAction(i), false);
 
-#ifdef Q_OS_MACOS
+#if defined(Q_OS_MACOS) && QT_CONFIG(action)
     if (q_func()->style()->inherits("QMacStyle"))
         for (int i = 0; i < NumWindowStateActions; ++i)
             if (QAction *action = actions[i])
@@ -2268,7 +2225,7 @@ QMdiSubWindow::QMdiSubWindow(QWidget *parent, Qt::WindowFlags flags)
     setMouseTracking(true);
     setLayout(new QVBoxLayout);
     setFocusPolicy(Qt::StrongFocus);
-    layout()->setMargin(0);
+    layout()->setContentsMargins(QMargins());
     d->updateGeometryConstraints();
     setAttribute(Qt::WA_Resized, false);
     d->titleBarPalette = d->desktopPalette();
@@ -2576,7 +2533,8 @@ void QMdiSubWindow::showSystemMenu()
 /*!
     \since 4.4
 
-    Returns the area containing this sub-window, or 0 if there is none.
+    Returns the area containing this sub-window, or \nullptr if there
+    is none.
 
     \sa QMdiArea::addSubWindow()
 */
@@ -2590,7 +2548,7 @@ QMdiArea *QMdiSubWindow::mdiArea() const
         }
         parent = parent->parentWidget();
     }
-    return 0;
+    return nullptr;
 }
 
 /*!
@@ -3049,7 +3007,7 @@ void QMdiSubWindow::closeEvent(QCloseEvent *closeEvent)
     d->setActive(false);
     if (parentWidget() && testAttribute(Qt::WA_DeleteOnClose)) {
         QChildEvent childRemoved(QEvent::ChildRemoved, this);
-        QApplication::sendEvent(parentWidget(), &childRemoved);
+        QCoreApplication::sendEvent(parentWidget(), &childRemoved);
     }
     closeEvent->accept();
 }
@@ -3347,8 +3305,11 @@ void QMdiSubWindow::mouseMoveEvent(QMouseEvent *mouseEvent)
     }
 
     if ((mouseEvent->buttons() & Qt::LeftButton) || d->isInInteractiveMode) {
-        if ((d->isResizeOperation() && d->resizeEnabled) || (d->isMoveOperation() && d->moveEnabled))
-            d->setNewGeometry(mapToParent(mouseEvent->pos()));
+        if ((d->isResizeOperation() && d->resizeEnabled) || (d->isMoveOperation() && d->moveEnabled)) {
+            // As setNewGeometry moves the window, it invalidates the pos() value of any mouse move events that are
+            // currently queued in the event loop. Map to parent using globalPos() instead.
+            d->setNewGeometry(parentWidget()->mapFromGlobal(mouseEvent->globalPos()));
+        }
         return;
     }
 

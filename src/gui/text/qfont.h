@@ -147,6 +147,7 @@ public:
     Q_ENUM(SpacingType)
 
     enum ResolveProperties {
+        NoPropertiesResolved        = 0x0000,
         FamilyResolved              = 0x0001,
         SizeResolved                = 0x0002,
         StyleHintResolved           = 0x0004,
@@ -164,13 +165,18 @@ public:
         WordSpacingResolved         = 0x4000,
         HintingPreferenceResolved   = 0x8000,
         StyleNameResolved           = 0x10000,
-        AllPropertiesResolved       = 0x1ffff
+        FamiliesResolved            = 0x20000,
+        AllPropertiesResolved       = 0x3ffff
     };
+    Q_ENUM(ResolveProperties)
 
     QFont();
     QFont(const QString &family, int pointSize = -1, int weight = -1, bool italic = false);
-    QFont(const QFont &, QPaintDevice *pd);
-    QFont(const QFont &);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    QFont(const QFont &font, QPaintDevice *pd);
+#endif
+    QFont(const QFont &font, const QPaintDevice *pd);
+    QFont(const QFont &font);
     ~QFont();
 
     void swap(QFont &other)
@@ -178,6 +184,9 @@ public:
 
     QString family() const;
     void setFamily(const QString &);
+
+    QStringList families() const;
+    void setFamilies(const QStringList &);
 
     QString styleName() const;
     void setStyleName(const QString &);
@@ -252,10 +261,8 @@ public:
     bool operator<(const QFont &) const;
     operator QVariant() const;
     bool isCopyOf(const QFont &) const;
-#ifdef Q_COMPILER_RVALUE_REFS
-    inline QFont &operator=(QFont &&other) Q_DECL_NOEXCEPT
+    inline QFont &operator=(QFont &&other) noexcept
     { qSwap(d, other.d); qSwap(resolve_mask, other.resolve_mask);  return *this; }
-#endif
 
 #if QT_DEPRECATED_SINCE(5, 3)
     // needed for X11
@@ -282,8 +289,10 @@ public:
     static void cacheStatistics();
 
     QString defaultFamily() const;
-    QString lastResortFamily() const;
-    QString lastResortFont() const;
+#if QT_DEPRECATED_SINCE(5, 13)
+    QT_DEPRECATED QString lastResortFamily() const;
+    QT_DEPRECATED QString lastResortFont() const;
+#endif
 
     QFont resolve(const QFont &) const;
     inline uint resolve() const { return resolve_mask; }
@@ -326,13 +335,17 @@ private:
     friend Q_GUI_EXPORT QDataStream &operator>>(QDataStream &, QFont &);
 #endif
 
+#ifndef QT_NO_DEBUG_STREAM
+    friend Q_GUI_EXPORT QDebug operator<<(QDebug, const QFont &);
+#endif
+
     QExplicitlySharedDataPointer<QFontPrivate> d;
     uint resolve_mask;
 };
 
 Q_DECLARE_SHARED(QFont)
 
-Q_GUI_EXPORT uint qHash(const QFont &font, uint seed = 0) Q_DECL_NOTHROW;
+Q_GUI_EXPORT uint qHash(const QFont &font, uint seed = 0) noexcept;
 
 inline bool QFont::bold() const
 { return weight() > Medium; }

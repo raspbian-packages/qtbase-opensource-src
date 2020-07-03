@@ -45,6 +45,7 @@
 #include <qvariant.h>
 #include <qstringlist.h>
 #include <qdebug.h>
+#include "qdatastream.h"
 
 #ifndef QT_BOOTSTRAPPED
 #  include <qcborarray.h>
@@ -111,7 +112,7 @@ QT_BEGIN_NAMESPACE
     The default is to create a Null value.
  */
 QJsonValue::QJsonValue(Type type)
-    : ui(0), d(0), t(type)
+    : ui(0), d(nullptr), t(type)
 {
 }
 
@@ -119,7 +120,7 @@ QJsonValue::QJsonValue(Type type)
     \internal
  */
 QJsonValue::QJsonValue(QJsonPrivate::Data *data, QJsonPrivate::Base *base, const QJsonPrivate::Value &v)
-    : d(0)
+    : d(nullptr)
 {
     t = (Type)(uint)v.type;
     switch (t) {
@@ -153,7 +154,7 @@ QJsonValue::QJsonValue(QJsonPrivate::Data *data, QJsonPrivate::Base *base, const
     Creates a value of type Bool, with value \a b.
  */
 QJsonValue::QJsonValue(bool b)
-    : d(0), t(Bool)
+    : d(nullptr), t(Bool)
 {
     this->b = b;
 }
@@ -162,7 +163,7 @@ QJsonValue::QJsonValue(bool b)
     Creates a value of type Double, with value \a n.
  */
 QJsonValue::QJsonValue(double n)
-    : d(0), t(Double)
+    : d(nullptr), t(Double)
 {
     this->dbl = n;
 }
@@ -172,7 +173,7 @@ QJsonValue::QJsonValue(double n)
     Creates a value of type Double, with value \a n.
  */
 QJsonValue::QJsonValue(int n)
-    : d(0), t(Double)
+    : d(nullptr), t(Double)
 {
     this->dbl = n;
 }
@@ -184,7 +185,7 @@ QJsonValue::QJsonValue(int n)
     If you pass in values outside this range expect a loss of precision to occur.
  */
 QJsonValue::QJsonValue(qint64 n)
-    : d(0), t(Double)
+    : d(nullptr), t(Double)
 {
     this->dbl = double(n);
 }
@@ -193,7 +194,7 @@ QJsonValue::QJsonValue(qint64 n)
     Creates a value of type String, with value \a s.
  */
 QJsonValue::QJsonValue(const QString &s)
-    : d(0), t(String)
+    : d(nullptr), t(String)
 {
     stringDataFromQStringHelper(s);
 }
@@ -220,7 +221,7 @@ void QJsonValue::stringDataFromQStringHelper(const QString &string)
     Creates a value of type String, with value \a s.
  */
 QJsonValue::QJsonValue(QLatin1String s)
-    : d(0), t(String)
+    : d(nullptr), t(String)
 {
     // ### FIXME: Avoid creating the temp QString below
     QString str(s);
@@ -693,6 +694,7 @@ QJsonObject QJsonValue::toObject() const
     return toObject(QJsonObject());
 }
 
+#if QT_STRINGVIEW_LEVEL < 2
 /*!
     Returns a QJsonValue representing the value for the key \a key.
 
@@ -706,6 +708,16 @@ QJsonObject QJsonValue::toObject() const
     \sa QJsonValue, QJsonValue::isUndefined(), QJsonObject
  */
 const QJsonValue QJsonValue::operator[](const QString &key) const
+{
+    return (*this)[QStringView(key)];
+}
+#endif
+
+/*!
+    \overload
+    \since 5.14
+*/
+const QJsonValue QJsonValue::operator[](QStringView key) const
 {
     if (!isObject())
         return QJsonValue(QJsonValue::Undefined);
@@ -930,6 +942,80 @@ QDebug operator<<(QDebug dbg, const QJsonValue &o)
         break;
     }
     return dbg;
+}
+#endif
+
+#ifndef QT_NO_DATASTREAM
+QDataStream &operator<<(QDataStream &stream, const QJsonValue &v)
+{
+    quint8 type = v.t;
+    stream << type;
+    switch (type) {
+    case QJsonValue::Undefined:
+    case QJsonValue::Null:
+        break;
+    case QJsonValue::Bool:
+        stream << v.toBool();
+        break;
+    case QJsonValue::Double:
+        stream << v.toDouble();
+        break;
+    case QJsonValue::String:
+        stream << v.toString();
+        break;
+    case QJsonValue::Array:
+        stream << v.toArray();
+        break;
+    case QJsonValue::Object:
+        stream << v.toObject();
+        break;
+    }
+    return stream;
+}
+
+QDataStream &operator>>(QDataStream &stream, QJsonValue &v)
+{
+    quint8 type;
+    stream >> type;
+    switch (type) {
+    case QJsonValue::Undefined:
+    case QJsonValue::Null:
+        v = QJsonValue{QJsonValue::Type(type)};
+        break;
+    case QJsonValue::Bool: {
+        bool b;
+        stream >> b;
+        v = QJsonValue(b);
+        break;
+    } case QJsonValue::Double: {
+        double d;
+        stream >> d;
+        v = QJsonValue{d};
+        break;
+    } case QJsonValue::String: {
+        QString s;
+        stream >> s;
+        v = QJsonValue{s};
+        break;
+    }
+    case QJsonValue::Array: {
+        QJsonArray a;
+        stream >> a;
+        v = QJsonValue{a};
+        break;
+    }
+    case QJsonValue::Object: {
+        QJsonObject o;
+        stream >> o;
+        v = QJsonValue{o};
+        break;
+    }
+    default: {
+        stream.setStatus(QDataStream::ReadCorruptData);
+        v = QJsonValue{QJsonValue::Undefined};
+    }
+    }
+    return stream;
 }
 #endif
 

@@ -34,7 +34,7 @@
 #include <qscopedpointer.h>
 #include <qstringlist.h>
 #include <qfileinfo.h>
-#include <qversionnumber.h>
+#include <qregexp.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -300,14 +300,17 @@ inline XmlOutput::xml_output valueTagT( const triState v)
     return valueTag(v == _True ? "true" : "false");
 }
 
-static QString vcxCommandSeparator()
+static QString commandLinesForOutput(QStringList commands)
 {
     // MSBuild puts the contents of the custom commands into a batch file and calls it.
     // As we want every sub-command to be error-checked (as is done by makefile-based
     // backends), we insert the checks ourselves, using the undocumented jump target.
-    static QString cmdSep =
-    QLatin1String("&#x000D;&#x000A;if errorlevel 1 goto VCEnd&#x000D;&#x000A;");
-    return cmdSep;
+    static QString errchk = QStringLiteral("if errorlevel 1 goto VCEnd");
+    for (int i = commands.count() - 2; i >= 0; --i) {
+        if (!commands.at(i).startsWith("rem", Qt::CaseInsensitive))
+            commands.insert(i + 1, errchk);
+    }
+    return commands.join("\r\n");
 }
 
 static QString unquote(const QString &value)
@@ -626,31 +629,17 @@ void VCXProjectWriter::write(XmlOutput &xml, VCProject &tool)
         << tagValue("RootNamespace", tool.Name)
         << tagValue("Keyword", tool.Keyword);
 
-    QString windowsTargetPlatformVersion;
     if (isWinRT) {
         xml << tagValue("MinimumVisualStudioVersion", tool.Version)
             << tagValue("DefaultLanguage", "en")
             << tagValue("AppContainerApplication", "true")
             << tagValue("ApplicationType", "Windows Store")
             << tagValue("ApplicationTypeRevision", tool.SdkVersion);
-        if (tool.SdkVersion == "10.0")
-            windowsTargetPlatformVersion = qgetenv("UCRTVERSION");
-    } else {
-        QByteArray winSDKVersionStr = qgetenv("WindowsSDKVersion").trimmed();
-
-        // This environment variable might end with a backslash due to a VS bug.
-        if (winSDKVersionStr.endsWith('\\'))
-            winSDKVersionStr.chop(1);
-
-        QVersionNumber winSDKVersion = QVersionNumber::fromString(
-                    QString::fromLocal8Bit(winSDKVersionStr));
-        if (!winSDKVersion.isNull())
-            windowsTargetPlatformVersion = winSDKVersionStr;
     }
-    if (!windowsTargetPlatformVersion.isEmpty()) {
-        xml << tagValue("WindowsTargetPlatformVersion", windowsTargetPlatformVersion)
-            << tagValue("WindowsTargetPlatformMinVersion", windowsTargetPlatformVersion);
-    }
+    if (!tool.WindowsTargetPlatformVersion.isEmpty())
+        xml << tagValue("WindowsTargetPlatformVersion", tool.WindowsTargetPlatformVersion);
+    if (!tool.WindowsTargetPlatformMinVersion.isEmpty())
+        xml << tagValue("WindowsTargetPlatformMinVersion", tool.WindowsTargetPlatformMinVersion);
 
     xml << closetag();
 
@@ -1672,7 +1661,7 @@ void VCXProjectWriter::write(XmlOutput &xml, const VCCustomBuildTool &tool)
     {
         xml << tag("Command")
             << attrTag("Condition", condition)
-            << valueTag(tool.CommandLine.join(vcxCommandSeparator()));
+            << valueTag(commandLinesForOutput(tool.CommandLine));
     }
 
     if ( !tool.Description.isEmpty() )
@@ -1726,7 +1715,7 @@ void VCXProjectWriter::write(XmlOutput &xml, const VCEventTool &tool)
 {
     xml
         << tag(tool.EventName)
-            << tag(_Command) << valueTag(tool.CommandLine.join(vcxCommandSeparator()))
+            << tag(_Command) << valueTag(commandLinesForOutput(tool.CommandLine))
             << tag(_Message) << valueTag(tool.Description)
         << closetag(tool.EventName);
 }

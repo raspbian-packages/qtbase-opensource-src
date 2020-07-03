@@ -385,10 +385,10 @@ void GLWidget::paintGL()
 
     painter.endNativePainting();
 
-    if (m_showBubbles)
-        foreach (Bubble *bubble, m_bubbles) {
+    if (m_showBubbles) {
+        for (Bubble *bubble : qAsConst(m_bubbles))
             bubble->drawBubble(&painter);
-        }
+    }
 
     if (const int elapsed = m_time.elapsed()) {
         QString framesPerSecond;
@@ -399,12 +399,9 @@ void GLWidget::paintGL()
 
     painter.end();
 
-    QMutableListIterator<Bubble*> iter(m_bubbles);
-
-    while (iter.hasNext()) {
-        Bubble *bubble = iter.next();
+    for (Bubble *bubble : qAsConst(m_bubbles))
         bubble->move(rect());
-    }
+
     if (!(m_frames % 100)) {
         m_time.start();
         m_frames = 0;

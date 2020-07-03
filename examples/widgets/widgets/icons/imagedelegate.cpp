@@ -48,10 +48,10 @@
 **
 ****************************************************************************/
 
-#include <QtWidgets>
-
 #include "imagedelegate.h"
 #include "iconpreviewarea.h"
+
+#include <QComboBox>
 
 //! [0]
 ImageDelegate::ImageDelegate(QObject *parent)

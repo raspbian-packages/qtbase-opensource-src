@@ -48,13 +48,12 @@
 **
 ****************************************************************************/
 
+#include "mandelbrotwidget.h"
+
 #include <QPainter>
 #include <QKeyEvent>
 
 #include <math.h>
-
-#include "mandelbrotwidget.h"
-
 
 //! [0]
 const double DefaultCenterX = -0.637011f;
@@ -75,7 +74,8 @@ MandelbrotWidget::MandelbrotWidget(QWidget *parent)
     pixmapScale = DefaultScale;
     curScale = DefaultScale;
 
-    connect(&thread, SIGNAL(renderedImage(QImage,double)), this, SLOT(updatePixmap(QImage,double)));
+    connect(&thread, &RenderThread::renderedImage,
+            this, &MandelbrotWidget::updatePixmap);
 
     setWindowTitle(tr("Mandelbrot"));
 #ifndef QT_NO_CURSOR
@@ -117,7 +117,8 @@ void MandelbrotWidget::paintEvent(QPaintEvent * /* event */)
         painter.save();
         painter.translate(newX, newY);
         painter.scale(scaleFactor, scaleFactor);
-        QRectF exposed = painter.matrix().inverted().mapRect(rect()).adjusted(-1, -1, 1, 1);
+
+        QRectF exposed = painter.transform().inverted().mapRect(rect()).adjusted(-1, -1, 1, 1);
         painter.drawPixmap(exposed, pixmap, exposed);
         painter.restore();
     }
@@ -175,7 +176,7 @@ void MandelbrotWidget::keyPressEvent(QKeyEvent *event)
 //! [12]
 void MandelbrotWidget::wheelEvent(QWheelEvent *event)
 {
-    int numDegrees = event->delta() / 8;
+    int numDegrees = event->angleDelta().y() / 8;
     double numSteps = numDegrees / 15.0f;
     zoom(pow(ZoomInFactor, numSteps));
 }

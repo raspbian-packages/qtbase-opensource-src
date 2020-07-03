@@ -1602,27 +1602,16 @@ void tst_QCompleter::task247560_keyboardNavigation()
 }
 
 // Helpers for QTBUG_14292_filesystem: Recursion helper for below recurseTreeModel
-template <class Function>
-bool recurseTreeModelIndex(const QModelIndex &idx, Function f, int depth = 0)
-{
-    if (f(idx, depth))
-        return true;
-    const int rowCount = idx.model()->rowCount(idx);
-    for (int row = 0; row < rowCount; ++row)
-        if (recurseTreeModelIndex(idx.child(row, 0), f, depth + 1))
-            return true;
-    return false;
-}
-
 // Function to recurse over a tree model applying a function
 // taking index and depth, returning true to terminate recursion.
-
 template <class Function>
-bool recurseTreeModel(const QAbstractItemModel &m, Function f)
+bool recurseTreeModel(const QAbstractItemModel &m, const QModelIndex &idx, Function f, int depth = 0)
 {
-    const int rowCount = m.rowCount(QModelIndex());
+    if (idx.isValid() && f(idx, depth))
+        return true;
+    const int rowCount = m.rowCount(idx);
     for (int row = 0; row < rowCount; ++row)
-        if (recurseTreeModelIndex(m.index(row, 0, QModelIndex()), f))
+        if (recurseTreeModel(m, m.index(row, 0, idx), f, depth + 1))
             return true;
     return false;
 }
@@ -1665,7 +1654,7 @@ QDebug operator<<(QDebug d, const QAbstractItemModel &m)
 {
     QDebug dns = d.nospace();
     dns << '\n';
-    recurseTreeModel(m, DebugFunction(dns));
+    recurseTreeModel(m, QModelIndex(), DebugFunction(dns));
     return d;
 }
 
@@ -1678,8 +1667,8 @@ static const char testDir2[] = "holla";
 
 static inline bool testFileSystemReady(const QAbstractItemModel &model)
 {
-    return recurseTreeModel(model, SearchFunction(QLatin1String(testDir1), QFileSystemModel::FileNameRole))
-           && recurseTreeModel(model, SearchFunction(QLatin1String(testDir2), QFileSystemModel::FileNameRole));
+    return recurseTreeModel(model, QModelIndex(), SearchFunction(QLatin1String(testDir1), QFileSystemModel::FileNameRole))
+           && recurseTreeModel(model, QModelIndex(), SearchFunction(QLatin1String(testDir2), QFileSystemModel::FileNameRole));
 }
 
 void tst_QCompleter::QTBUG_14292_filesystem()
@@ -1776,7 +1765,7 @@ void tst_QCompleter::QTBUG_52028_tabAutoCompletes()
     auto le = new QLineEdit;
     w.layout()->addWidget(le);
 
-    const auto pos = QApplication::desktop()->availableGeometry(&w).topLeft() + QPoint(200,200);
+    const auto pos = w.screen()->availableGeometry().topLeft() + QPoint(200,200);
     w.move(pos);
     w.show();
     QApplication::setActiveWindow(&w);
@@ -1817,7 +1806,7 @@ void tst_QCompleter::QTBUG_51889_activatedSentTwice()
 
     w.layout()->addWidget(new QLineEdit);
 
-    const auto pos = QApplication::desktop()->availableGeometry(&w).topLeft() + QPoint(200,200);
+    const auto pos = w.screen()->availableGeometry().topLeft() + QPoint(200,200);
     w.move(pos);
     w.show();
     QApplication::setActiveWindow(&w);

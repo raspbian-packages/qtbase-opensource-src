@@ -39,7 +39,7 @@
 
 #include "qcborvalue.h"
 #include "qcborvalue_p.h"
-
+#include "qdatastream.h"
 #include "qcborarray.h"
 #include "qcbormap.h"
 #include "qcborstream.h"
@@ -108,7 +108,7 @@ QT_BEGIN_NAMESPACE
 
     QCborValue can contain a value of "null", which is not of any specific type.
     It resembles the C++ \c {std::nullptr_t} type, whose only possible value is
-    \c nullptr. QCborValue has a constructor taking such a type and creates a
+    \nullptr. QCborValue has a constructor taking such a type and creates a
     null QCborValue.
 
     Null values are used to indicate that an optional value is not present. In
@@ -128,10 +128,11 @@ QT_BEGIN_NAMESPACE
 
     Such values are completely valid and may appear in CBOR streams, unlike
     JSON content and QJsonValue's undefined bit. But like QJsonValue's
-    Undefined, it is returned by QCborArray::value() when out of range or
-    QCborMap::operator[] when the key is not found in the container. It is not
-    possible to tell such a case apart from the value of Undefined, so if that
-    is required, check the QCborArray size and use the QCborMap iterator API.
+    Undefined, it is returned by a CBOR container's value() or read-only
+    operator[] for invalid look-ups (index out of range for QCborArray, or key
+    not found for QCborMap). It is not possible to tell such a case apart from
+    the value of Undefined, so if that is required, check the QCborArray size
+    and use the QCborMap iterator API.
 
     \section1 Simple types
 
@@ -416,7 +417,7 @@ QT_BEGIN_NAMESPACE
     using toSimpleType() as well as isSimpleType(st).
 
     CBOR simple types are types that do not have any associated value, like
-    C++'s \c{std::nullptr_t} type, whose only possible value is \c nullptr.
+    C++'s \c{std::nullptr_t} type, whose only possible value is \nullptr.
 
     If \a st is \c{QCborSimpleType::Null}, the resulting QCborValue will be of
     the \l{Type}{Null} type and similarly for \c{QCborSimpleType::Undefined}.
@@ -457,7 +458,7 @@ QT_BEGIN_NAMESPACE
     \fn QCborValue::QCborValue(QCborValue &&other)
     \overload
 
-    Moves the contents of the \a other CBorValue object into this one and frees
+    Moves the contents of the \a other QCborValue object into this one and frees
     the resources of this one.
  */
 
@@ -465,7 +466,7 @@ QT_BEGIN_NAMESPACE
     \fn QCborValue &&QCborValue::operator=(QCborValue &&other)
     \overload
 
-    Moves the contents of the \a other CBorValue object into this one and frees
+    Moves the contents of the \a other QCborValue object into this one and frees
     the resources of this one. Returns a reference to this object.
  */
 
@@ -757,6 +758,81 @@ QT_BEGIN_NAMESPACE
 
 using namespace QtCbor;
 
+static QCborValue::Type convertToExtendedType(QCborContainerPrivate *d)
+{
+    qint64 tag = d->elements.at(0).value;
+    auto &e = d->elements[1];
+    const ByteData *b = d->byteData(e);
+
+    auto replaceByteData = [&](const char *buf, qsizetype len, Element::ValueFlags f) {
+        d->data.clear();
+        d->usedData = 0;
+        e.flags = Element::HasByteData | f;
+        e.value = d->addByteData(buf, len);
+    };
+
+    switch (tag) {
+    case qint64(QCborKnownTags::DateTimeString):
+    case qint64(QCborKnownTags::UnixTime_t): {
+        QDateTime dt;
+        if (tag == qint64(QCborKnownTags::DateTimeString) && b &&
+            e.type == QCborValue::String && (e.flags & Element::StringIsUtf16) == 0) {
+            // The data is supposed to be US-ASCII. If it isn't (contains UTF-8),
+            // QDateTime::fromString will fail anyway.
+            dt = QDateTime::fromString(b->asLatin1(), Qt::ISODateWithMs);
+        } else if (tag == qint64(QCborKnownTags::UnixTime_t) && e.type == QCborValue::Integer) {
+            dt = QDateTime::fromSecsSinceEpoch(e.value, Qt::UTC);
+        } else if (tag == qint64(QCborKnownTags::UnixTime_t) && e.type == QCborValue::Double) {
+            dt = QDateTime::fromMSecsSinceEpoch(qint64(e.fpvalue() * 1000), Qt::UTC);
+        }
+        if (dt.isValid()) {
+            QByteArray text = dt.toString(Qt::ISODateWithMs).toLatin1();
+            replaceByteData(text, text.size(), Element::StringIsAscii);
+            e.type = QCborValue::String;
+            d->elements[0].value = qint64(QCborKnownTags::DateTimeString);
+            return QCborValue::DateTime;
+        }
+        break;
+    }
+
+    case qint64(QCborKnownTags::Url):
+        if (e.type == QCborValue::String) {
+            if (b) {
+                // normalize to a short (decoded) form, so as to save space
+                QUrl url(e.flags & Element::StringIsUtf16 ?
+                             b->asQStringRaw() :
+                             b->toUtf8String());
+                QByteArray encoded = url.toString(QUrl::DecodeReserved).toUtf8();
+                replaceByteData(encoded, encoded.size(), {});
+            }
+            return QCborValue::Url;
+        }
+        break;
+
+    case quint64(QCborKnownTags::RegularExpression):
+        if (e.type == QCborValue::String) {
+            // no normalization is necessary
+            return QCborValue::RegularExpression;
+        }
+        break;
+
+    case qint64(QCborKnownTags::Uuid):
+        if (e.type == QCborValue::ByteArray) {
+            // force the size to 16
+            char buf[sizeof(QUuid)] = {};
+            if (b)
+                memcpy(buf, b->byte(), qMin(sizeof(buf), size_t(b->len)));
+            replaceByteData(buf, sizeof(buf), {});
+
+            return QCborValue::Uuid;
+        }
+        break;
+    }
+
+    // no enriching happened
+    return QCborValue::Tag;
+}
+
 // in qcborstream.cpp
 extern void qt_cbor_stream_set_error(QCborStreamReaderPrivate *d, QCborError error);
 
@@ -765,8 +841,8 @@ static void writeDoubleToCbor(QCborStreamWriter &writer, double d, QCborValue::E
     if (qt_is_nan(d)) {
         if (opt & QCborValue::UseFloat16) {
             if ((opt & QCborValue::UseFloat16) == QCborValue::UseFloat16)
-                return writer.append(qfloat16(qt_qnan()));
-            return writer.append(float(qt_qnan()));
+                return writer.append(std::numeric_limits<qfloat16>::quiet_NaN());
+            return writer.append(std::numeric_limits<float>::quiet_NaN());
         }
         return writer.append(qt_qnan());
     }
@@ -848,7 +924,7 @@ QCborContainerPrivate *QCborContainerPrivate::clone(QCborContainerPrivate *d, qs
 
 QCborContainerPrivate *QCborContainerPrivate::detach(QCborContainerPrivate *d, qsizetype reserved)
 {
-    if (!d || d->ref.load() != 1)
+    if (!d || d->ref.loadRelaxed() != 1)
         return clone(d, reserved);
     return d;
 }
@@ -883,12 +959,12 @@ void QCborContainerPrivate::replaceAt_complex(Element &e, const QCborValue &valu
 
         // detect self-assignment
         if (Q_UNLIKELY(this == value.container)) {
-            Q_ASSERT(ref.load() >= 2);
+            Q_ASSERT(ref.loadRelaxed() >= 2);
             if (disp == MoveContainer)
                 ref.deref();    // not deref() because it can't drop to 0
             QCborContainerPrivate *d = QCborContainerPrivate::clone(this);
             d->elements.detach();
-            d->ref.store(1);
+            d->ref.storeRelaxed(1);
             e.container = d;
         } else {
             e.container = value.container;
@@ -914,7 +990,7 @@ void QCborContainerPrivate::replaceAt_complex(Element &e, const QCborValue &valu
 // in qstring.cpp
 void qt_to_latin1_unchecked(uchar *dst, const ushort *uc, qsizetype len);
 
-Q_NEVER_INLINE void QCborContainerPrivate::appendAsciiString(const QString &s)
+Q_NEVER_INLINE void QCborContainerPrivate::appendAsciiString(QStringView s)
 {
     qsizetype len = s.size();
     QtCbor::Element e;
@@ -925,7 +1001,7 @@ Q_NEVER_INLINE void QCborContainerPrivate::appendAsciiString(const QString &s)
 
     char *ptr = data.data() + e.value + sizeof(ByteData);
     uchar *l = reinterpret_cast<uchar *>(ptr);
-    const ushort *uc = (const ushort *)s.unicode();
+    const ushort *uc = (const ushort *)s.utf16();
     qt_to_latin1_unchecked(l, uc, len);
 }
 
@@ -1367,7 +1443,7 @@ static Element decodeBasicValueFromCbor(QCborStreamReader &reader)
 static inline QCborContainerPrivate *createContainerFromCbor(QCborStreamReader &reader)
 {
     auto d = new QCborContainerPrivate;
-    d->ref.store(1);
+    d->ref.storeRelaxed(1);
     d->decodeFromCbor(reader);
     return d;
 }
@@ -1383,77 +1459,10 @@ static QCborValue taggedValueFromCbor(QCborStreamReader &reader)
         d->decodeValueFromCbor(reader);
     }
 
-    QCborValue::Type type = QCborValue::Tag;
+    QCborValue::Type type;
     if (reader.lastError() == QCborError::NoError) {
         // post-process to create our extended types
-        qint64 tag = d->elements.at(0).value;
-        auto &e = d->elements[1];
-        const ByteData *b = d->byteData(e);
-
-        auto replaceByteData = [&](const char *buf, qsizetype len) {
-            d->data.clear();
-            d->usedData = 0;
-            e.flags = Element::HasByteData | Element::StringIsAscii;
-            e.value = d->addByteData(buf, len);
-        };
-
-        switch (tag) {
-        case qint64(QCborKnownTags::DateTimeString):
-        case qint64(QCborKnownTags::UnixTime_t): {
-            QDateTime dt;
-            if (tag == qint64(QCborKnownTags::DateTimeString) && b &&
-                e.type == QCborValue::String && (e.flags & Element::StringIsUtf16) == 0) {
-                // The data is supposed to be US-ASCII. If it isn't,
-                // QDateTime::fromString will fail anyway.
-                dt = QDateTime::fromString(b->asLatin1(), Qt::ISODateWithMs);
-            } else if (tag == qint64(QCborKnownTags::UnixTime_t) && e.type == QCborValue::Integer) {
-                dt = QDateTime::fromSecsSinceEpoch(e.value, Qt::UTC);
-            } else if (tag == qint64(QCborKnownTags::UnixTime_t) && e.type == QCborValue::Double) {
-                dt = QDateTime::fromMSecsSinceEpoch(qint64(e.fpvalue() * 1000), Qt::UTC);
-            }
-            if (dt.isValid()) {
-                QByteArray text = dt.toString(Qt::ISODateWithMs).toLatin1();
-                replaceByteData(text, text.size());
-                e.type = QCborValue::String;
-                d->elements[0].value = qint64(QCborKnownTags::DateTimeString);
-                type = QCborValue::DateTime;
-            }
-            break;
-        }
-
-        case qint64(QCborKnownTags::Url):
-            if (e.type == QCborValue::String) {
-                if (b) {
-                    // normalize to a short (decoded) form, so as to save space
-                    QUrl url(e.flags & Element::StringIsUtf16 ?
-                                 b->asQStringRaw() :
-                                 b->toUtf8String());
-                    QByteArray encoded = url.toString(QUrl::DecodeReserved).toUtf8();
-                    replaceByteData(encoded, encoded.size());
-                }
-                type = QCborValue::Url;
-            }
-            break;
-
-        case quint64(QCborKnownTags::RegularExpression):
-            if (e.type == QCborValue::String) {
-                // no normalization is necessary
-                type = QCborValue::RegularExpression;
-            }
-            break;
-
-        case qint64(QCborKnownTags::Uuid):
-            if (e.type == QCborValue::ByteArray) {
-                // force the size to 16
-                char buf[sizeof(QUuid)] = {};
-                if (b)
-                    memcpy(buf, b->byte(), qMin(sizeof(buf), size_t(b->len)));
-                replaceByteData(buf, sizeof(buf));
-
-                type = QCborValue::Uuid;
-            }
-            break;
-        }
+        type = convertToExtendedType(d);
     } else {
         // decoding error
         type = QCborValue::Invalid;
@@ -1642,20 +1651,30 @@ QCborValue::QCborValue(const QByteArray &ba)
     : n(0), container(new QCborContainerPrivate), t(ByteArray)
 {
     container->appendByteData(ba.constData(), ba.size(), t);
-    container->ref.store(1);
+    container->ref.storeRelaxed(1);
 }
 
+#if QT_STRINGVIEW_LEVEL < 2
 /*!
     Creates a QCborValue with string value \a s. The value can later be
     retrieved using toString().
 
     \sa toString(), isString(), isByteArray()
  */
-QCborValue::QCborValue(const QString &s)
+QCborValue::QCborValue(const QString &s) : QCborValue(qToStringViewIgnoringNull(s)) {}
+#endif
+
+/*!
+    Creates a QCborValue with string value \a s. The value can later be
+    retrieved using toString().
+
+    \sa toString(), isString(), isByteArray()
+*/
+QCborValue::QCborValue(QStringView s)
     : n(0), container(new QCborContainerPrivate), t(String)
 {
     container->append(s);
-    container->ref.store(1);
+    container->ref.storeRelaxed(1);
 }
 
 /*!
@@ -1670,7 +1689,7 @@ QCborValue::QCborValue(QLatin1String s)
     : n(0), container(new QCborContainerPrivate), t(String)
 {
     container->append(s);
-    container->ref.store(1);
+    container->ref.storeRelaxed(1);
 }
 
 /*!
@@ -1706,21 +1725,22 @@ QCborValue::QCborValue(const QCborMap &m)
 }
 
 /*!
-    \fn QCborValue::QCborValue(QCborTag t, const QCborValue &tv)
-    \fn QCborValue::QCborValue(QCborKnownTags t, const QCborValue &tv)
+    \fn QCborValue::QCborValue(QCborTag tag, const QCborValue &tv)
+    \fn QCborValue::QCborValue(QCborKnownTags tag, const QCborValue &tv)
 
     Creates a QCborValue for the extended type represented by the tag value \a
-    t, tagging value \a tv. The tag can later be retrieved using tag() and
+    tag, tagging value \a tv. The tag can later be retrieved using tag() and
     the tagged value using taggedValue().
 
     \sa isTag(), tag(), taggedValue(), QCborKnownTags
  */
-QCborValue::QCborValue(QCborTag t, const QCborValue &tv)
+QCborValue::QCborValue(QCborTag tag, const QCborValue &tv)
     : n(-1), container(new QCborContainerPrivate), t(Tag)
 {
-    container->ref.store(1);
-    container->append(t);
+    container->ref.storeRelaxed(1);
+    container->append(tag);
     container->append(tv);
+    t = convertToExtendedType(container);
 }
 
 /*!
@@ -2111,15 +2131,16 @@ const QCborValue QCborValue::operator[](QLatin1String key) const
 }
 
 /*!
+    \overload
+
     If this QCborValue is a QCborMap, searches elements for the value whose key
-    matches \a key. If this is an array, returns the element whose index is \a
-    key. If there's no matching value in the array or map, or if this
+    matches \a key. If this is a QCborArray, returns the element whose index is
+    \a key. If there's no matching value in the array or map, or if this
     QCborValue object is not an array or map, returns the undefined value.
 
     \sa operator[], QCborMap::operator[], QCborMap::value(),
         QCborMap::find(), QCborArray::operator[], QCborArray::at()
  */
-
 const QCborValue QCborValue::operator[](qint64 key) const
 {
     if (isMap())
@@ -2127,6 +2148,191 @@ const QCborValue QCborValue::operator[](qint64 key) const
     if (isArray())
         return toArray().at(key);
     return QCborValue();
+}
+
+/*!
+  \internal
+ */
+static Q_DECL_COLD_FUNCTION QCborMap arrayAsMap(const QCborArray &array)
+{
+    if (array.size())
+        qWarning("Using CBOR array as map forced conversion");
+    QCborMap map;
+    for (qsizetype i = array.size(); i-- > 0; ) {
+        QCborValue entry = array.at(i);
+        // Ignore padding entries that may have been added to grow the array
+        // when inserting past its end:
+        if (!entry.isInvalid())
+            map[i] = entry;
+    }
+    return map;
+}
+
+/*!
+  \internal
+ */
+static QCborContainerPrivate *maybeDetach(QCborContainerPrivate *container, qsizetype size)
+{
+    auto replace = QCborContainerPrivate::detach(container, size);
+    Q_ASSERT(replace);
+    if (replace != container) {
+        if (container)
+            container->deref();
+        replace->ref.ref();
+    }
+    return replace;
+}
+
+/*!
+  \internal
+ */
+static QCborContainerPrivate *maybeGrow(QCborContainerPrivate *container, qsizetype index)
+{
+    auto replace = QCborContainerPrivate::grow(container, index);
+    Q_ASSERT(replace);
+    if (replace != container) {
+        if (container)
+            container->deref();
+        replace->ref.ref();
+    }
+    if (replace->elements.size() == index)
+        replace->append(Undefined());
+    else
+        Q_ASSERT(replace->elements.size() > index);
+    return replace;
+}
+
+/*!
+    Returns a QCborValueRef that can be used to read or modify the entry in
+    this, as a map, with the given \a key. When this QCborValue is a QCborMap,
+    this function is equivalent to the matching operator[] on that map.
+
+    Before returning the reference: if this QCborValue was an array, it is first
+    converted to a map (so that \c{map[i]} is \c{array[i]} for each index, \c i,
+    with valid \c{array[i]}); otherwise, if it was not a map it will be
+    over-written with an empty map.
+
+    \sa operator[](qint64), QCborMap::operator[], QCborMap::value(),
+        QCborMap::find()
+ */
+QCborValueRef QCborValue::operator[](const QString &key)
+{
+    if (!isMap())
+        *this = QCborValue(isArray() ? arrayAsMap(toArray()) : QCborMap());
+
+    const qsizetype size = container ? container->elements.size() : 0;
+    qsizetype index = size + 1;
+    bool found = false;
+    if (container) {
+        QCborMap proxy(*container);
+        auto it = proxy.constFind(key);
+        if (it < proxy.constEnd()) {
+            found = true;
+            index = it.item.i;
+        }
+    }
+
+    container = maybeDetach(container, size + (found ? 0 : 2));
+    Q_ASSERT(container);
+    if (!found) {
+        container->append(key);
+        container->append(QCborValue());
+    }
+    Q_ASSERT(index & 1 && !(container->elements.size() & 1));
+    Q_ASSERT(index < container->elements.size());
+    return { container, index };
+}
+
+/*!
+    \overload
+
+    Returns a QCborValueRef that can be used to read or modify the entry in
+    this, as a map, with the given \a key. When this QCborValue is a QCborMap,
+    this function is equivalent to the matching operator[] on that map.
+
+    Before returning the reference: if this QCborValue was an array, it is first
+    converted to a map (so that \c{map[i]} is \c{array[i]} for each index, \c i,
+    with valid \c{array[i]}); otherwise, if it was not a map it will be
+    over-written with an empty map.
+
+    \sa operator[](qint64), QCborMap::operator[], QCborMap::value(),
+        QCborMap::find()
+ */
+QCborValueRef QCborValue::operator[](QLatin1String key)
+{
+    if (!isMap())
+        *this = QCborValue(isArray() ? arrayAsMap(toArray()) : QCborMap());
+
+    const qsizetype size = container ? container->elements.size() : 0;
+    qsizetype index = size + 1;
+    bool found = false;
+    if (container) {
+        QCborMap proxy(*container);
+        auto it = proxy.constFind(key);
+        if (it < proxy.constEnd()) {
+            found = true;
+            index = it.item.i;
+        }
+    }
+
+    container = maybeDetach(container, size + (found ? 0 : 2));
+    Q_ASSERT(container);
+    if (!found) {
+        container->append(key);
+        container->append(QCborValue());
+    }
+    Q_ASSERT(index & 1 && !(container->elements.size() & 1));
+    Q_ASSERT(index < container->elements.size());
+    return { container, index };
+}
+
+/*!
+    \overload
+
+    Returns a QCborValueRef that can be used to read or modify the entry in
+    this, as a map or array, with the given \a key. When this QCborValue is a
+    QCborMap or, for 0 <= key < 0x10000, a QCborArray, this function is
+    equivalent to the matching operator[] on that map or array.
+
+    Before returning the reference: if this QCborValue was an array but the key
+    is out of range, the array is first converted to a map (so that \c{map[i]}
+    is \c{array[i]} for each index, \c i, with valid \c{array[i]}); otherwise,
+    if it was not a map it will be over-written with an empty map.
+
+    \sa operator[], QCborMap::operator[], QCborMap::value(),
+        QCborMap::find(), QCborArray::operator[], QCborArray::at()
+ */
+QCborValueRef QCborValue::operator[](qint64 key)
+{
+    if (isArray() && key >= 0 && key < 0x10000) {
+        container = maybeGrow(container, key);
+        return { container, qsizetype(key) };
+    }
+    if (!isMap())
+        *this = QCborValue(isArray() ? arrayAsMap(toArray()) : QCborMap());
+
+    const qsizetype size = container ? container->elements.size() : 0;
+    Q_ASSERT(!(size & 1));
+    qsizetype index = size + 1;
+    bool found = false;
+    if (container) {
+        QCborMap proxy(*container);
+        auto it = proxy.constFind(key);
+        if (it < proxy.constEnd()) {
+            found = true;
+            index = it.item.i;
+        }
+    }
+
+    container = maybeDetach(container, size + (found ? 0 : 2));
+    Q_ASSERT(container);
+    if (!found) {
+        container->append(key);
+        container->append(QCborValue());
+    }
+    Q_ASSERT(index & 1 && !(container->elements.size() & 1));
+    Q_ASSERT(index < container->elements.size());
+    return { container, index };
 }
 
 /*!
@@ -2393,6 +2599,255 @@ QCborValue::Type QCborValueRef::concreteType(QCborValueRef self) noexcept
     return self.d->elements.at(self.i).type;
 }
 
+/*!
+    If this QCborValueRef refers to a QCborMap, searches elements for the value
+    whose key matches \a key. If there's no key matching \a key in the map or if
+    this QCborValueRef object is not a map, returns the undefined value.
+
+    This function is equivalent to:
+
+    \code
+      value.toMap().value(key);
+    \endcode
+
+    \sa operator[](qint64), QCborMap::operator[], QCborMap::value(),
+        QCborMap::find()
+ */
+const QCborValue QCborValueRef::operator[](const QString &key) const
+{
+    const QCborValue item = d->valueAt(i);
+    return item[key];
+}
+
+/*!
+    \overload
+
+    If this QCborValueRef refers to a QCborMap, searches elements for the value
+    whose key matches \a key. If there's no key matching \a key in the map or if
+    this QCborValueRef object is not a map, returns the undefined value.
+
+    This function is equivalent to:
+
+    \code
+      value.toMap().value(key);
+    \endcode
+
+    \sa operator[](qint64), QCborMap::operator[], QCborMap::value(),
+        QCborMap::find()
+ */
+const QCborValue QCborValueRef::operator[](QLatin1String key) const
+{
+    const QCborValue item = d->valueAt(i);
+    return item[key];
+}
+
+/*!
+   \overload
+
+    If this QCborValueRef refers to a QCborMap, searches elements for the value
+    whose key matches \a key. If this is a QCborArray, returns the element whose
+    index is \a key. If there's no matching value in the array or map, or if
+    this QCborValueRef object is not an array or map, returns the undefined
+    value.
+
+    \sa operator[], QCborMap::operator[], QCborMap::value(),
+        QCborMap::find(), QCborArray::operator[], QCborArray::at()
+ */
+const QCborValue QCborValueRef::operator[](qint64 key) const
+{
+    const QCborValue item = d->valueAt(i);
+    return item[key];
+}
+
+/*!
+    Returns a QCborValueRef that can be used to read or modify the entry in
+    this, as a map, with the given \a key. When this QCborValueRef refers to a
+    QCborMap, this function is equivalent to the matching operator[] on that
+    map.
+
+    Before returning the reference: if the QCborValue referenced was an array,
+    it is first converted to a map (so that \c{map[i]} is \c{array[i]} for each
+    index, \c i, with valid \c{array[i]}); otherwise, if it was not a map it
+    will be over-written with an empty map.
+
+    \sa operator[](qint64), QCborMap::operator[], QCborMap::value(),
+        QCborMap::find()
+ */
+QCborValueRef QCborValueRef::operator[](const QString &key)
+{
+    auto &e = d->elements[i];
+    qsizetype size = 0;
+    if (e.flags & QtCbor::Element::IsContainer) {
+        if (e.container) {
+            if (e.type == QCborValue::Array) {
+                QCborValue repack = QCborValue(arrayAsMap(QCborArray(*e.container)));
+                qSwap(e.container, repack.container);
+            } else if (e.type != QCborValue::Map) {
+                e.container->deref();
+                e.container = nullptr;
+            }
+        }
+        e.type = QCborValue::Map;
+        if (e.container)
+            size = e.container->elements.size();
+    } else {
+        // Stomp any prior e.value, replace with a map (that we'll grow)
+        e.container = nullptr;
+        e.type = QCborValue::Map;
+        e.flags = QtCbor::Element::IsContainer;
+    }
+
+    qsizetype index = size + 1;
+    bool found = false;
+    if (e.container) {
+        QCborMap proxy(*e.container);
+        auto it = proxy.constFind(key);
+        if (it < proxy.constEnd()) {
+            found = true;
+            index = it.item.i;
+        }
+    }
+
+    e.container = maybeDetach(e.container, size + (found ? 0 : 2));
+    Q_ASSERT(e.container);
+    if (!found) {
+        e.container->append(key);
+        e.container->append(QCborValue());
+    }
+    Q_ASSERT(index & 1 && !(e.container->elements.size() & 1));
+    Q_ASSERT(index < e.container->elements.size());
+    return { e.container, index };
+}
+
+/*!
+    \overload
+
+    Returns a QCborValueRef that can be used to read or modify the entry in
+    this, as a map, with the given \a key. When this QCborValue is a QCborMap,
+    this function is equivalent to the matching operator[] on that map.
+
+    Before returning the reference: if the QCborValue referenced was an array,
+    it is first converted to a map (so that \c{map[i]} is \c{array[i]} for each
+    index, \c i, with valid \c{array[i]}); otherwise, if it was not a map it
+    will be over-written with an empty map.
+
+    \sa operator[](qint64), QCborMap::operator[], QCborMap::value(),
+        QCborMap::find()
+ */
+QCborValueRef QCborValueRef::operator[](QLatin1String key)
+{
+    auto &e = d->elements[i];
+    qsizetype size = 0;
+    if (e.flags & QtCbor::Element::IsContainer) {
+        if (e.container) {
+            if (e.type == QCborValue::Array) {
+                QCborValue repack = QCborValue(arrayAsMap(QCborArray(*e.container)));
+                qSwap(e.container, repack.container);
+            } else if (e.type != QCborValue::Map) {
+                e.container->deref();
+                e.container = nullptr;
+            }
+        }
+        e.type = QCborValue::Map;
+        if (e.container)
+            size = e.container->elements.size();
+    } else {
+        // Stomp any prior e.value, replace with a map (that we'll grow)
+        e.container = nullptr;
+        e.type = QCborValue::Map;
+        e.flags = QtCbor::Element::IsContainer;
+    }
+
+    qsizetype index = size + 1;
+    bool found = false;
+    if (e.container) {
+        QCborMap proxy(*e.container);
+        auto it = proxy.constFind(key);
+        if (it < proxy.constEnd()) {
+            found = true;
+            index = it.item.i;
+        }
+    }
+
+    e.container = maybeDetach(e.container, size + (found ? 0 : 2));
+    Q_ASSERT(e.container);
+    if (!found) {
+        e.container->append(key);
+        e.container->append(QCborValue());
+    }
+    Q_ASSERT(index & 1 && !(e.container->elements.size() & 1));
+    Q_ASSERT(index < e.container->elements.size());
+    return { e.container, index };
+}
+
+/*!
+    \overload
+
+    Returns a QCborValueRef that can be used to read or modify the entry in
+    this, as a map or array, with the given \a key. When this QCborValue is a
+    QCborMap or, for 0 <= key < 0x10000, a QCborArray, this function is
+    equivalent to the matching operator[] on that map or array.
+
+    Before returning the reference: if the QCborValue referenced was an array
+    but the key is out of range, the array is first converted to a map (so that
+    \c{map[i]} is \c{array[i]} for each index, \c i, with valid \c{array[i]});
+    otherwise, if it was not a map it will be over-written with an empty map.
+
+    \sa operator[], QCborMap::operator[], QCborMap::value(),
+        QCborMap::find(), QCborArray::operator[], QCborArray::at()
+ */
+QCborValueRef QCborValueRef::operator[](qint64 key)
+{
+    auto &e = d->elements[i];
+    if (e.type == QCborValue::Array && key >= 0 && key < 0x10000) {
+        e.container = maybeGrow(e.container, key);
+        return { e.container, qsizetype(key) };
+    }
+    qsizetype size = 0;
+    if (e.flags & QtCbor::Element::IsContainer) {
+        if (e.container) {
+            if (e.type == QCborValue::Array) {
+                QCborValue repack = QCborValue(arrayAsMap(QCborArray(*e.container)));
+                qSwap(e.container, repack.container);
+            } else if (e.type != QCborValue::Map) {
+                e.container->deref();
+                e.container = nullptr;
+            }
+        }
+        e.type = QCborValue::Map;
+        if (e.container)
+            size = e.container->elements.size();
+    } else {
+        // Stomp any prior e.value, replace with a map (that we'll grow)
+        e.container = nullptr;
+        e.type = QCborValue::Map;
+        e.flags = QtCbor::Element::IsContainer;
+    }
+    Q_ASSERT(!(size & 1));
+
+    qsizetype index = size + 1;
+    bool found = false;
+    if (e.container) {
+        QCborMap proxy(*e.container);
+        auto it = proxy.constFind(key);
+        if (it < proxy.constEnd()) {
+            found = true;
+            index = it.item.i;
+        }
+    }
+
+    e.container = maybeDetach(e.container, size + (found ? 0 : 2));
+    Q_ASSERT(e.container);
+    if (!found) {
+        e.container->append(key);
+        e.container->append(QCborValue());
+    }
+    Q_ASSERT(index & 1 && !(e.container->elements.size() & 1));
+    Q_ASSERT(index < e.container->elements.size());
+    return { e.container, index };
+}
+
+
 inline QCborArray::QCborArray(QCborContainerPrivate &dd) noexcept
     : d(&dd)
 {
@@ -2505,7 +2960,7 @@ static QDebug debugContents(QDebug &dbg, const QCborValue &v)
     }
     if (v.isSimpleType())
         return dbg << v.toSimpleType();
-    return dbg << "<unknown type " << hex << int(v.type()) << dec << '>';
+    return dbg << "<unknown type " << Qt::hex << int(v.type()) << Qt::dec << '>';
 }
 QDebug operator<<(QDebug dbg, const QCborValue &v)
 {
@@ -2514,6 +2969,26 @@ QDebug operator<<(QDebug dbg, const QCborValue &v)
     return debugContents(dbg, v) << ')';
 }
 #endif
+
+#ifndef QT_NO_DATASTREAM
+QDataStream &operator<<(QDataStream &stream, const QCborValue &value)
+{
+    stream << QCborValue(value).toCbor();
+    return stream;
+}
+
+QDataStream &operator>>(QDataStream &stream, QCborValue &value)
+{
+    QByteArray buffer;
+    stream >> buffer;
+    QCborParserError parseError{};
+    value = QCborValue::fromCbor(buffer, &parseError);
+    if (parseError.error)
+        stream.setStatus(QDataStream::ReadCorruptData);
+    return stream;
+}
+#endif
+
 
 QT_END_NAMESPACE
 

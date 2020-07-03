@@ -74,6 +74,10 @@ QT_BEGIN_NAMESPACE
 static void saveCoverageTool(const char * appname, bool testfailed, bool installedTestCoverage)
 {
 #ifdef __COVERAGESCANNER__
+#  if QT_CONFIG(testlib_selfcover)
+    __coveragescanner_teststate(QTestLog::failCount() > 0 ? "FAILED" :
+                                QTestLog::passCount() > 0 ? "PASSED" : "SKIPPED");
+#  else
     if (!installedTestCoverage)
         return;
     // install again to make sure the filename is correct.
@@ -84,6 +88,7 @@ static void saveCoverageTool(const char * appname, bool testfailed, bool install
     __coveragescanner_testname("");
     __coveragescanner_clear();
     unsetenv("QT_TESTCOCOON_ACTIVE");
+#  endif // testlib_selfcover
 #else
     Q_UNUSED(appname);
     Q_UNUSED(testfailed);
@@ -106,7 +111,7 @@ namespace QTest {
     struct IgnoreResultList
     {
         inline IgnoreResultList(QtMsgType tp, const QVariant &patternIn)
-            : type(tp), pattern(patternIn), next(0) {}
+            : type(tp), pattern(patternIn) {}
 
         static inline void clearList(IgnoreResultList *&list)
         {
@@ -158,10 +163,10 @@ namespace QTest {
 
         QtMsgType type;
         QVariant pattern;
-        IgnoreResultList *next;
+        IgnoreResultList *next = nullptr;
     };
 
-    static IgnoreResultList *ignoreResultList = 0;
+    static IgnoreResultList *ignoreResultList = nullptr;
 
     static QVector<QAbstractTestLogger*> loggers;
     static bool loggerUsingStdout = false;
@@ -176,7 +181,7 @@ namespace QTest {
     {
         if (!ignoreResultList)
             return false;
-        IgnoreResultList *last = 0;
+        IgnoreResultList *last = nullptr;
         IgnoreResultList *list = ignoreResultList;
         while (list) {
             if (list->matches(type, message)) {
@@ -186,7 +191,7 @@ namespace QTest {
                 else if (list->next)
                     ignoreResultList = list->next;
                 else
-                    ignoreResultList = 0;
+                    ignoreResultList = nullptr;
 
                 delete list;
                 return true;
@@ -214,7 +219,7 @@ namespace QTest {
         }
 
         if (type != QtFatalMsg) {
-            if (counter.load() <= 0)
+            if (counter.loadRelaxed() <= 0)
                 return;
 
             if (!counter.deref()) {
@@ -433,11 +438,11 @@ void QTestLog::stopLogging()
 void QTestLog::addLogger(LogMode mode, const char *filename)
 {
     if (filename && strcmp(filename, "-") == 0)
-        filename = 0;
+        filename = nullptr;
     if (!filename)
         QTest::loggerUsingStdout = true;
 
-    QAbstractTestLogger *logger = 0;
+    QAbstractTestLogger *logger = nullptr;
     switch (mode) {
     case QTestLog::Plain:
         logger = new QPlainTestLogger(filename);

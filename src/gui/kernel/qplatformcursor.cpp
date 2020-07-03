@@ -89,7 +89,7 @@ QT_BEGIN_NAMESPACE
     set or the system default cursor should take effect.
 
     \a window is a pointer to the window currently displayed at QCursor::pos(). Note
-    that this may be 0 if the current position is not occupied by a displayed widget.
+    that this may be \nullptr if the current position is not occupied by a displayed widget.
 
     \sa QCursor::pos()
 */
@@ -129,6 +129,14 @@ void QPlatformCursor::setPos(const QPoint &pos)
                  "; emulating movement within the application.");
     }
     QWindowSystemInterface::handleMouseEvent(0, pos, pos, Qt::NoButton, Qt::NoButton, QEvent::MouseMove);
+}
+
+/*!
+    Returns the size of the cursor, in native pixels.
+*/
+QSize QPlatformCursor::size() const
+{
+    return QSize(16, 16);
 }
 
 // End of display and pointer event handling code

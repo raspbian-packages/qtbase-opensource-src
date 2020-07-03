@@ -1,6 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2018 The Qt Company Ltd.
+** Copyright (C) 2020 The Qt Company Ltd.
 ** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtWidgets module of the Qt Toolkit.
@@ -113,7 +113,7 @@ public:
         , copyAvailable(false)
     {
         QVBoxLayout *layout = new QVBoxLayout;
-        layout->setMargin(0);
+        layout->setContentsMargins(QMargins());
         QFrame *line = new QFrame(this);
         line->setFrameShape(QFrame::HLine);
         line->setFrameShadow(QFrame::Sunken);
@@ -756,6 +756,12 @@ void QMessageBoxPrivate::_q_clicked(QPlatformDialogHelper::StandardButton button
 */
 
 /*!
+    \enum QMessageBox::ButtonRole
+
+    \include qdialogbuttonbox.cpp buttonrole-enum
+*/
+
+/*!
     \enum QMessageBox::StandardButton
     \since 4.2
 
@@ -834,7 +840,7 @@ QMessageBox::QMessageBox(QWidget *parent)
     The message box is an \l{Qt::ApplicationModal} {application modal}
     dialog box.
 
-    On \macos, if \a parent is not 0 and you want your message box
+    On \macos, if \a parent is not \nullptr and you want your message box
     to appear as a Qt::Sheet of that parent, set the message box's
     \l{setWindowModality()} {window modality} to Qt::WindowModal
     (default). Otherwise, the message box will be a standard dialog.
@@ -983,7 +989,7 @@ QMessageBox::StandardButton QMessageBox::standardButton(QAbstractButton *button)
     \since 4.2
 
     Returns a pointer corresponding to the standard button \a which,
-    or 0 if the standard button doesn't exist in this message box.
+    or \nullptr if the standard button doesn't exist in this message box.
 
     \sa standardButtons, standardButton()
 */
@@ -1106,7 +1112,7 @@ void QMessageBoxPrivate::detectEscapeButton()
     \since 4.2
 
     Returns the button that was clicked by the user,
-    or 0 if the user hit the \uicontrol Esc key and
+    or \nullptr if the user hit the \uicontrol Esc key and
     no \l{setEscapeButton()}{escape button} was set.
 
     If exec() hasn't been called yet, returns nullptr.
@@ -1173,7 +1179,7 @@ void QMessageBox::setDefaultButton(QMessageBox::StandardButton button)
 /*! \since 5.2
 
     Sets the checkbox \a cb on the message dialog. The message box takes ownership of the checkbox.
-    The argument \a cb can be 0 to remove an existing checkbox from the message box.
+    The argument \a cb can be \nullptr to remove an existing checkbox from the message box.
 
     \sa checkBox()
 */
@@ -1205,7 +1211,7 @@ void QMessageBox::setCheckBox(QCheckBox *cb)
 
 /*! \since 5.2
 
-    Returns the checkbox shown on the dialog. This is 0 if no checkbox is set.
+    Returns the checkbox shown on the dialog. This is \nullptr if no checkbox is set.
     \sa setCheckBox()
 */
 
@@ -1508,7 +1514,7 @@ void QMessageBox::keyPressEvent(QKeyEvent *e)
             if (d->detailsText)
                 textToCopy += d->detailsText->text() + QLatin1Char('\n') + separator;
 #endif
-            QApplication::clipboard()->setText(textToCopy);
+            QGuiApplication::clipboard()->setText(textToCopy);
             return;
         }
 #endif // Q_OS_WIN
@@ -1570,7 +1576,7 @@ QList<QAbstractButton *> QMessageBox::buttons() const
     \since 4.5
 
     Returns the button role for the specified \a button. This function returns
-    \l InvalidRole if \a button is 0 or has not been added to the message box.
+    \l InvalidRole if \a button is \nullptr or has not been added to the message box.
 
     \sa buttons(), addButton()
 */
@@ -1835,7 +1841,7 @@ void QMessageBox::about(QWidget *parent, const QString &title, const QString &te
 
 /*!
     Displays a simple message box about Qt, with the given \a title
-    and centered over \a parent (if \a parent is not 0). The message
+    and centered over \a parent (if \a parent is not \nullptr). The message
     includes the version number of Qt being used by the application.
 
     This is useful for inclusion in the \uicontrol Help menu of an application,
@@ -1890,7 +1896,7 @@ void QMessageBox::aboutQt(QWidget *parent, const QString &title)
         "<p>Qt and the Qt logo are trademarks of The Qt Company Ltd.</p>"
         "<p>Qt is The Qt Company Ltd product developed as an open source "
         "project. See <a href=\"http://%3/\">%3</a> for more information.</p>"
-        ).arg(QStringLiteral("2019"),
+        ).arg(QStringLiteral("2020"),
               QStringLiteral("qt.io/licensing"),
               QStringLiteral("qt.io"));
     QMessageBox *msgBox = new QMessageBox(parent);
@@ -2662,14 +2668,9 @@ QPixmap QMessageBoxPrivate::standardIcon(QMessageBox::Icon icon, QMessageBox *mb
         break;
     }
     if (!tmpIcon.isNull()) {
-        QWindow *window = nullptr;
-        if (mb) {
-            window = mb->windowHandle();
-            if (!window) {
-                if (const QWidget *nativeParent = mb->nativeParentWidget())
-                    window = nativeParent->windowHandle();
-            }
-        }
+        QWindow *window = mb
+            ? qt_widget_private(mb)->windowHandle(QWidgetPrivate::WindowHandleMode::Closest)
+            : nullptr;
         return tmpIcon.pixmap(window, QSize(iconSize, iconSize));
     }
     return QPixmap();

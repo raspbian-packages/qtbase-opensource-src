@@ -3,9 +3,6 @@ targetinfofile ~= s/pro$/target.txt/
 
 win32 {
     ext = .exe
-} else:android {
-    file_prefix = lib
-    ext = .so
 } else:wasm {
     ext = .wasm
 }

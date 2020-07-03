@@ -95,6 +95,10 @@ init_context:
         // SSL 2 is no longer supported, but chosen deliberately -> error
         sslContext->ctx = nullptr;
         unsupportedProtocol = true;
+    } else if (sslContext->sslConfiguration.protocol() == QSsl::SslV3) {
+        // SSL 3 is no longer supported, but chosen deliberately -> error
+        sslContext->ctx = nullptr;
+        unsupportedProtocol = true;
     } else {
         switch (sslContext->sslConfiguration.protocol()) {
         case QSsl::DtlsV1_0:
@@ -151,11 +155,6 @@ init_context:
     long maxVersion = anyVersion;
 
     switch (sslContext->sslConfiguration.protocol()) {
-    // The single-protocol versions first:
-    case QSsl::SslV3:
-        minVersion = SSL3_VERSION;
-        maxVersion = SSL3_VERSION;
-        break;
     case QSsl::TlsV1_0:
         minVersion = TLS1_VERSION;
         maxVersion = TLS1_VERSION;
@@ -181,9 +180,6 @@ init_context:
     // Ranges:
     case QSsl::TlsV1SslV3:
     case QSsl::AnyProtocol:
-        minVersion = SSL3_VERSION;
-        maxVersion = 0;
-        break;
     case QSsl::SecureProtocols:
     case QSsl::TlsV1_0OrLater:
         minVersion = TLS1_VERSION;
@@ -197,7 +193,6 @@ init_context:
         minVersion = TLS1_2_VERSION;
         maxVersion = 0;
         break;
-#if QT_CONFIG(dtls)
     case QSsl::DtlsV1_0:
         minVersion = DTLS1_VERSION;
         maxVersion = DTLS1_VERSION;
@@ -214,7 +209,6 @@ init_context:
         minVersion = DTLS1_2_VERSION;
         maxVersion = DTLS_MAX_VERSION;
         break;
-#endif // dtls
     case QSsl::TlsV1_3OrLater:
 #ifdef TLS1_3_VERSION
         minVersion = TLS1_3_VERSION;
@@ -227,8 +221,9 @@ init_context:
         break;
 #endif // TLS1_3_VERSION
     case QSsl::SslV2:
-        // This protocol is not supported by OpenSSL 1.1 and we handle
-        // it as an error (see the code above).
+    case QSsl::SslV3:
+        // These protocols are not supported, and we handle
+        // them as an error (see the code above).
         Q_UNREACHABLE();
         break;
     case QSsl::UnknownProtocol:

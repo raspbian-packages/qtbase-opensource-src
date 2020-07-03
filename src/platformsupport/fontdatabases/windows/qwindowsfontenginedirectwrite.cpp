@@ -47,6 +47,7 @@
 #include <QtCore/QFile>
 #include <private/qstringiterator_p.h>
 #include <QtCore/private/qsystemlibrary_p.h>
+#include <QtCore/private/qwinregistry_p.h>
 #include <QtGui/private/qguiapplication_p.h>
 #include <qpa/qplatformintegration.h>
 #include <QtGui/private/qhighdpiscaling_p.h>
@@ -61,6 +62,9 @@
 
 QT_BEGIN_NAMESPACE
 
+// Clang does not consider __declspec(nothrow) as nothrow
+QT_WARNING_DISABLE_CLANG("-Wmicrosoft-exception-spec")
+
 // Convert from design units to logical pixels
 #define DESIGN_TO_LOGICAL(DESIGN_UNIT_VALUE) \
     QFixed::fromReal((qreal(DESIGN_UNIT_VALUE) / qreal(m_unitsPerEm)) * fontDef.pixelSize)
@@ -69,7 +73,7 @@ namespace {
 
     class GeometrySink: public IDWriteGeometrySink
     {
-        Q_DISABLE_COPY(GeometrySink)
+        Q_DISABLE_COPY_MOVE(GeometrySink)
     public:
         GeometrySink(QPainterPath *path)
             : m_refCount(0), m_path(path)
@@ -945,10 +949,10 @@ void QWindowsFontEngineDirectWrite::initFontInfo(const QFontDef &request,
 
 QString QWindowsFontEngineDirectWrite::fontNameSubstitute(const QString &familyName)
 {
-    const wchar_t key[] = L"Software\\Microsoft\\Windows NT\\CurrentVersion\\FontSubstitutes";
     const QString substitute =
-        QWindowsFontDatabase::readRegistryString(HKEY_LOCAL_MACHINE, key,
-                                                 reinterpret_cast<const wchar_t *>(familyName.utf16()));
+        QWinRegistryKey(HKEY_LOCAL_MACHINE,
+                        LR"(Software\Microsoft\Windows NT\CurrentVersion\FontSubstitutes)")
+        .stringValue(familyName);
     return substitute.isEmpty() ? familyName : substitute;
 }
 

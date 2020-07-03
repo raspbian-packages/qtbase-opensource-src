@@ -163,7 +163,7 @@ QFontDialog::QFontDialog(QWidget *parent)
     \since 4.5
 
     Constructs a standard font dialog with the given \a parent and specified
-    \a initial color.
+    \a initial font.
 */
 QFontDialog::QFontDialog(const QFont &initial, QWidget *parent)
     : QFontDialog(parent)
@@ -432,7 +432,7 @@ bool QFontDialog::eventFilter(QObject *o , QEvent *e)
          k->key() == Qt::Key_PageDown)) {
 
             int ci = d->sizeList->currentItem();
-            (void)QApplication::sendEvent(d->sizeList, k);
+            QCoreApplication::sendEvent(d->sizeList, k);
 
             if (ci != d->sizeList->currentItem()
                     && style()->styleHint(QStyle::SH_FontDialog_SelectAssociatedText, 0, this))
@@ -534,7 +534,7 @@ void QFontDialogPrivate::updateFamilies()
 
         //and try some fall backs
         match_t type = MATCH_NONE;
-        if (bestFamilyType <= MATCH_NONE && familyName2 == f.lastResortFamily())
+        if (bestFamilyType <= MATCH_NONE && familyName2 == QStringLiteral("helvetica"))
             type = MATCH_LAST_RESORT;
         if (bestFamilyType <= MATCH_LAST_RESORT && familyName2 == f.family())
             type = MATCH_APP;
@@ -680,7 +680,7 @@ void QFontDialogPrivate::updateSampleFont(const QFont &newFont)
 void QFontDialogPrivate::_q_writingSystemHighlighted(int index)
 {
     writingSystem = QFontDatabase::WritingSystem(index);
-    sampleEdit->setText(fdb.writingSystemSample(writingSystem));
+    sampleEdit->setText(QFontDatabase::writingSystemSample(writingSystem));
     updateFamilies();
 }
 

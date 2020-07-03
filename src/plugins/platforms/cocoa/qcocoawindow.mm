@@ -217,6 +217,7 @@ QCocoaWindow::~QCocoaWindow()
     }
 
     [m_view release];
+    [m_nsWindow close];
     [m_nsWindow release];
 }
 
@@ -566,7 +567,10 @@ void QCocoaWindow::setWindowFlags(Qt::WindowFlags flags)
     Qt::WindowType type = static_cast<Qt::WindowType>(int(flags & Qt::WindowType_Mask));
     if ((type & Qt::Popup) != Qt::Popup && (type & Qt::Dialog) != Qt::Dialog) {
         NSWindowCollectionBehavior behavior = m_view.window.collectionBehavior;
-        if ((flags & Qt::WindowFullscreenButtonHint) || m_view.window.qt_fullScreen) {
+        const bool enableFullScreen = m_view.window.qt_fullScreen
+                                    || !(flags & Qt::CustomizeWindowHint)
+                                    || (flags & Qt::WindowFullscreenButtonHint);
+        if (enableFullScreen) {
             behavior |= NSWindowCollectionBehaviorFullScreenPrimary;
             behavior &= ~NSWindowCollectionBehaviorFullScreenAuxiliary;
         } else {
@@ -640,7 +644,7 @@ void QCocoaWindow::applyWindowState(Qt::WindowStates requestedState)
 
     if (nsWindow.styleMask & NSWindowStyleMaskUtilityWindow
         && newState & (Qt::WindowMinimized | Qt::WindowFullScreen)) {
-        qWarning() << window()->type() << "windows can not be made" << newState;
+        qWarning() << window()->type() << "windows cannot be made" << newState;
         handleWindowStateChanged(HandleUnconditionally);
         return;
     }
@@ -1232,17 +1236,17 @@ void QCocoaWindow::windowDidChangeScreen()
         return;
 
     // Note: When a window is resized to 0x0 Cocoa will report the window's screen as nil
-    auto *currentScreen = QCocoaIntegration::instance()->screenForNSScreen(m_view.window.screen);
+    auto *currentScreen = QCocoaScreen::get(m_view.window.screen);
     auto *previousScreen = static_cast<QCocoaScreen*>(screen());
 
     Q_ASSERT_X(!m_view.window.screen || currentScreen,
         "QCocoaWindow", "Failed to get QCocoaScreen for NSScreen");
 
     // Note: The previous screen may be the same as the current screen, either because
-    // the screen was just reconfigured, which still results in AppKit sending an
-    // NSWindowDidChangeScreenNotification, because the previous screen was removed,
+    // a) the screen was just reconfigured, which still results in AppKit sending an
+    // NSWindowDidChangeScreenNotification, b) because the previous screen was removed,
     // and we ended up calling QWindow::setScreen to move the window, which doesn't
-    // actually move the window to the new screen, or because we've delivered the
+    // actually move the window to the new screen, or c) because we've delivered the
     // screen change to the top level window, which will make all the child windows
     // of that window report the new screen when requested via QWindow::screen().
     // We still need to deliver the screen change in all these cases, as the
@@ -1261,17 +1265,6 @@ void QCocoaWindow::windowDidChangeScreen()
         currentScreen->requestUpdate();
     }
 }
-/*
-    The window's backing scale factor or color space has changed.
-*/
-void QCocoaWindow::windowDidChangeBackingProperties()
-{
-    // Ideally we would plumb this thought QPA in a way that lets clients
-    // invalidate their own caches, and recreate QBackingStore. For now we
-    // trigger an expose, and let QCocoaBackingStore deal with its own
-    // buffer invalidation.
-    [m_view setNeedsDisplay:YES];
-}
 
 void QCocoaWindow::windowWillClose()
 {
@@ -1285,14 +1278,11 @@ void QCocoaWindow::windowWillClose()
 bool QCocoaWindow::windowShouldClose()
 {
     qCDebug(lcQpaWindow) << "QCocoaWindow::windowShouldClose" << window();
-   // This callback should technically only determine if the window
-   // should (be allowed to) close, but since our QPA API to determine
-   // that also involves actually closing the window we do both at the
-   // same time, instead of doing the latter in windowWillClose.
-    bool accepted = false;
-    QWindowSystemInterface::handleCloseEvent(window(), &accepted);
-    QWindowSystemInterface::flushWindowSystemEvents();
-    return accepted;
+    // This callback should technically only determine if the window
+    // should (be allowed to) close, but since our QPA API to determine
+    // that also involves actually closing the window we do both at the
+    // same time, instead of doing the latter in windowWillClose.
+    return QWindowSystemInterface::handleCloseEvent<QWindowSystemInterface::SynchronousDelivery>(window());
 }
 
 // ----------------------------- QPA forwarding -----------------------------
@@ -1525,17 +1515,6 @@ bool QCocoaWindow::updatesWithDisplayLink() const
 
 void QCocoaWindow::deliverUpdateRequest()
 {
-    // Don't send update requests for views that need display, as the update
-    // request doesn't carry any information about dirty rects, so the app
-    // may end up painting a smaller region than required. (For some reason
-    // the layer and view's needsDisplay status isn't always in sync, even if
-    // the view is layer-backed, not layer-hosted, so we check both).
-    if (m_view.layer.needsDisplay || m_view.needsDisplay) {
-        qCDebug(lcQpaDrawing) << "View needs display, deferring update request for" << window();
-        requestUpdate();
-        return;
-    }
-
     qCDebug(lcQpaDrawing) << "Delivering update request to" << window();
     QPlatformWindow::deliverUpdateRequest();
 }
@@ -1604,7 +1583,7 @@ QCocoaNSWindow *QCocoaWindow::createNSWindow(bool shouldBePanel)
 
     // The resulting screen can be different from the screen requested if
     // for example the application has been assigned to a specific display.
-    auto resultingScreen = QCocoaIntegration::instance()->screenForNSScreen(nsWindow.screen);
+    auto resultingScreen = QCocoaScreen::get(nsWindow.screen);
 
     // But may not always be resolved at this point, in which case we fall back
     // to the target screen. The real screen will be delivered as a screen change
@@ -1658,21 +1637,6 @@ QCocoaNSWindow *QCocoaWindow::createNSWindow(bool shouldBePanel)
     m_windowModality = QPlatformWindow::window()->modality();
 
     applyContentBorderThickness(nsWindow);
-
-    // Prevent CoreGraphics RGB32 -> RGB64 backing store conversions on deep color
-    // displays by forcing 8-bit components, unless a deep color format has been
-    // requested. This conversion uses significant CPU time.
-    QSurface::SurfaceType surfaceType = QPlatformWindow::window()->surfaceType();
-    bool usesCoreGraphics = surfaceType == QSurface::RasterSurface || surfaceType == QSurface::RasterGLSurface;
-    QSurfaceFormat surfaceFormat = QPlatformWindow::window()->format();
-    bool usesDeepColor = surfaceFormat.redBufferSize() > 8 ||
-                         surfaceFormat.greenBufferSize() > 8 ||
-                         surfaceFormat.blueBufferSize() > 8;
-    bool usesLayer = view().layer;
-    if (usesCoreGraphics && !usesDeepColor && !usesLayer) {
-        [nsWindow setDynamicDepthLimit:NO];
-        [nsWindow setDepthLimit:NSWindowDepthTwentyfourBitRGB];
-    }
 
     if (format().colorSpace() == QSurfaceFormat::sRGBColorSpace)
         nsWindow.colorSpace = NSColorSpace.sRGBColorSpace;
@@ -1731,9 +1695,9 @@ void QCocoaWindow::registerTouch(bool enable)
 {
     m_registerTouchCount += enable ? 1 : -1;
     if (enable && m_registerTouchCount == 1)
-        [m_view setAcceptsTouchEvents:YES];
+        m_view.allowedTouchTypes |= NSTouchTypeMaskIndirect;
     else if (m_registerTouchCount == 0)
-        [m_view setAcceptsTouchEvents:NO];
+        m_view.allowedTouchTypes &= ~NSTouchTypeMaskIndirect;
 }
 
 void QCocoaWindow::setContentBorderThickness(int topThickness, int bottomThickness)

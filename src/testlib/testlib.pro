@@ -17,7 +17,6 @@ HEADERS = \
     qbenchmark_p.h \
     qbenchmarkmeasurement_p.h \
     qbenchmarktimemeasurers_p.h \
-    qbenchmarkvalgrind_p.h \
     qbenchmarkevent_p.h \
     qbenchmarkperfevents_p.h \
     qbenchmarkmetric.h \
@@ -70,7 +69,6 @@ SOURCES = \
     qabstracttestlogger.cpp \
     qbenchmark.cpp \
     qbenchmarkmeasurement.cpp \
-    qbenchmarkvalgrind.cpp \
     qbenchmarkevent.cpp \
     qbenchmarkperfevents.cpp \
     qbenchmarkmetric.cpp \
@@ -90,6 +88,13 @@ qtConfig(itemmodeltester) {
 
     SOURCES += \
         qabstractitemmodeltester.cpp
+}
+
+qtConfig(valgrind) {
+    HEADERS += \
+        qbenchmarkvalgrind_p.h
+    SOURCES += \
+        qbenchmarkvalgrind.cpp
 }
 
 DEFINES *= QT_NO_CAST_TO_ASCII \
@@ -146,4 +151,5 @@ mac {
 
 !qtHaveModule(network): HEADERSCLEAN_EXCLUDE += qtest_network.h
 
+include(selfcover.pri)
 load(qt_module)

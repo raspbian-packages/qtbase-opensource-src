@@ -54,8 +54,10 @@
 #include "qpainter.h"
 #include "qpainterpath.h"
 #include "qpixmap.h"
+#include "qregexp.h"
 #include "qregion.h"
 #include "qdebug.h"
+#include <QtCore/private/qlocking_p.h>
 
 #include <algorithm>
 
@@ -234,7 +236,7 @@ void QPicture::detach()
 
 bool QPicture::isDetached() const
 {
-    return d_func()->ref.load() == 1;
+    return d_func()->ref.loadRelaxed() == 1;
 }
 
 /*!
@@ -858,7 +860,7 @@ bool QPicture::exec(QPainter *painter, QDataStream &s, int nrecords)
             break;
         case QPicturePrivate::PdcSetWXform:
             s >> i_8;
-            painter->setMatrixEnabled(i_8);
+            painter->setWorldMatrixEnabled(i_8);
             break;
         case QPicturePrivate::PdcSetWMatrix:
             if (d->formatMajor >= 8) {
@@ -1200,8 +1202,8 @@ QT_END_INCLUDE_NAMESPACE
     \obsolete
 
     Returns a string that specifies the picture format of the file \a
-    fileName, or 0 if the file cannot be read or if the format is not
-    recognized.
+    fileName, or \nullptr if the file cannot be read or if the format
+    is not recognized.
 
     \sa load(), save()
 */
@@ -1426,7 +1428,7 @@ void qt_init_picture_plugins()
     typedef PluginKeyMap::const_iterator PluginKeyMapConstIterator;
 
     static QBasicMutex mutex;
-    QMutexLocker locker(&mutex);
+    const auto locker = qt_scoped_lock(mutex);
     static QFactoryLoader loader(QPictureFormatInterface_iid,
                                  QStringLiteral("/pictureformats"));
 
@@ -1485,8 +1487,8 @@ static QPictureHandler *get_picture_handler(const char *format)
     \a format is used to select a handler to write a QPicture; \a header
     is used to select a handler to read an picture file.
 
-    If \a readPicture is a null pointer, the QPictureIO will not be able
-    to read pictures in \a format. If \a writePicture is a null pointer,
+    If \a readPicture is \nullptr, the QPictureIO will not be able
+    to read pictures in \a format. If \a writePicture is \nullptr,
     the QPictureIO will not be able to write pictures in \a format. If
     both are null, the QPictureIO object is valid but useless.
 
@@ -1543,7 +1545,7 @@ const QPicture &QPictureIO::picture() const { return d->pi; }
 int QPictureIO::status() const { return d->iostat; }
 
 /*!
-    Returns the picture format string or 0 if no format has been
+    Returns the picture format string or \nullptr if no format has been
     explicitly set.
 */
 const char *QPictureIO::format() const { return d->frmt; }

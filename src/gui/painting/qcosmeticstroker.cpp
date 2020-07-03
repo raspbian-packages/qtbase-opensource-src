@@ -289,7 +289,7 @@ void QCosmeticStroker::setup()
     drawCaps = state->lastPen.capStyle() != Qt::FlatCap;
 
     if (strokeSelection & FastDraw) {
-        color = multiplyAlpha256(state->penData.solid.color, opacity).toArgb32();
+        color = multiplyAlpha256(state->penData.solidColor, opacity).toArgb32();
         QRasterBuffer *buffer = state->penData.rasterBuffer;
         pixels = (uint *)buffer->buffer();
         ppl = buffer->stride<quint32>();
@@ -375,6 +375,7 @@ void QCosmeticStroker::drawLine(const QPointF &p1, const QPointF &p2)
 
     patternOffset = state->lastPen.dashOffset()*64;
     lastPixel.x = INT_MIN;
+    lastPixel.y = INT_MIN;
 
     stroke(this, start.x(), start.y(), end.x(), end.y(), drawCaps ? CapBegin|CapEnd : 0);
 
