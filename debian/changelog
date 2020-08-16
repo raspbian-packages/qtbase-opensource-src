@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.14.2+dfsg-4+rpi1) bullseye-staging; urgency=medium
+qtbase-opensource-src (5.14.2+dfsg-5+rpi1) bullseye-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,19 @@ qtbase-opensource-src (5.14.2+dfsg-4+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Fri, 03 Jul 2020 20:04:16 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 16 Aug 2020 23:56:15 +0000
+
+qtbase-opensource-src (5.14.2+dfsg-5) unstable; urgency=medium
+
+  * Backport upstream patch for moc to handle include directives in enums
+    (closes: #963955).
+  * Stop using -isystem flag in qmake (closes: #958479).
+  * Clarify warning message about PIC/PIE, thanks Daniel Kahn Gillmor
+    (closes: #879014).
+  * Update symbols files for GCC 10.
+  * Update libqt5gui5.lintian-overrides for tag renames in Lintian 2.79.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sun, 02 Aug 2020 11:49:03 +0300
 
 qtbase-opensource-src (5.14.2+dfsg-4) unstable; urgency=medium
 
