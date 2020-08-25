@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.14.2+dfsg-5+rpi1) bullseye-staging; urgency=medium
+qtbase-opensource-src (5.14.2+dfsg-6+rpi1) bullseye-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,17 @@ qtbase-opensource-src (5.14.2+dfsg-5+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sun, 16 Aug 2020 23:56:15 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Tue, 25 Aug 2020 16:27:27 +0000
+
+qtbase-opensource-src (5.14.2+dfsg-6) unstable; urgency=medium
+
+  * Backport upstream patch to fix buffer overflow in XBM parser
+    (CVE-2020-17507, closes: #968444).
+  * Backport upstream patch to handle SSL_shutdown's errors properly
+    (CVE-2020-13962).
+  * Update symbols files from buildds’ logs.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Wed, 19 Aug 2020 20:40:32 +0300
 
 qtbase-opensource-src (5.14.2+dfsg-5) unstable; urgency=medium
 
