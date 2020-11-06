@@ -305,6 +305,8 @@ typedef double qreal;
 #  define QT_DEPRECATED_VARIABLE
 #  undef QT_DEPRECATED_CONSTRUCTOR
 #  define QT_DEPRECATED_CONSTRUCTOR
+#  undef Q_DECL_ENUMERATOR_DEPRECATED
+#  define Q_DECL_ENUMERATOR_DEPRECATED
 #endif
 
 #ifndef QT_DEPRECATED_WARNINGS_SINCE
@@ -1272,8 +1274,10 @@ inline int qIntCast(float f) { return int(f); }
 /*
   Reentrant versions of basic rand() functions for random number generation
 */
-Q_CORE_EXPORT void qsrand(uint seed);
-Q_CORE_EXPORT int qrand();
+#if QT_DEPRECATED_SINCE(5, 15)
+Q_CORE_EXPORT QT_DEPRECATED_VERSION_X_5_15("use QRandomGenerator instead") void qsrand(uint seed);
+Q_CORE_EXPORT QT_DEPRECATED_VERSION_X_5_15("use QRandomGenerator instead") int qrand();
+#endif
 
 #define QT_MODULE(x)
 

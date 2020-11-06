@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.14.2+dfsg-6+rpi1) bullseye-staging; urgency=medium
+qtbase-opensource-src (5.15.1+dfsg-2+rpi1) bullseye-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,54 @@ qtbase-opensource-src (5.14.2+dfsg-6+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Tue, 25 Aug 2020 16:27:27 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Fri, 06 Nov 2020 17:21:15 +0000
+
+qtbase-opensource-src (5.15.1+dfsg-2) unstable; urgency=medium
+
+  [ Dmitry Shachnev ]
+  * Backport upstream patch to fix multiscreen-related regression that
+    affects Plasma.
+  * Update debian/libqt5core5a.symbols from buildds’ logs.
+  * Upload to unstable.
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Apply cross_build_mysql.diff to get closer to cross building on a Debian
+    environment. Thanks Helmut Grohne for the patch! (Closes: #971604).
+  * Remove qt5-default. Nowadays it's not needed as Qt 5 is the only Qt version
+    in Debian and it brought more problems than solutions.
+
+  [ Helmut Grohne ]
+  * qmake cross wrapper: Allow passing -qt5. (Closes: #972640)
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Wed, 28 Oct 2020 21:53:04 +0300
+
+qtbase-opensource-src (5.15.1+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop all patches that have been included in the new release:
+    - CVE-2015-9541.diff
+    - CVE-2020-17507.diff
+    - CVE-2020-13962.diff
+    - enable_a11y_on_linux.diff
+    - fix_qlibrary_deadlock.diff
+    - moc_handle_includes.diff
+    - no_isystem.diff
+    - clarify_pic_message.diff
+  * Refresh other patches.
+  * Update symbols files from buildds’ logs.
+  * Update to debhelper compat level 13.
+    - Drop dh_missing override, --fail-missing is now default behavior.
+    - Use ${DEB_HOST_MULTIARCH} substitution.
+    - Stop using dh-exec for .links files, as debhelper now supports
+      substitutions natively.
+  * Bump qttools build-dependencies to 5.15.
+  * Bump ABI version to qtbase-abi-5-15-1.
+  * Update debian/copyright using debian/scripts/update-copyright.
+  * Manually update non-generated part of debian/copyright.
+  * Update install files for the new release.
+  * Update symbols files from the current build log.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 10 Sep 2020 14:41:18 +0300
 
 qtbase-opensource-src (5.14.2+dfsg-6) unstable; urgency=medium
 
