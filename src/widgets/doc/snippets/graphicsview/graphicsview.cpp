@@ -47,62 +47,104 @@
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
+#include <QStandardItem>
+#include <QtCore/qmimedata.h>
+#include <QtGui/qdrag.h>
+#include <QtPrintSupport/qprintdialog.h>
+#include <QtPrintSupport/qprinter.h>
+#include <QtWidgets/QGraphicsSceneMouseEvent>
+#include <QtWidgets/qdialog.h>
+#include <QtWidgets/qgraphicsview.h>
+#include <QtWidgets/qopenglwidget.h>
 
-#include <QtWidgets>
-
-void mainWindowExample()
+void graphicsview_snippet_main()
 {
-    QMdiArea *mdiArea = new QMdiArea;
 //! [0]
-    QMainWindow *mainWindow = new QMainWindow;
-    mainWindow->setCentralWidget(mdiArea);
+QGraphicsScene scene;
+QGraphicsRectItem *rect = scene.addRect(QRectF(0, 0, 100, 100));
+
+QGraphicsItem *item = scene.itemAt(50, 50, QTransform());
 //! [0]
-
-    mdiArea->addSubWindow(new QPushButton("Push Me Now!"));
-
-    mainWindow->show();
+Q_UNUSED(rect);
+Q_UNUSED(item);
 }
 
-void addingSubWindowsExample()
+void myPopulateScene(QGraphicsScene *)
 {
-    QWidget *internalWidget1 = new QWidget;
-    QWidget *internalWidget2 = new QWidget;
-
-//! [1]
-    QMdiArea mdiArea;
-    QMdiSubWindow *subWindow1 = new QMdiSubWindow;
-    subWindow1->setWidget(internalWidget1);
-    subWindow1->setAttribute(Qt::WA_DeleteOnClose);
-    mdiArea.addSubWindow(subWindow1);
-
-    QMdiSubWindow *subWindow2 =
-        mdiArea.addSubWindow(internalWidget2);
-
-//! [1]
-    subWindow1->show();
-    subWindow2->show();
-
-    mdiArea.show();
+    // Intentionally left empty
 }
 
-/*
-int main(int argv, char **args)
+void snippetThatUsesMyPopulateScene()
 {
-    QApplication app(argv, args);
-
-    mainWindowExample();
-    //addingSubWindowsExample();
-
-   QAction *act = new QAction(qApp);
-   act->setShortcut(Qt::ALT + Qt::Key_S);
-   act->setShortcutContext( Qt::ApplicationShortcut );
-   QObject::connect(act, &QAction::triggered, qApp, &QApplication::aboutQt);
-
-    QWidget widget5;
-    widget5.show();
-    widget5.addAction(act);
-
-    return app.exec();
+//! [1]
+QGraphicsScene scene;
+myPopulateScene(&scene);
+QGraphicsView view(&scene);
+view.show();
+//! [1]
 }
-*/
 
+class CustomItem : public QStandardItem
+{
+public:
+    using QStandardItem::QStandardItem;
+
+    int type() const override { return UserType; }
+    void mousePressEvent(QGraphicsSceneMouseEvent *event);
+    QStandardItem *clone() const override { return new CustomItem; }
+};
+
+
+void printScene()
+{
+//! [3]
+QGraphicsScene scene;
+QPrinter printer;
+scene.addRect(QRectF(0, 0, 100, 200), QPen(Qt::black), QBrush(Qt::green));
+
+if (QPrintDialog(&printer).exec() == QDialog::Accepted) {
+    QPainter painter(&printer);
+    painter.setRenderHint(QPainter::Antialiasing);
+    scene.render(&painter);
+}
+//! [3]
+}
+
+void pixmapScene()
+{
+//! [4]
+QGraphicsScene scene;
+scene.addRect(QRectF(0, 0, 100, 200), QPen(Qt::black), QBrush(Qt::green));
+
+QPixmap pixmap;
+QPainter painter(&pixmap);
+painter.setRenderHint(QPainter::Antialiasing);
+scene.render(&painter);
+painter.end();
+
+pixmap.save("scene.png");
+//! [4]
+}
+
+//! [5]
+void CustomItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
+{
+    QMimeData *data = new QMimeData;
+    QDrag *drag = new QDrag(event->widget());
+    drag->setMimeData(data);
+    drag->exec();
+}
+//! [5]
+
+void viewScene()
+{
+QGraphicsScene scene;
+//! [6]
+QGraphicsView view(&scene);
+QOpenGLWidget *gl = new QOpenGLWidget();
+QSurfaceFormat format;
+format.setSamples(4);
+gl->setFormat(format);
+view.setViewport(gl);
+//! [6]
+}

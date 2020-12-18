@@ -48,31 +48,34 @@
 **
 ****************************************************************************/
 
-#include <QtWidgets>
+#include <QGraphicsEllipseItem>
+#include <QGraphicsScene>
+#include <QStyleOptionGraphicsItem>
+#include <QtGui>
 
-#include "./customstyle/customstyle.h"
-
-void CustomStyle::drawPrimitive(PrimitiveElement element, const QStyleOption *option,
-                                QPainter *painter, const QWidget *widget) const
+class CustomScene : public QGraphicsScene
 {
+public:
+    CustomScene()
+        { addItem(new QGraphicsEllipseItem(QRect(10, 10, 30, 30))); }
 
-//![0]
-    switch (element) {
-        case (PE_PanelItemViewItem): {
-            painter->save();
+    void drawItems(QPainter *painter, int numItems, QGraphicsItem *items[],
+                   const QStyleOptionGraphicsItem options[],
+                   QWidget *widget = 0) override;
+};
 
-            QPoint topLeft = option->rect.topLeft();
-            QPoint bottomRight = option->rect.topRight();
-            QLinearGradient backgroundGradient(topLeft, bottomRight);
-            backgroundGradient.setColorAt(0.0, QColor(Qt::yellow).lighter(190));
-            backgroundGradient.setColorAt(1.0, Qt::white);
-            painter->fillRect(option->rect, QBrush(backgroundGradient));
-
-            painter->restore();
-        break;
-        }
-        default:
-            QProxyStyle::drawPrimitive(element, option, painter, widget);
-    }
-//![0]
+//! [0]
+void CustomScene::drawItems(QPainter *painter, int numItems,
+                            QGraphicsItem *items[],
+                            const QStyleOptionGraphicsItem options[],
+                            QWidget *widget)
+{
+    for (int i = 0; i < numItems; ++i) {
+         // Draw the item
+         painter->save();
+         painter->setTransform(items[i]->sceneTransform(), true);
+         items[i]->paint(painter, &options[i], widget);
+         painter->restore();
+     }
 }
+//! [0]

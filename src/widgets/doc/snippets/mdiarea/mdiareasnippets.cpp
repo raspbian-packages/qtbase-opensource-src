@@ -47,103 +47,40 @@
 ** $QT_END_LICENSE$
 **
 ****************************************************************************/
-#include <QGraphicsView>
-#include <QOpenGLWidget>
-#include <QPrinter>
-#include <QPrintDialog>
-#include <QStandardItem>
-#include <QMimeData>
-#include <QDrag>
-#include <QGraphicsSceneMouseEvent>
 
-void graphicsview_snippet_main()
+#include <QtWidgets>
+
+void mainWindowExample()
 {
+    QMdiArea *mdiArea = new QMdiArea;
 //! [0]
-QGraphicsScene scene;
-QGraphicsRectItem *rect = scene.addRect(QRectF(0, 0, 100, 100));
-
-QGraphicsItem *item = scene.itemAt(50, 50, QTransform());
+    QMainWindow *mainWindow = new QMainWindow;
+    mainWindow->setCentralWidget(mdiArea);
 //! [0]
-Q_UNUSED(rect);
-Q_UNUSED(item);
+
+    mdiArea->addSubWindow(new QPushButton("Push Me Now!"));
+
+    mainWindow->show();
 }
 
-void myPopulateScene(QGraphicsScene *)
+void addingSubWindowsExample()
 {
-    // Intentionally left empty
-}
+    QWidget *internalWidget1 = new QWidget;
+    QWidget *internalWidget2 = new QWidget;
 
-void snippetThatUsesMyPopulateScene()
-{
 //! [1]
-QGraphicsScene scene;
-myPopulateScene(&scene);
-QGraphicsView view(&scene);
-view.show();
+    QMdiArea mdiArea;
+    QMdiSubWindow *subWindow1 = new QMdiSubWindow;
+    subWindow1->setWidget(internalWidget1);
+    subWindow1->setAttribute(Qt::WA_DeleteOnClose);
+    mdiArea.addSubWindow(subWindow1);
+
+    QMdiSubWindow *subWindow2 =
+        mdiArea.addSubWindow(internalWidget2);
+
 //! [1]
-}
+    subWindow1->show();
+    subWindow2->show();
 
-class CustomItem : public QStandardItem
-{
-public:
-    using QStandardItem::QStandardItem;
-
-    int type() const override { return UserType; }
-    void mousePressEvent(QGraphicsSceneMouseEvent *event);
-    QStandardItem *clone() const override { return new CustomItem; }
-};
-
-
-void printScene()
-{
-//! [3]
-QGraphicsScene scene;
-QPrinter printer;
-scene.addRect(QRectF(0, 0, 100, 200), QPen(Qt::black), QBrush(Qt::green));
-
-if (QPrintDialog(&printer).exec() == QDialog::Accepted) {
-    QPainter painter(&printer);
-    painter.setRenderHint(QPainter::Antialiasing);
-    scene.render(&painter);
-}
-//! [3]
-}
-
-void pixmapScene()
-{
-//! [4]
-QGraphicsScene scene;
-scene.addRect(QRectF(0, 0, 100, 200), QPen(Qt::black), QBrush(Qt::green));
-
-QPixmap pixmap;
-QPainter painter(&pixmap);
-painter.setRenderHint(QPainter::Antialiasing);
-scene.render(&painter);
-painter.end();
-
-pixmap.save("scene.png");
-//! [4]
-}
-
-//! [5]
-void CustomItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
-{
-    QMimeData *data = new QMimeData;
-    QDrag *drag = new QDrag(event->widget());
-    drag->setMimeData(data);
-    drag->exec();
-}
-//! [5]
-
-void viewScene()
-{
-QGraphicsScene scene;
-//! [6]
-QGraphicsView view(&scene);
-QOpenGLWidget *gl = new QOpenGLWidget();
-QSurfaceFormat format;
-format.setSamples(4);
-gl->setFormat(format);
-view.setViewport(gl);
-//! [6]
+    mdiArea.show();
 }
