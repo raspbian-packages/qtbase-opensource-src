@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.2+dfsg-2+rpi1) bullseye-staging; urgency=medium
+qtbase-opensource-src (5.15.2+dfsg-3+rpi1) bullseye-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,17 @@ qtbase-opensource-src (5.15.2+dfsg-2+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Fri, 18 Dec 2020 15:21:31 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Fri, 05 Feb 2021 01:47:04 +0000
+
+qtbase-opensource-src (5.15.2+dfsg-3) unstable; urgency=medium
+
+  * Backport upstream patch to fix memory leak in QNetworkAccessManager
+    from QMetaObjectPrivate::connect.
+  * Backport upstream changes to add #include <limits> for GCC 11.
+  * Update debian/watch: use format 4, and track only 5.15.x releases.
+  * Update debian/libqt5core5a.symbols for hurd-i386.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Tue, 26 Jan 2021 20:17:11 +0300
 
 qtbase-opensource-src (5.15.2+dfsg-2) unstable; urgency=medium
 
