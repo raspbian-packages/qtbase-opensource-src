@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.2+dfsg-5+rpi1) bullseye-staging; urgency=medium
+qtbase-opensource-src (5.15.2+dfsg-7+rpi1) bullseye-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,22 @@ qtbase-opensource-src (5.15.2+dfsg-5+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sat, 06 Mar 2021 16:16:54 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Thu, 10 Jun 2021 16:53:19 +0000
+
+qtbase-opensource-src (5.15.2+dfsg-7) unstable; urgency=medium
+
+  [ Lu Yaning ]
+  * Backport upstream patch to fix invalid pointer return with
+    QGridLayout::itemAt(-1): fix-invalid-pointer-return-with-QGridLayout.diff
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Thu, 03 Jun 2021 09:55:29 -0300
+
+qtbase-opensource-src (5.15.2+dfsg-6) unstable; urgency=medium
+
+  * Backport upstream patch to adjust QMimeDatabase behavior (LP: #1857824).
+  * Make qtbase5-dev break qt5-default (see #976389, LP: #1920130).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 29 May 2021 12:04:21 +0300
 
 qtbase-opensource-src (5.15.2+dfsg-5) unstable; urgency=medium
 
