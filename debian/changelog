@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.2+dfsg-7+rpi1) bullseye-staging; urgency=medium
+qtbase-opensource-src (5.15.2+dfsg-9+rpi1) bullseye-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,27 @@ qtbase-opensource-src (5.15.2+dfsg-7+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 10 Jun 2021 16:53:19 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Thu, 15 Jul 2021 22:18:33 +0000
+
+qtbase-opensource-src (5.15.2+dfsg-9) unstable; urgency=medium
+
+  * Revert adding fix-misplacement-of-placeholder-text-in-QLineEdit.diff.
+    Unfortunately it causes a regression (see QTBUG-94824).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 02 Jul 2021 18:58:04 +0300
+
+qtbase-opensource-src (5.15.2+dfsg-8) unstable; urgency=medium
+
+  [ Lu Yaning ]
+  * Backport upstream patch to fix misplacement of placeholder text in
+    QLineEdit with RTL content.
+
+  [ Dmitry Shachnev ]
+  * Remove the qmimeprovider.cpp part of mime_globs.diff. It is unrelated
+    to the original purpose of that patch, and causes various problems
+    (closes: #989255, #989744, #990129).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 28 Jun 2021 20:38:59 +0300
 
 qtbase-opensource-src (5.15.2+dfsg-7) unstable; urgency=medium
 
