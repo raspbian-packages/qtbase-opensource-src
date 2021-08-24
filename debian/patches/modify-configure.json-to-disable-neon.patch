@@ -1,0 +1,19 @@
+From: Peter Michael Green <plugwash@raspbian.org>
+Date: Sun, 3 Sep 2017 22:55:28 +0000
+X-Dgit-Generated: 5.9.1+dfsg-9+rpi1 917f03417097d6e0bbeef4e626acce9d6030ba33
+Subject: Modify configure.json to disable neon.
+
+
+---
+
+--- qtbase-opensource-src-5.9.1+dfsg.orig/configure.json
++++ qtbase-opensource-src-5.9.1+dfsg/configure.json
+@@ -896,7 +896,7 @@
+         },
+         "neon": {
+             "label": "NEON",
+-            "condition": "(arch.arm || arch.arm64) && subarch.neon",
++            "condition": "(arch.arm64) && subarch.neon",
+             "output": [
+                 "privateConfig",
+                 { "type": "define", "name": "QT_COMPILER_SUPPORTS_NEON", "value": 1 }
