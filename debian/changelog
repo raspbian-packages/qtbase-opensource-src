@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.2+dfsg-10+rpi1) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.2+dfsg-12+rpi1) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,26 @@ qtbase-opensource-src (5.15.2+dfsg-10+rpi1) bookworm-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Tue, 24 Aug 2021 13:28:22 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Tue, 28 Sep 2021 14:44:33 +0000
+
+qtbase-opensource-src (5.15.2+dfsg-12) unstable; urgency=medium
+
+  * Add a patch to properly cast types for EGL X11 tests (Closes: #994906).
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Thu, 23 Sep 2021 10:02:33 -0300
+
+qtbase-opensource-src (5.15.2+dfsg-11) unstable; urgency=medium
+
+  * Apply multi-arch hints.
+    + qtbase5-doc, qtbase5-doc-dev, qtbase5-doc-html: Add Multi-Arch: foreign.
+
+  [ Lisandro Damián Nicanor Pérez Meyer ]
+  * Backport upstream patch
+    xcb_add_a_timeout_control_when_reading_INCR_property.diff in order to fix
+    timestamp issue on QXcbConnection,
+    https://bugreports.qt.io/browse/QTBUG-56595
+
+ -- Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>  Wed, 22 Sep 2021 15:07:55 -0300
 
 qtbase-opensource-src (5.15.2+dfsg-10) unstable; urgency=medium
 

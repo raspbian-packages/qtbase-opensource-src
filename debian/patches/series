@@ -10,6 +10,7 @@ fix-placement-of-placeholder-text-in-QLineEdits-with-action-icons.diff
 fusion_checkable_qpushbutton.diff
 mysql_remove_version_checks.diff
 full_width_selection_rtl.diff
+xcb_add_a_timeout_control_when_reading_INCR_property.diff
 
 # Debian specific.
 gnukfreebsd.diff
@@ -23,4 +24,5 @@ qdoc_default_incdirs.diff
 path_max.diff
 qstorageinfo_linux.diff
 cross_build_mysql.diff
+cast_types_for_egl_x11_test.diff
 modify-configure.json-to-disable-neon.patch
