@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.2+dfsg-13+rpi1) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.2+dfsg-15+rpi1) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,27 @@ qtbase-opensource-src (5.15.2+dfsg-13+rpi1) bookworm-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Tue, 23 Nov 2021 22:56:25 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 27 Feb 2022 06:46:51 +0000
+
+qtbase-opensource-src (5.15.2+dfsg-15) unstable; urgency=medium
+
+  * Backport upstream changes to improve support for OpenSSL 3.0.
+    - Don't hardcode libssl version in Depends, fill it dynamically.
+  * Replace -ffile-prefix-map in qmodule.pri.
+  * Backport upstream patch to make QProcess not search for executables in
+    CWD unless explicitly told so (CVE-2022-25255).
+  * Update some Lintian overrides.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Tue, 22 Feb 2022 00:00:28 +0300
+
+qtbase-opensource-src (5.15.2+dfsg-14) unstable; urgency=medium
+
+  * Backport four upstream commits to fix massive memory consumption when
+    rendering specially crafted SVG files (CVE-2021-38593, LP: #1950193).
+  * Update symbols files from buildds’ logs.
+  * Override some source-is-missing and unpack-message-for-orig warnings.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sun, 28 Nov 2021 17:12:50 +0300
 
 qtbase-opensource-src (5.15.2+dfsg-13) unstable; urgency=medium
 
