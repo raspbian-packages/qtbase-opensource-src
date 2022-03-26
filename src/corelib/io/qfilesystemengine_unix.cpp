@@ -1407,7 +1407,7 @@ bool QFileSystemEngine::setFileTime(int fd, const QDateTime &newDate, QAbstractF
         return false;
     }
 
-#if QT_CONFIG(futimens)
+#if QT_CONFIG(futimens) && defined(UTIME_OMIT)
     struct timespec ts[2];
 
     ts[0].tv_sec = ts[1].tv_sec = 0;
