@@ -2626,6 +2626,9 @@ void QStyleSheetStyle::setProperties(QWidget *w)
         default: v = decl.d->values.at(0).variant; break;
         }
 
+        if (propertyL1 == QByteArray("styleSheet") && value == v)
+            continue;
+
         w->setProperty(propertyL1, v);
     }
 }
