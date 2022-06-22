@@ -12,7 +12,7 @@ include /usr/share/dpkg/pkg-info.mk
 export PATH := $(PATH):$(shell pwd)/bin
 export CFLAGS := $(shell dpkg-buildflags --get CFLAGS) $(shell dpkg-buildflags --get CPPFLAGS) $(shell getconf LFS_CFLAGS)
 export CXXFLAGS := $(shell dpkg-buildflags --get CXXFLAGS) $(shell dpkg-buildflags --get CPPFLAGS) $(shell getconf LFS_CFLAGS)
-export LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
+export LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS)
 export PKG_CONFIG := /usr/bin/$(DEB_HOST_GNU_TYPE)-pkg-config
 sslpkgname := $(shell dpkg-query --show '--showformat=$${Depends}' libssl-dev | cut -d ' ' -f1)
 
@@ -299,6 +299,10 @@ endif
 	# Reproducible builds: remove build paths from .prl files.
 	sed -i -e '/^QMAKE_PRL_BUILD_DIR/d' debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libQt5*.prl \
 		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/qt5/examples/widgets/tools/plugandpaint/plugins/libpnp_basictools.prl
+
+	# Headers needed for building deepin-qt5dxcb-plugin.
+	install -D -t debian/tmp/usr/include/$(DEB_HOST_MULTIARCH)/qt5/QtXcb/$(DEB_VERSION_UPSTREAM:+dfsg=)/QtXcb/private \
+		src/plugins/platforms/xcb/*.h
 
 override_dh_auto_install-indep:
 	dh_auto_build -- INSTALL_ROOT=$(CURDIR)/debian/tmp install_docs

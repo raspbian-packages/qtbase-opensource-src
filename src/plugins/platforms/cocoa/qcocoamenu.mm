@@ -351,6 +351,17 @@ void QCocoaMenu::showPopup(const QWindow *parentWindow, const QRect &targetRect,
     NSView *view = cocoaWindow ? cocoaWindow->view() : nil;
     NSMenuItem *nsItem = item ? ((QCocoaMenuItem *)item)->nsItem() : nil;
 
+    // store the window that this popup belongs to so that we can evaluate whether we are modally blocked
+    bool resetMenuParent = false;
+    if (!menuParent()) {
+        setMenuParent(cocoaWindow);
+        resetMenuParent = true;
+    }
+    auto menuParentGuard = qScopeGuard([&]{
+        if (resetMenuParent)
+            setMenuParent(nullptr);
+    });
+
     QScreen *screen = nullptr;
     if (parentWindow)
         screen = parentWindow->screen();
@@ -377,7 +388,7 @@ void QCocoaMenu::showPopup(const QWindow *parentWindow, const QRect &targetRect,
 
         QCocoaScreen *cocoaScreen = static_cast<QCocoaScreen *>(screen->handle());
         int availableHeight = cocoaScreen->availableGeometry().height();
-        const QPoint &globalPos = cocoaWindow->mapToGlobal(pos);
+        const QPoint globalPos = cocoaWindow ? cocoaWindow->mapToGlobal(pos) : pos;
         int menuHeight = m_nativeMenu.size.height;
         if (globalPos.y() + menuHeight > availableHeight) {
             // Maybe we need to fix the vertical popup position but we don't know the
@@ -421,7 +432,7 @@ void QCocoaMenu::showPopup(const QWindow *parentWindow, const QRect &targetRect,
 
     // The calls above block, and also swallow any mouse release event,
     // so we need to clear any mouse button that triggered the menu popup.
-    if (!cocoaWindow->isForeignWindow())
+    if (cocoaWindow && !cocoaWindow->isForeignWindow())
         [qnsview_cast(view) resetMouseButtons];
 }
 

@@ -503,9 +503,11 @@ void QFontDatabasePrivate::invalidate()
     emit static_cast<QGuiApplication *>(QCoreApplication::instance())->fontDatabaseChanged();
 }
 
-QtFontFamily *QFontDatabasePrivate::family(const QString &f, FamilyRequestFlags flags)
+QtFontFamily *QFontDatabasePrivate::family(const QString &family, FamilyRequestFlags flags)
 {
     QtFontFamily *fam = nullptr;
+
+    const QString f = family.trimmed();
 
     int low = 0;
     int high = count;
@@ -2677,6 +2679,12 @@ QFontEngine *QFontDatabase::findFont(const QFontDef &request, int script)
     if (engine) {
         qCDebug(lcFontMatch, "Cache hit level 1");
         return engine;
+    }
+
+    if (request.pixelSize > 0xffff) {
+        // Stop absurd requests reaching the engines; pixel size is assumed to fit ushort
+        qCDebug(lcFontMatch, "Rejecting request for pixel size %g2, returning box engine", double(request.pixelSize));
+        return new QFontEngineBox(32); // not request.pixelSize, to avoid overflow/DOS
     }
 
     QString family_name, foundry_name;

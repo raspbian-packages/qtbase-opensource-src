@@ -137,8 +137,13 @@ namespace QtAndroid
         m_androidPlatformIntegration = androidPlatformIntegration;
 
         // flush the pending state if necessary.
-        if (m_androidPlatformIntegration && (m_pendingApplicationState != -1))
+        if (m_androidPlatformIntegration && (m_pendingApplicationState != -1)) {
+            if (m_pendingApplicationState == Qt::ApplicationActive)
+                QtAndroidPrivate::handleResume();
+            else if (m_pendingApplicationState == Qt::ApplicationInactive)
+                QtAndroidPrivate::handlePause();
             QWindowSystemInterface::handleApplicationStateChanged(Qt::ApplicationState(m_pendingApplicationState));
+        }
 
         m_pendingApplicationState = -1;
     }
@@ -216,6 +221,21 @@ namespace QtAndroid
 
         QJNIObjectPrivate::callStaticMethod<void>(m_applicationClass, "setFullScreen", "(Z)V", true);
         m_statusBarShowing = false;
+    }
+
+    void notifyAccessibilityLocationChange()
+    {
+        QJNIObjectPrivate::callStaticMethod<void>(m_applicationClass, "notifyAccessibilityLocationChange");
+    }
+
+    void notifyObjectHide(uint accessibilityObjectId)
+    {
+        QJNIObjectPrivate::callStaticMethod<void>(m_applicationClass, "notifyObjectHide","(I)V", accessibilityObjectId);
+    }
+
+    void notifyObjectFocus(uint accessibilityObjectId)
+    {
+        QJNIObjectPrivate::callStaticMethod<void>(m_applicationClass, "notifyObjectFocus","(I)V", accessibilityObjectId);
     }
 
     jobject createBitmap(QImage img, JNIEnv *env)
@@ -513,7 +533,7 @@ static void waitForServiceSetup(JNIEnv *env, jclass /*clazz*/)
         QtAndroidPrivate::waitForServiceSetup();
 }
 
-static jboolean startQtApplication(JNIEnv */*env*/, jclass /*clazz*/)
+static void startQtApplication(JNIEnv */*env*/, jclass /*clazz*/)
 {
     {
         JNIEnv* env = nullptr;
@@ -552,7 +572,8 @@ static jboolean startQtApplication(JNIEnv */*env*/, jclass /*clazz*/)
     sem_destroy(&m_exitSemaphore);
 
     // We must call exit() to ensure that all global objects will be destructed
-    exit(ret);
+    if (!qEnvironmentVariableIsSet("QT_ANDROID_NO_EXIT_CALL"))
+        exit(ret);
 }
 
 static void quitQtCoreApplication(JNIEnv *env, jclass /*clazz*/)

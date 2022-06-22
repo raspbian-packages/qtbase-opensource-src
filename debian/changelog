@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.2+dfsg-16+rpi1) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.4+dfsg-3+rpi1) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,15 +6,63 @@ qtbase-opensource-src (5.15.2+dfsg-16+rpi1) bookworm-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sun, 10 Apr 2022 13:02:25 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 22 Jun 2022 05:52:37 +0000
 
-qtbase-opensource-src (5.15.2+dfsg-16) unstable; urgency=medium
+qtbase-opensource-src (5.15.4+dfsg-3) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 13 Jun 2022 21:00:47 +0300
+
+qtbase-opensource-src (5.15.4+dfsg-2) experimental; urgency=medium
+
+  * Install QtXcbQpa private headers needed for deepin-qt5dxcb-plugin,
+    to avoid modifying it for every new Qt version.
+  * Use symver directive to catch all private symbols at once.
+  * Bump Standards-Version to 4.6.1, no changes needed.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 16 May 2022 14:42:53 +0300
+
+qtbase-opensource-src (5.15.4+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop patches that are included in the new release:
+    - fix-invalid-pointer-return-with-QGridLayout.diff
+    - gcc-11-qtconcurrentthreadengine.diff
+  * Refresh other patches.
+  * Bump ABI version to qtbase-abi-5-15-4.
+  * Update debian/copyright.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 13 May 2022 17:14:31 +0300
+
+qtbase-opensource-src (5.15.3+dfsg-2) experimental; urgency=medium
 
   [ Andrea Pappacoda ]
   * Backport upstream patch to fix qtconcurrentthreadengine.h with GCC 11.
     - Closes: #1008391
 
- -- Dmitry Shachnev <mitya57@debian.org>  Sat, 02 Apr 2022 21:23:38 +0300
+  [ Dmitry Shachnev ]
+  * Backport upstream patch to fix parsing include inside enum (LP: #1968074).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 07 Apr 2022 18:50:52 +0300
+
+qtbase-opensource-src (5.15.3+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Update debian/watch for new file names.
+  * Drop patches that are included in the new release:
+    - xcb_screens_uaf.patch
+    - qnam_connect_memory_leak.diff
+    - qiodevice_readline_memory.diff
+  * Remove most of gcc_11_limits.diff, only one change left.
+  * Refresh other patches.
+  * Update debian/copyright.
+  * Bump ABI version to qtbase-abi-5-15-3.
+  * Update symbols files from the current build logs.
+  * Exclude one more RFC file from the tarball.
+  * Stop adding -Wl,--as-needed explicitly.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 04 Mar 2022 21:00:06 +0300
 
 qtbase-opensource-src (5.15.2+dfsg-15) unstable; urgency=medium
 

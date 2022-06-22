@@ -14,6 +14,7 @@ Files-Excluded: bin/licheck*
                 tests/auto/network/access/qnetworkreply/resource
                 tests/auto/network/access/qnetworkreply/rfc3252.txt
                 tests/manual/network_stresstest/qtest
+                tests/testserver/apache2/testdata/www/htdocs/protected/rfc3252.txt
                 tests/testserver/apache2/testdata/www/htdocs/rfcs/rfc2616.html
 # Removed non-free files:
 # * RFCs (see QTBUG-30544 and QTBUG-30545)
@@ -38,7 +39,7 @@ Files: qmake/*
        src/tools/*
        tests/*
        util/*
-Copyright: 2016-2020 The Qt Company Ltd.
+Copyright: 2016-2021 The Qt Company Ltd.
 License: GPL-3 with Qt-1.0 exception
 
 Files: doc/src/snippets/*
@@ -65,7 +66,7 @@ Copyright: 2007-2013 Fathi Boudra <fabo@debian.org>
            2005-2007 Brian Nelson <pyro@debian.org>
            2012-2013 Zoltán Balogh <zoltan.balogh@canonical.com>
            2012-2013 Timo Jyrinki <timo.jyrinki@canonical.com>
-           2013-2020 Dmitry Shachnev <mitya57@debian.org>
+           2013-2022 Dmitry Shachnev <mitya57@debian.org>
            2018 Simon Quigley <tsimonq2@ubuntu.com>
 License: LGPL-3 or GPL-2+
 
@@ -494,7 +495,7 @@ Files: configure
        tests/benchmarks/corelib/text/qbytearray/main.cpp
        tests/benchmarks/corelib/tools/qhash/main.cpp
 Copyright: 2016-2020 Intel Corporation
-           2016-2020 The Qt Company Ltd.
+           2016-2021 The Qt Company Ltd.
 License: GPL-3 with Qt-1.0 exception
 
 Files: tests/auto/corelib/global/qglobalstatic/tst_qglobalstatic.cpp
@@ -1373,7 +1374,6 @@ License: LGPL-3 or GPL-2
 Files: src/corelib/time/qtimezone.cpp
        src/corelib/time/qtimezone.h
        src/corelib/time/qtimezoneprivate_icu.cpp
-       src/corelib/time/qtimezoneprivate_p.h
        src/corelib/time/qtimezoneprivate_win.cpp
        src/gui/painting/qpagelayout.cpp
        src/gui/painting/qpagelayout.h
@@ -1393,13 +1393,14 @@ License: LGPL-3 or GPL-2
 Files: src/corelib/time/qtimezoneprivate.cpp
        src/corelib/time/qtimezoneprivate_data_p.h
        src/corelib/time/qtimezoneprivate_mac.mm
+       src/corelib/time/qtimezoneprivate_p.h
        src/plugins/printsupport/cups/qcupsprintersupport.cpp
        src/plugins/printsupport/cups/qcupsprintersupport_p.h
        src/plugins/printsupport/windows/qwindowsprintdevice.cpp
        src/plugins/printsupport/windows/qwindowsprintdevice.h
        src/printsupport/kernel/qplatformprintdevice.h
 Copyright: 2013-2014 John Layt <jlayt@kde.org>
-           2016-2019 The Qt Company Ltd.
+           2016-2021 The Qt Company Ltd.
 License: LGPL-3 or GPL-2
 
 Files: src/platformsupport/input/evdevtouch/qevdevtouchfilter_p.h
@@ -1975,7 +1976,7 @@ Files: src/corelib/text/qlocale_data_p.h
        tests/auto/corelib/text/qchar/data/NormalizationTest.txt
        tests/auto/corelib/text/qtextboundaryfinder/data/*.txt
        util/unicode/data/*.txt
-Copyright: 1991-2017 Unicode, Inc.
+Copyright: 1991-2020 Unicode, Inc.
 License: Unicode
  Permission is hereby granted, free of charge, to any person obtaining a
  copy of the Unicode data files and any associated documentation (the "Data
@@ -2152,13 +2153,13 @@ Copyright: 2009-2020 D. R. Commander
            2011-2016 Siarhei Siamashka
            2015-2016, 2018 Matthieu Darbois
            2015 Intel Corporation
-           2015 Google, Inc.
+           2015-2020 Google, Inc.
            2013-2014 MIPS Technologies, Inc.
-           2013 Linaro Limited
+           2013-2014 Linaro Limited
            2009-2011 Nokia Corporation and/or its subsidiary(-ies)
-           2009 Pierre Ossman for Cendio AB
+           2009-2012 Pierre Ossman for Cendio AB
            1999-2006 MIYASAKA Masaru
-           1991-2016 Thomas G. Lane, Guido Vollbeding
+           1991-2017 Thomas G. Lane, Guido Vollbeding
            2019 Arm Limited
 License: libjpeg and BSD-3-clause and Zlib
 
@@ -2210,8 +2211,7 @@ Copyright: 1997-2020 University of Cambridge
 License: BSD-3-clause
 
 Files: src/3rdparty/pcre2/src/sljit/*
-Copyright: 2013 Tilera Corporation (jiwang@tilera.com)
-           2009-2018 Zoltan Herczeg (hzmester@freemail.hu)
+Copyright: 2009-2020 Zoltan Herczeg <hzmester@freemail.hu>
 License: BSD-2-clause
 
 Files: src/3rdparty/pixman/*

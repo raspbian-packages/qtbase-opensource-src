@@ -57,6 +57,10 @@
 #if QT_CONFIG(lineedit)
 #include <qlineedit.h>
 #endif
+#if QT_CONFIG(textedit)
+#include <qtextedit.h>
+#endif
+#include <qplaintextedit.h>
 #include <private/qwindowsstyle_p.h>
 #if QT_CONFIG(combobox)
 #include <qcombobox.h>
@@ -1324,11 +1328,11 @@ QPainterPath QRenderRule::borderClip(QRect r)
 
     path.lineTo(rect.x() + blr.width(), curY);
     curX = rect.left() + borders[LeftEdge]/2.0;
-    path.arcTo(curX, rect.bottom() - 2*blr.height() + borders[BottomEdge]/2,
+    path.arcTo(curX, rect.bottom() - 2*blr.height() + borders[BottomEdge]/2.0,
                blr.width()*2 - borders[LeftEdge], blr.height()*2 - borders[BottomEdge], 270, -90);
 
     path.lineTo(curX, rect.top() + tlr.height());
-    path.arcTo(curX, rect.top() + borders[TopEdge]/2,
+    path.arcTo(curX, rect.top() + borders[TopEdge]/2.0,
                tlr.width()*2 - borders[LeftEdge], tlr.height()*2 - borders[TopEdge], 180, -90);
 
     path.closeSubpath();
@@ -1458,6 +1462,7 @@ void QRenderRule::configurePalette(QPalette *p, QPalette::ColorGroup cg, const Q
         p->setBrush(cg, w->foregroundRole(), pal->foreground);
         p->setBrush(cg, QPalette::WindowText, pal->foreground);
         p->setBrush(cg, QPalette::Text, pal->foreground);
+        p->setBrush(cg, QPalette::PlaceholderText, pal->foreground);
     }
     if (pal->selectionBackground.style() != Qt::NoBrush)
         p->setBrush(cg, QPalette::Highlight, pal->selectionBackground);
@@ -2085,6 +2090,14 @@ QRenderRule QStyleSheetStyle::renderRule(const QObject *obj, const QStyleOption 
 
         }
 #endif
+        else if (const QPlainTextEdit *edit = qobject_cast<const QPlainTextEdit *>(obj)) {
+            extraClass |= (edit->isReadOnly() ? PseudoClass_ReadOnly : PseudoClass_Editable);
+        }
+#if QT_CONFIG(textedit)
+        else if (const QTextEdit *edit = qobject_cast<const QTextEdit *>(obj)) {
+            extraClass |= (edit->isReadOnly() ? PseudoClass_ReadOnly : PseudoClass_Editable);
+        }
+#endif
 #if QT_CONFIG(lineedit)
         // LineEdit sets Sunken flag to indicate Sunken frame (argh)
         if (const QLineEdit *lineEdit = qobject_cast<const QLineEdit *>(obj)) {
@@ -2511,7 +2524,14 @@ static quint64 extendedPseudoClass(const QWidget *w)
         pc |= (edit->isReadOnly() ? PseudoClass_ReadOnly : PseudoClass_Editable);
     } else
 #endif
-    { } // required for the above ifdef'ery to work
+#if QT_CONFIG(textedit)
+    if (const QTextEdit *edit = qobject_cast<const QTextEdit *>(w)) {
+        pc |= (edit->isReadOnly() ? PseudoClass_ReadOnly : PseudoClass_Editable);
+    } else
+#endif
+    if (const QPlainTextEdit *edit = qobject_cast<const QPlainTextEdit *>(w)) {
+        pc |= (edit->isReadOnly() ? PseudoClass_ReadOnly : PseudoClass_Editable);
+    }
     return pc;
 }
 
@@ -2851,6 +2871,7 @@ void QStyleSheetStyle::polish(QWidget *w)
         if ( cssClass & PseudoClass_Hover || negated & PseudoClass_Hover) {
             w->setAttribute(Qt::WA_Hover);
             embeddedWidget(w)->setAttribute(Qt::WA_Hover);
+            embeddedWidget(w)->setMouseTracking(true);
         }
     }
 
@@ -3515,7 +3536,8 @@ void QStyleSheetStyle::drawControl(ControlElement ce, const QStyleOption *opt, Q
 
             if (btn->features & QStyleOptionButton::HasMenu) {
                 QRenderRule subRule = renderRule(w, opt, PseudoElement_PushButtonMenuIndicator);
-                QRect ir = positionRect(w, rule, subRule, PseudoElement_PushButtonMenuIndicator, opt->rect, opt->direction);
+                QRect ir = positionRect(w, rule, subRule, PseudoElement_PushButtonMenuIndicator,
+                                        baseStyle()->subElementRect(SE_PushButtonBevel, btn, w), opt->direction);
                 if (subRule.hasDrawable()) {
                     subRule.drawRule(p, ir);
                 } else {
@@ -3540,7 +3562,7 @@ void QStyleSheetStyle::drawControl(ControlElement ce, const QStyleOption *opt, Q
                 QRect textRect = button->rect;
 
                 const uint horizontalAlignMask = Qt::AlignHCenter | Qt::AlignLeft | Qt::AlignRight;
-                const uint verticalAlignMask = Qt::AlignVCenter | Qt::AlignTop | Qt::AlignLeft;
+                const uint verticalAlignMask = Qt::AlignVCenter | Qt::AlignTop | Qt::AlignBottom;
 
                 if (rule.hasPosition() && rule.position()->textAlignment != 0) {
                     Qt::Alignment textAlignment = rule.position()->textAlignment;
@@ -3760,10 +3782,10 @@ void QStyleSheetStyle::drawControl(ControlElement ce, const QStyleOption *opt, Q
                     QRect pmr(0, 0, pixw, pixh);
                     pmr.moveCenter(iconRect.center());
                     p->drawPixmap(pmr.topLeft(), pixmap);
-                } else if (checkable) {
+                } else if (mi.menuHasCheckableItems) {
                     QRenderRule subSubRule = renderRule(w, opt, PseudoElement_MenuCheckMark);
                     const QRect cmRect = positionRect(w, subRule, subSubRule, PseudoElement_MenuCheckMark, opt->rect, opt->direction);
-                    if (subSubRule.hasDrawable() || checked) {
+                    if (checkable && (subSubRule.hasDrawable() || checked)) {
                         QStyleOptionMenuItem newMi = mi;
                         if (!dis)
                             newMi.state |= State_Enabled;
@@ -5827,6 +5849,13 @@ QRect QStyleSheetStyle::subElementRect(SubElement se, const QStyleOption *opt, c
     case SE_PushButtonBevel:
     case SE_PushButtonFocusRect:
         if (const QStyleOptionButton *btn = qstyleoption_cast<const QStyleOptionButton *>(opt)) {
+            if (btn->features & QStyleOptionButton::HasMenu
+                && hasStyleRule(w, PseudoElement_PushButtonMenuIndicator)) {
+                QStyleOptionButton btnOpt(*btn);
+                btnOpt.features &= ~QStyleOptionButton::HasMenu;
+                return rule.baseStyleCanDraw() ? baseStyle()->subElementRect(se, &btnOpt, w)
+                                               : QWindowsStyle::subElementRect(se, &btnOpt, w);
+            }
             if (rule.hasBox() || !rule.hasNativeBorder()) {
                 return visualRect(opt->direction, opt->rect, se == SE_PushButtonBevel
                                                                 ? rule.borderRect(opt->rect)
