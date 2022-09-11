@@ -12,6 +12,8 @@ CVE-2020-0569.diff
 CVE-2020-0570.diff
 XCB_Fix_clipboard_breaking_when_timer_wraps_after_50_days.patch
 CVE-2020-17507.diff
+fix_settaborder.diff
+CVE-2015-9541.diff
 
 # Debian specific.
 gnukfreebsd.diff

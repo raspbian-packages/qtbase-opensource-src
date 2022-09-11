@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.11.3+dfsg1-1+rpi1+deb10u4) buster-staging; urgency=medium
+qtbase-opensource-src (5.11.3+dfsg1-1+rpi1+deb10u5) buster-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,16 @@ qtbase-opensource-src (5.11.3+dfsg1-1+rpi1+deb10u4) buster-staging; urgency=medi
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sun, 27 Sep 2020 19:46:20 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 11 Sep 2022 20:26:38 +0000
+
+qtbase-opensource-src (5.11.3+dfsg1-1+deb10u5) buster; urgency=medium
+
+  * Backport two upstream commits to fix setTabOrder for compound widgets
+    (closes: #1001082).
+  * Backport upstream patch to add an expansion limit for XML entities
+    (CVE-2015-9541, closes: #951066).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 26 Mar 2022 10:12:03 +0300
 
 qtbase-opensource-src (5.11.3+dfsg1-1+deb10u4) buster; urgency=medium
 
