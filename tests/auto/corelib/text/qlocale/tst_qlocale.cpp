@@ -2630,6 +2630,8 @@ void tst_QLocale::currency()
     const QLocale es_CR(QLocale::Spanish, QLocale::CostaRica);
     QCOMPARE(es_CR.toCurrencyString(double(1565.25)),
              QString::fromUtf8("\xE2\x82\xA1" "1\xC2\xA0" "565,25"));
+    QCOMPARE(es_CR.toCurrencyString(double(12565.25)),
+             QString::fromUtf8("\xE2\x82\xA1" "12\xC2\xA0" "565,25"));
 
     const QLocale system = QLocale::system();
     QVERIFY(system.toCurrencyString(1, QLatin1String("FOO")).contains(QLatin1String("FOO")));
@@ -2981,13 +2983,13 @@ void tst_QLocale::bcp47Name()
 class MySystemLocale : public QSystemLocale
 {
 public:
-    MySystemLocale(const QLocale &locale) : m_locale(locale)
+    MySystemLocale(const QString &locale) : m_name(locale), m_locale(locale)
     {
     }
 
-    QVariant query(QueryType /*type*/, QVariant /*in*/) const override
+    QVariant query(QueryType type, QVariant /*in*/) const override
     {
-        return QVariant();
+        return type == UILanguages ? QVariant(QStringList{m_name}) : QVariant();
     }
 
     QLocale fallbackUiLocale() const override
@@ -2996,16 +2998,32 @@ public:
     }
 
 private:
+    const QString m_name;
     const QLocale m_locale;
 };
 
 void tst_QLocale::systemLocale_data()
 {
+    // Test uses MySystemLocale, so is platform-independent.
     QTest::addColumn<QString>("name");
     QTest::addColumn<QLocale::Language>("language");
-    QTest::addRow("catalan") << QString("ca") << QLocale::Catalan;
-    QTest::addRow("ukrainian") << QString("uk") << QLocale::Ukrainian;
-    QTest::addRow("german") << QString("de") << QLocale::German;
+    QTest::addColumn<QStringList>("uiLanguages");
+
+    QTest::addRow("catalan")
+        << QString("ca") << QLocale::Catalan
+        << QStringList{QStringLiteral("ca"), QStringLiteral("ca-ES"), QStringLiteral("ca-Latn-ES")};
+    QTest::addRow("ukrainian")
+        << QString("uk") << QLocale::Ukrainian
+        << QStringList{QStringLiteral("uk"), QStringLiteral("uk-UA"), QStringLiteral("uk-Cyrl-UA")};
+    QTest::addRow("german")
+        << QString("de") << QLocale::German
+        << QStringList{QStringLiteral("de"), QStringLiteral("de-DE"), QStringLiteral("de-Latn-DE")};
+    QTest::addRow("chinese-min")
+        << QString("zh") << QLocale::Chinese
+        << QStringList{QStringLiteral("zh"), QStringLiteral("zh-CN"), QStringLiteral("zh-Hans-CN")};
+    QTest::addRow("chinese-full")
+        << QString("zh-Hans-CN") << QLocale::Chinese
+        << QStringList{QStringLiteral("zh-Hans-CN"), QStringLiteral("zh"), QStringLiteral("zh-CN")};
 }
 
 void tst_QLocale::systemLocale()
@@ -3015,11 +3033,13 @@ void tst_QLocale::systemLocale()
 
     QFETCH(QString, name);
     QFETCH(QLocale::Language, language);
+    QFETCH(QStringList, uiLanguages);
 
     {
         MySystemLocale sLocale(name);
         QCOMPARE(QLocale().language(), language);
         QCOMPARE(QLocale::system().language(), language);
+        QCOMPARE(QLocale::system().uiLanguages(), uiLanguages);
     }
 
     QCOMPARE(QLocale(), originalLocale);

@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.4+dfsg-5+rpi1) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.6+dfsg-2+rpi1) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,63 @@ qtbase-opensource-src (5.15.4+dfsg-5+rpi1) bookworm-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sat, 13 Aug 2022 04:53:32 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 30 Oct 2022 20:03:40 +0000
+
+qtbase-opensource-src (5.15.6+dfsg-2) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 29 Sep 2022 11:41:52 +0300
+
+qtbase-opensource-src (5.15.6+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop patches that are included in the new release:
+    - fix-misplacement-of-placeholder-text-in-QLineEdit.diff
+    - fix-placement-of-placeholder-text-in-QLineEdits-with-action-icons.diff
+    - mysql_remove_version_checks.diff
+    - full_width_selection_rtl.diff
+    - xcb_add_a_timeout_control_when_reading_INCR_property.diff
+    - CVE-2021-38593.diff
+    - moc_handle_include.diff
+    - remove_limit_on_number_of_streams.diff
+  * Update symbols files from buildds’ and current build logs.
+  * Revert removal of QtConcurrent::ThreadEngineBase::startBlocking(),
+    which is part of public API and used in the wild.
+  * Bump ABI version to qtbase-abi-5-15-6.
+  * Update debian/copyright (automatically and manually).
+  * Exclude chip.debug compiled binary from the tarball.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sun, 11 Sep 2022 11:44:12 +0300
+
+qtbase-opensource-src (5.15.5+dfsg-3) experimental; urgency=medium
+
+  * Merge 5.15.4+dfsg-5 upload from unstable.
+  * Update Lintian overrides.
+  * Update symbols files from buildds' logs.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Tue, 09 Aug 2022 16:08:10 +0300
+
+qtbase-opensource-src (5.15.5+dfsg-2) experimental; urgency=medium
+
+  * Restore CVE-2021-38593.diff, 3 of 4 commits are still applicable.
+  * Update symbols files from buildds’ logs.
+  * Backport upstream patch to remove limit on the number of HTTP/2 streams.
+    Fixes https://bugs.kde.org/show_bug.cgi?id=455540.
+  * Update debian/copyright.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 20 Jun 2022 23:37:04 +0300
+
+qtbase-opensource-src (5.15.5+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+    - Bump ABI version to 5.15.5.
+  * Remove reverse-applicable upstream patches:
+    - gcc_11_limits.diff
+    - CVE-2021-38593.diff
+  * Refresh existing patches.
+
+ -- Simon Quigley <tsimonq2@debian.org>  Fri, 17 Jun 2022 22:08:50 -0500
 
 qtbase-opensource-src (5.15.4+dfsg-5) unstable; urgency=medium
 
