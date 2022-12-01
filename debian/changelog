@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.6+dfsg-2+rpi1) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.6+dfsg-4+rpi1) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,26 @@ qtbase-opensource-src (5.15.6+dfsg-2+rpi1) bookworm-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sun, 30 Oct 2022 20:03:40 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Thu, 01 Dec 2022 23:13:16 +0000
+
+qtbase-opensource-src (5.15.6+dfsg-4) unstable; urgency=medium
+
+  * Revert upstream commit which caused graphical glitches in some apps.
+    Backport upstream patch to fix the original issue in a better way.
+    Thanks to Alexander Kernozhitsky and Alexis Murzeau for the pointers!
+    (closes: #1022748, #1023580)
+  * Upload to unstable.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 24 Nov 2022 20:38:09 +0300
+
+qtbase-opensource-src (5.15.6+dfsg-3) experimental; urgency=medium
+
+  * Backport upstream patch to fix misplaced menus with Wayland on GNOME.
+  * Backport upstream patch to use Wayland platform plugin on GNOME Wayland
+    sessions by default (closes: #954781).
+  * Update debian/libqt5core5a.symbols for ia64 and sparc64.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 24 Oct 2022 00:43:06 +0300
 
 qtbase-opensource-src (5.15.6+dfsg-2) unstable; urgency=medium
 
