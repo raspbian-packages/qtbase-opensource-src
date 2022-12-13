@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.6+dfsg-4+rpi1) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.6+dfsg-5+rpi1) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,18 @@ qtbase-opensource-src (5.15.6+dfsg-4+rpi1) bookworm-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 01 Dec 2022 23:13:16 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Tue, 13 Dec 2022 13:27:57 +0000
+
+qtbase-opensource-src (5.15.6+dfsg-5) unstable; urgency=medium
+
+  * Promote qtwayland5 from Suggests to Recommends (closes: #998698).
+  * Make libqt5gui5 suggest qgnomeplatform-qt5 (closes: #1024976).
+  * Backport upstream patch to fix Alt+` shortcut on non-US layouts.
+  * Build-Depends: Drop versioned constraint on dpkg-dev, libharfbuzz-dev and
+    pkg-kde-tools (thanks Debian Janitor).
+  * Drop Breaks/Replaces unnecessary since buster (thanks Debian Janitor).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 03 Dec 2022 20:38:46 +0300
 
 qtbase-opensource-src (5.15.6+dfsg-4) unstable; urgency=medium
 
