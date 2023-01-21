@@ -260,7 +260,7 @@ enum : quint32 {
             | XCB_EVENT_MASK_POINTER_MOTION,
 
     transparentForInputEventMask = baseEventMask
-            | XCB_EVENT_MASK_VISIBILITY_CHANGE | XCB_EVENT_MASK_RESIZE_REDIRECT
+            | XCB_EVENT_MASK_VISIBILITY_CHANGE
             | XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT
             | XCB_EVENT_MASK_COLOR_MAP_CHANGE | XCB_EVENT_MASK_OWNER_GRAB_BUTTON
 };
@@ -299,11 +299,6 @@ void QXcbWindow::create()
         return;
     }
 
-    QPlatformWindow::setGeometry(rect);
-
-    if (platformScreen != currentScreen)
-        QWindowSystemInterface::handleWindowScreenChanged(window(), platformScreen->QPlatformScreen::screen());
-
     const QSize minimumSize = windowMinimumSize();
     if (rect.width() > 0 || rect.height() > 0) {
         rect.setWidth(qBound(1, rect.width(), XCOORD_MAX));
@@ -314,6 +309,11 @@ void QXcbWindow::create()
         rect.setWidth(QHighDpi::toNativePixels(int(defaultWindowWidth), platformScreen->QPlatformScreen::screen()));
         rect.setHeight(QHighDpi::toNativePixels(int(defaultWindowHeight), platformScreen->QPlatformScreen::screen()));
     }
+
+    QPlatformWindow::setGeometry(rect);
+
+    if (platformScreen != currentScreen)
+        QWindowSystemInterface::handleWindowScreenChanged(window(), platformScreen->QPlatformScreen::screen());
 
     xcb_window_t xcb_parent_id = platformScreen->root();
     if (parent()) {
