@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.8+dfsg-2+rpi1) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.8+dfsg-3+rpi1) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,17 @@ qtbase-opensource-src (5.15.8+dfsg-2+rpi1) bookworm-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sat, 21 Jan 2023 23:21:48 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 12 Mar 2023 16:23:35 +0000
+
+qtbase-opensource-src (5.15.8+dfsg-3) unstable; urgency=medium
+
+  * Use ${DEB_HOST_GNU_TYPE} substitution in debian/qt5-qmake.install.
+  * Add upstream patch to fix denial-of-service in Qt SQL ODBC plugin
+    (CVE-2023-24607, closes: #1031872).
+  * Update debian/libqt5gui5.symbols from s390x build log.
+  * Amend image_deletion_order.diff from one more upstream commit.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 27 Feb 2023 11:28:53 +0300
 
 qtbase-opensource-src (5.15.8+dfsg-2) unstable; urgency=medium
 
