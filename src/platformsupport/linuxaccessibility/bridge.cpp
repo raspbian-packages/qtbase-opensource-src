@@ -65,6 +65,16 @@ QSpiAccessibleBridge::QSpiAccessibleBridge()
 {
     dbusConnection = new DBusConnection();
     connect(dbusConnection, SIGNAL(enabledChanged(bool)), this, SLOT(enabledChanged(bool)));
+    // Now that we have connected the signal, make sure we didn't miss a change,
+    // e.g. when running as root or when AT_SPI_BUS_ADDRESS is set by hand.
+    // But do that only on next loop, once dbus is really settled.
+    QMetaObject::invokeMethod(
+        this,
+        [this] {
+            if (dbusConnection->isEnabled())
+                enabledChanged(true);
+        },
+        Qt::QueuedConnection);
 }
 
 void QSpiAccessibleBridge::enabledChanged(bool enabled)
