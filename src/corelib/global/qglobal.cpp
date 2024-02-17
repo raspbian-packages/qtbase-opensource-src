@@ -1816,6 +1816,37 @@ bool qSharedBuild() noexcept
 */
 
 /*!
+    \macro Q_PROCESSOR_LOONGARCH
+    \relates <QtGlobal>
+
+    Defined if the application is compiled for LoongArch processors.
+
+    \sa QSysInfo::buildCpuArchitecture()
+*/
+
+/*!
+    \macro Q_PROCESSOR_LOONGARCH_32
+    \relates <QtGlobal>
+
+    Defined if the application is compiled for 32-bit LoongArch processors.
+    The \l Q_PROCESSOR_LOONGARCH macro is also defined when
+    Q_PROCESSOR_LOONGARCH_32 is defined.
+
+    \sa QSysInfo::buildCpuArchitecture()
+*/
+
+/*!
+    \macro Q_PROCESSOR_LOONGARCH_64
+    \relates <QtGlobal>
+
+    Defined if the application is compiled for 64-bit LoongArch processors.
+    The \l Q_PROCESSOR_LOONGARCH macro is also defined when
+    Q_PROCESSOR_LOONGARCH_64 is defined.
+
+    \sa QSysInfo::buildCpuArchitecture()
+*/
+
+/*!
     \macro Q_PROCESSOR_MIPS
     \relates <QtGlobal>
 
