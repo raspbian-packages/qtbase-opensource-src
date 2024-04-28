@@ -456,6 +456,55 @@ int qstrnicmp(const char *str1, const char *str2, uint len)
 
 /*!
     \internal
+    \since 5.12
+
+    A helper for QByteArray::compare. Compares \a len1 bytes from \a str1 to \a
+    len2 bytes from \a str2. If \a len2 is -1, then \a str2 is expected to be
+    '\\0'-terminated.
+ */
+int qstrnicmp(const char *str1, qsizetype len1, const char *str2, qsizetype len2)
+{
+    Q_ASSERT(str1);
+    Q_ASSERT(len1 >= 0);
+    Q_ASSERT(len2 >= -1);
+    const uchar *s1 = reinterpret_cast<const uchar *>(str1);
+    const uchar *s2 = reinterpret_cast<const uchar *>(str2);
+    if (!s2)
+        return len1 == 0 ? 0 : 1;
+
+    int res;
+    uchar c;
+    if (len2 == -1) {
+        // null-terminated str2
+        qsizetype i;
+        for (i = 0; i < len1; ++i) {
+            c = latin1_lowercased[s2[i]];
+            if (!c)
+                return 1;
+
+            res = latin1_lowercased[s1[i]] - c;
+            if (res)
+                return res;
+        }
+        c = latin1_lowercased[s2[i]];
+        return c ? -1 : 0;
+    } else {
+        // not null-terminated
+        for (qsizetype i = 0; i < qMin(len1, len2); ++i) {
+            c = latin1_lowercased[s2[i]];
+            res = latin1_lowercased[s1[i]] - c;
+            if (res)
+                return res;
+        }
+        if (len1 == len2)
+            return 0;
+        return len1 < len2 ? -1 : 1;
+    }
+}
+
+
+/*!
+    \internal
  */
 int qstrcmp(const QByteArray &str1, const char *str2)
 {
