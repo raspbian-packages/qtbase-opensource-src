@@ -1,0 +1,99 @@
+Index: qtbase-opensource-src-5.11.3+dfsg1/src/corelib/tools/qbytearray.h
+===================================================================
+--- qtbase-opensource-src-5.11.3+dfsg1.orig/src/corelib/tools/qbytearray.h	2024-04-28 11:20:58.547376204 +0200
++++ qtbase-opensource-src-5.11.3+dfsg1/src/corelib/tools/qbytearray.h	2024-04-28 11:21:46.475388773 +0200
+@@ -99,6 +99,7 @@
+ }
+ Q_CORE_EXPORT int qstricmp(const char *, const char *);
+ Q_CORE_EXPORT int qstrnicmp(const char *, const char *, uint len);
++Q_CORE_EXPORT int qstrnicmp(const char *, qsizetype, const char *, qsizetype = -1);
+ 
+ // implemented in qvsnprintf.cpp
+ Q_CORE_EXPORT int qvsnprintf(char *str, size_t n, const char *fmt, va_list ap);
+@@ -231,6 +232,9 @@
+     int count(const char *a) const;
+     int count(const QByteArray &a) const;
+ 
++    inline int compare(const char *c, Qt::CaseSensitivity cs = Qt::CaseSensitive) const noexcept;
++    inline int compare(const QByteArray &a, Qt::CaseSensitivity cs = Qt::CaseSensitive) const noexcept;
++
+     Q_REQUIRED_RESULT QByteArray left(int len) const;
+     Q_REQUIRED_RESULT QByteArray right(int len) const;
+     Q_REQUIRED_RESULT QByteArray mid(int index, int len = -1) const;
+@@ -600,6 +604,16 @@
+ { return indexOf(a) != -1; }
+ inline bool QByteArray::contains(char c) const
+ { return indexOf(c) != -1; }
++inline int QByteArray::compare(const char *c, Qt::CaseSensitivity cs) const noexcept
++{
++    return cs == Qt::CaseSensitive ? qstrcmp(*this, c) :
++                                     qstrnicmp(data(), size(), c, -1);
++}
++inline int QByteArray::compare(const QByteArray &a, Qt::CaseSensitivity cs) const noexcept
++{
++    return cs == Qt::CaseSensitive ? qstrcmp(*this, a) :
++                                     qstrnicmp(data(), size(), a.data(), a.size());
++}
+ inline bool operator==(const QByteArray &a1, const QByteArray &a2) Q_DECL_NOTHROW
+ { return (a1.size() == a2.size()) && (memcmp(a1.constData(), a2.constData(), a1.size())==0); }
+ inline bool operator==(const QByteArray &a1, const char *a2) Q_DECL_NOTHROW
+Index: qtbase-opensource-src-5.11.3+dfsg1/src/corelib/tools/qbytearray.cpp
+===================================================================
+--- qtbase-opensource-src-5.11.3+dfsg1.orig/src/corelib/tools/qbytearray.cpp	2024-04-28 11:20:58.547376204 +0200
++++ qtbase-opensource-src-5.11.3+dfsg1/src/corelib/tools/qbytearray.cpp	2024-04-28 11:20:58.547376204 +0200
+@@ -456,6 +456,55 @@
+ 
+ /*!
+     \internal
++    \since 5.12
++
++    A helper for QByteArray::compare. Compares \a len1 bytes from \a str1 to \a
++    len2 bytes from \a str2. If \a len2 is -1, then \a str2 is expected to be
++    '\\0'-terminated.
++ */
++int qstrnicmp(const char *str1, qsizetype len1, const char *str2, qsizetype len2)
++{
++    Q_ASSERT(str1);
++    Q_ASSERT(len1 >= 0);
++    Q_ASSERT(len2 >= -1);
++    const uchar *s1 = reinterpret_cast<const uchar *>(str1);
++    const uchar *s2 = reinterpret_cast<const uchar *>(str2);
++    if (!s2)
++        return len1 == 0 ? 0 : 1;
++
++    int res;
++    uchar c;
++    if (len2 == -1) {
++        // null-terminated str2
++        qsizetype i;
++        for (i = 0; i < len1; ++i) {
++            c = latin1_lowercased[s2[i]];
++            if (!c)
++                return 1;
++
++            res = latin1_lowercased[s1[i]] - c;
++            if (res)
++                return res;
++        }
++        c = latin1_lowercased[s2[i]];
++        return c ? -1 : 0;
++    } else {
++        // not null-terminated
++        for (qsizetype i = 0; i < qMin(len1, len2); ++i) {
++            c = latin1_lowercased[s2[i]];
++            res = latin1_lowercased[s1[i]] - c;
++            if (res)
++                return res;
++        }
++        if (len1 == len2)
++            return 0;
++        return len1 < len2 ? -1 : 1;
++    }
++}
++
++
++/*!
++    \internal
+  */
+ int qstrcmp(const QByteArray &str1, const char *str2)
+ {
