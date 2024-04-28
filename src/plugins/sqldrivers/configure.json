@@ -52,7 +52,7 @@
             "headers": "ibase.h",
             "sources": [
                 { "libs": "-lgds32_ms", "condition": "config.win32" },
-                { "libs": "-lgds", "condition": "!config.win32" }
+                { "libs": "-lfbclient", "condition": "!config.win32" }
             ]
         },
         "mysql": {
