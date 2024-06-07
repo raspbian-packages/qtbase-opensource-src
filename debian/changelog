@@ -6,6 +6,9 @@ qtbase-opensource-src (5.15.13+dfsg-2+rpi1) trixie-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
+  [changes introduced in 5.15.13+dfsg-2+rpi1 by Peter Michael Green]
+  * Add build-conflicts on libts-dev to avoid unwanted extra files.
+
  -- Peter Michael Green <plugwash@raspbian.org>  Fri, 07 Jun 2024 00:44:36 +0000
 
 qtbase-opensource-src (5.15.13+dfsg-2) unstable; urgency=medium

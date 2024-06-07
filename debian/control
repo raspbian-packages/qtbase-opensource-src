@@ -73,6 +73,8 @@ Build-Depends: debhelper-compat (= 13),
                qt5-qmake-bin <cross>,
                unixodbc-dev,
                zlib1g-dev
+Build-Conflicts:
+               libts-dev
 Build-Depends-Indep: qdoc-qt5 (>= 5.15~) <!nodoc>,
                      qhelpgenerator-qt5 (>= 5.15~) <!nodoc>,
                      qtattributionsscanner-qt5 <!nodoc>
