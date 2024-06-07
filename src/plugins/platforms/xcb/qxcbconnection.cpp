@@ -71,6 +71,10 @@
 #undef explicit
 #include <xcb/xinput.h>
 
+#if QT_CONFIG(xcb_xlib)
+#include "qt_xlib_wrapper.h"
+#endif
+
 QT_BEGIN_NAMESPACE
 
 Q_LOGGING_CATEGORY(lcQpaXInput, "qt.qpa.input")
@@ -488,12 +492,12 @@ void QXcbConnection::printXcbError(const char *message, xcb_generic_error_t *err
     uint clamped_error_code = qMin<uint>(error->error_code, (sizeof(xcb_errors) / sizeof(xcb_errors[0])) - 1);
     uint clamped_major_code = qMin<uint>(error->major_code, (sizeof(xcb_protocol_request_codes) / sizeof(xcb_protocol_request_codes[0])) - 1);
 
-    qCWarning(lcQpaXcb, "%s: %d (%s), sequence: %d, resource id: %d, major code: %d (%s), minor code: %d",
-             message,
-             int(error->error_code), xcb_errors[clamped_error_code],
-             int(error->sequence), int(error->resource_id),
-             int(error->major_code), xcb_protocol_request_codes[clamped_major_code],
-             int(error->minor_code));
+    qCDebug(lcQpaXcb, "%s: %d (%s), sequence: %d, resource id: %d, major code: %d (%s), minor code: %d",
+            message,
+            int(error->error_code), xcb_errors[clamped_error_code],
+            int(error->sequence), int(error->resource_id),
+            int(error->major_code), xcb_protocol_request_codes[clamped_major_code],
+            int(error->minor_code));
 }
 
 static Qt::MouseButtons translateMouseButtons(int s)
@@ -798,8 +802,8 @@ xcb_timestamp_t QXcbConnection::getTimestamp()
 {
     // send a dummy event to myself to get the timestamp from X server.
     xcb_window_t window = rootWindow();
-    xcb_atom_t dummyAtom = atom(QXcbAtom::CLIP_TEMPORARY);
-    xcb_change_property(xcb_connection(), XCB_PROP_MODE_APPEND, window, dummyAtom,
+    xcb_atom_t dummyAtom = atom(QXcbAtom::_QT_GET_TIMESTAMP);
+    xcb_change_property(xcb_connection(), XCB_PROP_MODE_REPLACE, window, dummyAtom,
                         XCB_ATOM_INTEGER, 32, 0, nullptr);
 
     connection()->flush();
@@ -830,8 +834,6 @@ xcb_timestamp_t QXcbConnection::getTimestamp()
     xcb_property_notify_event_t *pn = reinterpret_cast<xcb_property_notify_event_t *>(event);
     xcb_timestamp_t timestamp = pn->time;
     free(event);
-
-    xcb_delete_property(xcb_connection(), window, dummyAtom);
 
     return timestamp;
 }
@@ -1067,6 +1069,10 @@ void QXcbConnection::processXcbEvents(QEventLoop::ProcessEventsFlags flags)
         // this flush here after QTBUG-70095
         m_eventQueue->flushBufferedEvents();
     }
+
+#if QT_CONFIG(xcb_xlib)
+    qt_XFlush(static_cast<Display *>(xlib_display()));
+#endif
 
     xcb_flush(xcb_connection());
 }

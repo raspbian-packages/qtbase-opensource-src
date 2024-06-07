@@ -1816,6 +1816,37 @@ bool qSharedBuild() noexcept
 */
 
 /*!
+    \macro Q_PROCESSOR_LOONGARCH
+    \relates <QtGlobal>
+
+    Defined if the application is compiled for LoongArch processors.
+
+    \sa QSysInfo::buildCpuArchitecture()
+*/
+
+/*!
+    \macro Q_PROCESSOR_LOONGARCH_32
+    \relates <QtGlobal>
+
+    Defined if the application is compiled for 32-bit LoongArch processors.
+    The \l Q_PROCESSOR_LOONGARCH macro is also defined when
+    Q_PROCESSOR_LOONGARCH_32 is defined.
+
+    \sa QSysInfo::buildCpuArchitecture()
+*/
+
+/*!
+    \macro Q_PROCESSOR_LOONGARCH_64
+    \relates <QtGlobal>
+
+    Defined if the application is compiled for 64-bit LoongArch processors.
+    The \l Q_PROCESSOR_LOONGARCH macro is also defined when
+    Q_PROCESSOR_LOONGARCH_64 is defined.
+
+    \sa QSysInfo::buildCpuArchitecture()
+*/
+
+/*!
     \macro Q_PROCESSOR_MIPS
     \relates <QtGlobal>
 
@@ -3077,7 +3108,8 @@ QByteArray QSysInfo::machineUniqueId()
 {
 #if defined(Q_OS_DARWIN) && __has_include(<IOKit/IOKitLib.h>)
     char uuid[UuidStringLen + 1];
-    io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
+    static const mach_port_t defaultPort = 0; // Effectively kIOMasterPortDefault/kIOMainPortDefault
+    io_service_t service = IOServiceGetMatchingService(defaultPort, IOServiceMatching("IOPlatformExpertDevice"));
     QCFString stringRef = (CFStringRef)IORegistryEntryCreateCFProperty(service, CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault, 0);
     CFStringGetCString(stringRef, uuid, sizeof(uuid), kCFStringEncodingMacRoman);
     return QByteArray(uuid);
@@ -3722,6 +3754,15 @@ bool qEnvironmentVariableIsSet(const char *varName) noexcept
 */
 bool qputenv(const char *varName, const QByteArray& value)
 {
+    // protect against non-NUL-terminated QByteArrays:
+    #define IS_RAW_DATA(d) ((d)->offset != sizeof(QByteArrayData)) // copied from qbytearray.cpp
+    if (IS_RAW_DATA(const_cast<QByteArray&>(value).data_ptr())) {
+        QByteArray copy(value);
+        copy.detach(); // ensures NUL termination
+        return qputenv(varName, copy);
+    }
+    #undef IS_RAW_DATA
+
     const auto locker = qt_scoped_lock(environmentMutex);
 #if defined(Q_CC_MSVC)
     return _putenv_s(varName, value.constData()) == 0;
