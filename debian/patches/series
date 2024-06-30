@@ -18,6 +18,14 @@ qshapedpixmapwindow_no_tooltip.diff
 CVE-2023-32763.diff
 CVE-2023-32762.diff
 CVE-2023-33285.diff
+sql_odbc_more_unicode_checks.diff
+sql_odbc_fix_unicode_check.diff
+CVE-2023-34410.diff
+CVE-2023-37369.diff
+CVE-2023-38197.diff
+
+CVE-2023-51714.diff
+CVE-2024-25580.diff
 
 # Debian specific.
 gnukfreebsd.diff

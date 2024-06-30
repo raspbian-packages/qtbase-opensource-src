@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.8+dfsg-11+rpi1) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.8+dfsg-11+rpi1+deb12u2) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,33 @@ qtbase-opensource-src (5.15.8+dfsg-11+rpi1) bookworm-staging; urgency=medium
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 01 Jun 2023 18:14:07 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 30 Jun 2024 21:30:20 +0000
+
+qtbase-opensource-src (5.15.8+dfsg-11+deb12u2) bookworm; urgency=medium
+
+  * Non-maintainer upload by the LTS Team.
+  * CVE-2024-25580 (Closes: #1064053)
+    fix buffer overflow due to crafted KTX image file
+  * CVE-2023-51714 (Closes: #1060694)
+    fix incorrect HPack integer overflow check.
+
+ -- Thorsten Alteholz <debian@alteholz.de>  Sun, 28 Apr 2024 20:48:02 +0200
+
+qtbase-opensource-src (5.15.8+dfsg-11+deb12u1) bookworm; urgency=medium
+
+  [ Alexander Volkov ]
+  * Backport upstream patches to fix regression caused by CVE-2023-24607.diff
+    (closes: #1055280).
+
+  [ Dmitry Shachnev ]
+  * Backport fixes for three CVEs from Debian unstable:
+    - CVE-2023-34410: use of system CA certificates when not wanted
+      (closes: #1037210).
+    - CVE-2023-37369: potential buffer overflow in QXmlStreamReader.
+    - CVE-2023-38197: infinite loop in XML recursive entity expansion
+      (closes: #1041105).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sun, 07 Apr 2024 12:45:51 +0300
 
 qtbase-opensource-src (5.15.8+dfsg-11) unstable; urgency=medium
 

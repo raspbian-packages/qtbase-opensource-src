@@ -125,7 +125,6 @@ inline static QVarLengthArray<SQLTCHAR> toSQLTCHAR(const QString &input)
 {
     QVarLengthArray<SQLTCHAR> result;
     toSQLTCHARImpl(result, input);
-    result.append(0); // make sure it's null terminated, doesn't matter if it already is, it does if it isn't.
     return result;
 }
 
@@ -2111,7 +2110,19 @@ void QODBCDriverPrivate::checkUnicode()
                                   hDbc,
                                   &hStmt);
 
-    r = SQLExecDirect(hStmt, toSQLTCHAR(QLatin1String("select 'test'")).data(), SQL_NTS);
+    // for databases which do not return something useful in SQLGetInfo and are picky about a
+    // 'SELECT' statement without 'FROM' but support VALUE(foo) statement like e.g. DB2 or Oracle
+    const auto statements = {
+        QLatin1String("select 'test'"),
+        QLatin1String("values('test')"),
+        QLatin1String("select 'test' from dual"),
+    };
+    for (const auto &statement : statements) {
+        auto encoded = toSQLTCHAR(statement);
+        r = SQLExecDirect(hStmt, encoded.data(), SQLINTEGER(encoded.size()));
+        if (r == SQL_SUCCESS)
+            break;
+    }
     if(r == SQL_SUCCESS) {
         r = SQLFetch(hStmt);
         if(r == SQL_SUCCESS) {
