@@ -296,4 +296,4 @@ override_dh_strip_nondeterminism:
 	dh_strip_nondeterminism --verbose -X.png
 
 execute_after_dh_shlibdeps-arch:
-	echo libssl:Depends=$(sslpkgname) >> debian/libqt5network5.substvars
+	echo libssl:Depends=$(sslpkgname) >> debian/libqt5network5t64.substvars
