@@ -21,6 +21,10 @@ loongarch.diff
 CVE-2023-51714.diff
 CVE-2024-25580.diff
 CVE-2024-39936.diff
+gcc_14.diff
+revert_statusnotifierhost_checking.diff
+dont_fallback_to_x11_tray_on_non_x11.diff
+check_dbus_tray_availability_every_time.diff
 
 # Debian specific.
 no_htmlinfo_example.diff

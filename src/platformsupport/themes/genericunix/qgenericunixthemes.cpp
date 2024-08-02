@@ -101,17 +101,14 @@ static const char defaultFixedFontNameC[] = "monospace";
 enum { defaultSystemFontSize = 9 };
 
 #if !defined(QT_NO_DBUS) && !defined(QT_NO_SYSTEMTRAYICON)
-static bool isDBusTrayAvailable() {
-    static bool dbusTrayAvailable = false;
-    static bool dbusTrayAvailableKnown = false;
-    if (!dbusTrayAvailableKnown) {
-        QDBusMenuConnection conn;
-        if (conn.isStatusNotifierHostRegistered())
-            dbusTrayAvailable = true;
-        dbusTrayAvailableKnown = true;
-        qCDebug(qLcTray) << "D-Bus tray available:" << dbusTrayAvailable;
-    }
-    return dbusTrayAvailable;
+static bool shouldUseDBusTray() {
+    // There's no other tray implementation to fallback to on non-X11
+    // and QDBusTrayIcon can register the icon on the fly after creation
+    if (QGuiApplication::platformName() != QLatin1String("xcb"))
+        return true;
+    const bool result = QDBusMenuConnection().isWatcherRegistered();
+    qCDebug(qLcTray) << "D-Bus tray available:" << result;
+    return result;
 }
 #endif
 
@@ -204,7 +201,7 @@ QPlatformMenuBar *QGenericUnixTheme::createPlatformMenuBar() const
 #if !defined(QT_NO_DBUS) && !defined(QT_NO_SYSTEMTRAYICON)
 QPlatformSystemTrayIcon *QGenericUnixTheme::createPlatformSystemTrayIcon() const
 {
-    if (isDBusTrayAvailable())
+    if (shouldUseDBusTray())
         return new QDBusTrayIcon();
     return nullptr;
 }
@@ -683,7 +680,7 @@ QPlatformMenuBar *QKdeTheme::createPlatformMenuBar() const
 #if !defined(QT_NO_DBUS) && !defined(QT_NO_SYSTEMTRAYICON)
 QPlatformSystemTrayIcon *QKdeTheme::createPlatformSystemTrayIcon() const
 {
-    if (isDBusTrayAvailable())
+    if (shouldUseDBusTray())
         return new QDBusTrayIcon();
     return nullptr;
 }
@@ -803,7 +800,7 @@ QPlatformMenuBar *QGnomeTheme::createPlatformMenuBar() const
 #if !defined(QT_NO_DBUS) && !defined(QT_NO_SYSTEMTRAYICON)
 QPlatformSystemTrayIcon *QGnomeTheme::createPlatformSystemTrayIcon() const
 {
-    if (isDBusTrayAvailable())
+    if (shouldUseDBusTray())
         return new QDBusTrayIcon();
     return nullptr;
 }

@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.13+dfsg-3+rpi1) trixie-staging; urgency=medium
+qtbase-opensource-src (5.15.13+dfsg-4+rpi1) trixie-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -9,7 +9,17 @@ qtbase-opensource-src (5.15.13+dfsg-3+rpi1) trixie-staging; urgency=medium
   [changes introduced in 5.15.13+dfsg-2+rpi1 by Peter Michael Green]
   * Add build-conflicts on libts-dev to avoid unwanted extra files.
 
- -- Raspbian forward porter <root@raspbian.org>  Wed, 24 Jul 2024 10:37:46 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Fri, 02 Aug 2024 07:12:21 +0000
+
+qtbase-opensource-src (5.15.13+dfsg-4) unstable; urgency=medium
+
+  * Backport upstream patch to fix qfutureinterface.h for GCC 14
+    (closes: #1075430).
+  * Backport three upstream patches to improve D-Bus tray integration,
+    in particular on non-X11 desktops (LP: #2059819).
+  * Update symbols files for GCC 14.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 25 Jul 2024 15:43:37 +0300
 
 qtbase-opensource-src (5.15.13+dfsg-3) unstable; urgency=medium
 
