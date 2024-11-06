@@ -9,15 +9,16 @@ Description: SQL/ODBC: add another check to detect unicode availability in drive
  is still open but can't be checked since I've no access to an oracle
  database.
 Origin: upstream, https://code.qt.io/cgit/qt/qtbase.git/commit/?id=f19320748d282b1e
-Last-Update: 2023-06-30
+Last-Update: 2024-05-25
 
 --- a/src/plugins/sqldrivers/odbc/qsql_odbc.cpp
 +++ b/src/plugins/sqldrivers/odbc/qsql_odbc.cpp
-@@ -2111,7 +2111,18 @@ void QODBCDriverPrivate::checkUnicode()
+@@ -2110,9 +2110,18 @@ void QODBCDriverPrivate::checkUnicode()
                                    hDbc,
                                    &hStmt);
  
--    r = SQLExecDirect(hStmt, toSQLTCHAR(QLatin1String("select 'test'")).data(), SQL_NTS);
+-    {
+-        auto encoded = toSQLTCHAR(QLatin1String("select 'test'"));
 +    // for databases which do not return something useful in SQLGetInfo and are picky about a
 +    // 'SELECT' statement without 'FROM' but support VALUE(foo) statement like e.g. DB2 or Oracle
 +    const auto statements = {
@@ -26,10 +27,10 @@ Last-Update: 2023-06-30
 +        QLatin1String("select 'test' from dual"),
 +    };
 +    for (const auto &statement : statements) {
-+        r = SQLExecDirect(hStmt, toSQLTCHAR(statement).data(), SQL_NTS);
++        auto encoded = toSQLTCHAR(statement);
+         r = SQLExecDirect(hStmt, encoded.data(), SQLINTEGER(encoded.size()));
 +        if (r == SQL_SUCCESS)
 +            break;
-+    }
+     }
      if(r == SQL_SUCCESS) {
          r = SQLFetch(hStmt);
-         if(r == SQL_SUCCESS) {

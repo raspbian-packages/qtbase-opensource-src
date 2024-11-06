@@ -1,6 +1,6 @@
-# SymbolsHelper-Confirmed: 5.15.13 amd64 i386
+# SymbolsHelper-Confirmed: 5.15.13 alpha amd64 i386 loong64 powerpc ppc64 sh4 sparc64
 libQt5Gui.so.5 libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#
-| libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#, qtbase-abi-5-15-13
+| libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#, qtbase-abi-5-15-15
 | libqt5gui5t64 #MINVER#
 * Build-Depends-Package: qtbase5-dev
  Qt_5.0@Qt_5.0 5.6.0~beta
@@ -1562,7 +1562,7 @@ libQt5Gui.so.5 libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#
  _ZN16QDoubleValidatorD0Ev@Qt_5 5.0.2
  _ZN16QDoubleValidatorD1Ev@Qt_5 5.0.2
  _ZN16QDoubleValidatorD2Ev@Qt_5 5.0.2
- (optional=inline|arch=!hppa !ia64 !s390x)_ZN16QOpenGLFunctions17glBindFramebufferEjj@Qt_5 5.15.2
+ (optional=inline|arch=!hppa !ia64 !ppc64 !s390x !sparc64)_ZN16QOpenGLFunctions17glBindFramebufferEjj@Qt_5 5.15.2
  _ZN16QOpenGLFunctions25initializeOpenGLFunctionsEv@Qt_5 5.0.2
  _ZN16QOpenGLFunctionsC1EP14QOpenGLContext@Qt_5 5.0.2
  _ZN16QOpenGLFunctionsC1Ev@Qt_5 5.0.2
@@ -5042,8 +5042,10 @@ libQt5Gui.so.5 libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#
  _ZNK9QVector4D16toVector3DAffineEv@Qt_5 5.0.2
  _ZNK9QVector4D6lengthEv@Qt_5 5.0.2
  _ZNK9QVector4Dcv8QVariantEv@Qt_5 5.0.2
+ (optional=templinst|arch=alpha loong64 powerpc sh4|subst)_ZNSt6vectorIiSaIiEE14_M_fill_assignE{size_t}RKi@Qt_5 5.15.13
  (optional=templinst|subst)_ZNSt6vectorIiSaIiEE14_M_fill_insertEN9__gnu_cxx17__normal_iteratorIPiS1_EE{size_t}RKi@Qt_5 5.15.3
- (optional=templinst)_ZNSt6vectorIiSaIiEE17_M_realloc_appendIJRKiEEEvDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=!alpha !loong64 !powerpc !sh4)_ZNSt6vectorIiSaIiEE17_M_realloc_appendIJRKiEEEvDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=alpha loong64 powerpc sh4)_ZNSt6vectorIiSaIiEE17_M_realloc_insertIJRKiEEEvN9__gnu_cxx17__normal_iteratorIPiS1_EEDpOT_@Qt_5 5.15.13
  _ZTI10QClipboard@Qt_5 5.0.2
  _ZTI10QDropEvent@Qt_5 5.0.2
  _ZTI10QHelpEvent@Qt_5 5.0.2

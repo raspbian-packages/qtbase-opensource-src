@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.13+dfsg-4+rpi1) trixie-staging; urgency=medium
+qtbase-opensource-src (5.15.15+dfsg-2+rpi1) trixie-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -9,7 +9,43 @@ qtbase-opensource-src (5.15.13+dfsg-4+rpi1) trixie-staging; urgency=medium
   [changes introduced in 5.15.13+dfsg-2+rpi1 by Peter Michael Green]
   * Add build-conflicts on libts-dev to avoid unwanted extra files.
 
- -- Raspbian forward porter <root@raspbian.org>  Fri, 02 Aug 2024 07:12:21 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 06 Nov 2024 01:03:02 +0000
+
+qtbase-opensource-src (5.15.15+dfsg-2) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 25 Oct 2024 12:40:08 +0300
+
+qtbase-opensource-src (5.15.15+dfsg-1) experimental; urgency=medium
+
+  * Merge 5.15.13+dfsg-4 upload from unstable.
+  * New upstream release.
+  * Drop patches, included in the new release:
+    - CVE-2023-32763.diff
+    - CVE-2023-34410.diff
+    - CVE-2023-37369.diff
+    - CVE-2023-38197.diff
+  * Bump API version to qtbase-abi-5-15-15.
+  * Update debian/copyright.
+  * Update symbols files from buildds’ logs.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 30 Aug 2024 22:07:11 +0300
+
+qtbase-opensource-src (5.15.14+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop patches, included in the new release:
+    - CVE-2023-32762.diff
+    - CVE-2023-33285.diff
+    - sql_odbc_fix_unicode_check.diff
+  * Rebase sql_odbc_more_unicode_checks.diff.
+  * Populate ${libssl:Depends} properly for libqt5network5t64.
+  * Update debian/copyright.
+  * Bump ABI version to qtbase-abi-5-15-14.
+  * Bump Standards-Version to 4.7.0, no changes needed.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sun, 26 May 2024 17:32:51 +0300
 
 qtbase-opensource-src (5.15.13+dfsg-4) unstable; urgency=medium
 

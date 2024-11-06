@@ -106,6 +106,8 @@
 #    if __UCLIBC_HAS_BACKTRACE__
 #      define QLOGGING_HAVE_BACKTRACE
 #    endif
+#  elif defined(Q_OS_ANDROID) && __ANDROID_API__ < 33
+    // Android lacked backtrace logging until API level 33.
 #  elif (defined(__GLIBC__) && defined(__GLIBCXX__)) || (__has_include(<cxxabi.h>) && __has_include(<execinfo.h>))
 #    define QLOGGING_HAVE_BACKTRACE
 #  endif
@@ -189,6 +191,17 @@ static int checked_var_value(const char *varname)
     return ok ? value : 1;
 }
 
+static bool is_fatal_count_down(QAtomicInt &n)
+{
+    // it's fatal if the current value is exactly 1,
+    // otherwise decrement if it's non-zero
+
+    int v = n.loadRelaxed();
+    while (v != 0 && !n.testAndSetRelaxed(v, v - 1, v))
+        ;
+    return v == 1; // we exited the loop, so either v == 0 or CAS succeeded to set n from v to v-1
+}
+
 static bool isFatal(QtMsgType msgType)
 {
     if (msgType == QtFatalMsg)
@@ -196,18 +209,12 @@ static bool isFatal(QtMsgType msgType)
 
     if (msgType == QtCriticalMsg) {
         static QAtomicInt fatalCriticals = checked_var_value("QT_FATAL_CRITICALS");
-
-        // it's fatal if the current value is exactly 1,
-        // otherwise decrement if it's non-zero
-        return fatalCriticals.loadRelaxed() && fatalCriticals.fetchAndAddRelaxed(-1) == 1;
+        return is_fatal_count_down(fatalCriticals);
     }
 
     if (msgType == QtWarningMsg || msgType == QtCriticalMsg) {
         static QAtomicInt fatalWarnings = checked_var_value("QT_FATAL_WARNINGS");
-
-        // it's fatal if the current value is exactly 1,
-        // otherwise decrement if it's non-zero
-        return fatalWarnings.loadRelaxed() && fatalWarnings.fetchAndAddRelaxed(-1) == 1;
+        return is_fatal_count_down(fatalWarnings);
     }
 
     return false;
@@ -934,6 +941,12 @@ Q_AUTOTEST_EXPORT QByteArray qCleanupFuncinfo(QByteArray info)
         if (pos == -1) {
             // Don't know how to parse this function name
             return info;
+        }
+        if (info.indexOf('>', pos) != -1
+                || info.indexOf(':', pos) != -1) {
+            // that wasn't the function argument list.
+            pos = info.size();
+            break;
         }
 
         // find the beginning of the argument list
