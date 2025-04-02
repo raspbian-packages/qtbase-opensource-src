@@ -18,6 +18,7 @@ gcc_14.diff
 revert_statusnotifierhost_checking.diff
 dont_fallback_to_x11_tray_on_non_x11.diff
 check_dbus_tray_availability_every_time.diff
+a11y_null_checks.diff
 
 # Debian specific.
 no_htmlinfo_example.diff
@@ -30,4 +31,5 @@ path_max.diff
 qstorageinfo_linux.diff
 cross_build_mysql.diff
 cast_types_for_egl_x11_test.diff
+containsTLDEntry.diff
 modify-configure.json-to-disable-neon.patch

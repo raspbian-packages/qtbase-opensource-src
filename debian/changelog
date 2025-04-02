@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.15+dfsg-2+rpi1) trixie-staging; urgency=medium
+qtbase-opensource-src (5.15.15+dfsg-5+rpi1) trixie-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -9,7 +9,37 @@ qtbase-opensource-src (5.15.15+dfsg-2+rpi1) trixie-staging; urgency=medium
   [changes introduced in 5.15.13+dfsg-2+rpi1 by Peter Michael Green]
   * Add build-conflicts on libts-dev to avoid unwanted extra files.
 
- -- Raspbian forward porter <root@raspbian.org>  Wed, 06 Nov 2024 01:03:02 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 02 Apr 2025 10:46:32 +0000
+
+qtbase-opensource-src (5.15.15+dfsg-5) unstable; urgency=medium
+
+  * Backport upstream patch to add null checks in table iface methods in
+    linuxaccessibility/atspiadaptor.cpp (closes: #1081682).
+  * Update symbols files from buildds’ logs.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 24 Mar 2025 15:42:48 +0300
+
+qtbase-opensource-src (5.15.15+dfsg-4) unstable; urgency=medium
+
+  * Fix containsTLDEntry() crash when tldChunkCount >= 3 (closes: #1095423).
+    - Thanks to Timo Röhling for help with debugging this!
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 08 Feb 2025 19:24:33 +0300
+
+qtbase-opensource-src (5.15.15+dfsg-3) unstable; urgency=medium
+
+  * Team upload.
+  * Enable the Vulkan support on all the architectures (i.e. not only on
+    Linux), as vulkan-loader is portable, and now available also on non-Linux
+    architectures in Debian:
+    - remove the linux-any limitation for the libvulkan-dev build and runtime
+      dependency
+    - remove the linux-any limitation for the vulkan-related symbols in
+      libqt5gui5t64.symbols
+    - remove the linux-any limitation for the vulkan-related files in install
+      files
+
+ -- Pino Toscano <pino@debian.org>  Fri, 07 Feb 2025 07:20:36 +0100
 
 qtbase-opensource-src (5.15.15+dfsg-2) unstable; urgency=medium
 

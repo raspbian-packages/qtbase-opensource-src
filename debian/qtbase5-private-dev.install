@@ -18,21 +18,12 @@
 [linux-any] usr/include/${DEB_HOST_MULTIARCH}/qt5/QtKmsSupport/QtKmsSupportDepends
 [linux-any] usr/include/${DEB_HOST_MULTIARCH}/qt5/QtKmsSupport/QtKmsSupportVersion
 [linux-any] usr/include/${DEB_HOST_MULTIARCH}/qt5/QtKmsSupport/qtkmssupportversion.h
-[linux-any] usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/5.*/*
-[linux-any] usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/QtVulkanSupport
-[linux-any] usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/QtVulkanSupportDepends
-[linux-any] usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/QtVulkanSupportVersion
-[linux-any] usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/qtvulkansupportversion.h
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5EglFSDeviceIntegration/Qt5EglFSDeviceIntegrationConfig.cmake
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5EglFSDeviceIntegration/Qt5EglFSDeviceIntegrationConfigVersion.cmake
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5KmsSupport/Qt5KmsSupportConfig.cmake
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5KmsSupport/Qt5KmsSupportConfigVersion.cmake
-[linux-any] usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5VulkanSupport/Qt5VulkanSupportConfig.cmake
-[linux-any] usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5VulkanSupport/Qt5VulkanSupportConfigVersion.cmake
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/libQt5KmsSupport.a
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/libQt5KmsSupport.prl
-[linux-any] usr/lib/${DEB_HOST_MULTIARCH}/libQt5VulkanSupport.a
-[linux-any] usr/lib/${DEB_HOST_MULTIARCH}/libQt5VulkanSupport.prl
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtAccessibilitySupport/5.*/*
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtAccessibilitySupport/QtAccessibilitySupport
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtAccessibilitySupport/QtAccessibilitySupportDepends
@@ -103,6 +94,11 @@ usr/include/${DEB_HOST_MULTIARCH}/qt5/QtThemeSupport/QtThemeSupport
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtThemeSupport/QtThemeSupportDepends
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtThemeSupport/QtThemeSupportVersion
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtThemeSupport/qtthemesupportversion.h
+usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/5.*/*
+usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/QtVulkanSupport
+usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/QtVulkanSupportDepends
+usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/QtVulkanSupportVersion
+usr/include/${DEB_HOST_MULTIARCH}/qt5/QtVulkanSupport/qtvulkansupportversion.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtWidgets/5.*/*
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtXcb/5.*/*
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtXkbCommonSupport/5.*/*
@@ -135,6 +131,8 @@ usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5ServiceSupport/Qt5ServiceSupportConfig.cm
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5ServiceSupport/Qt5ServiceSupportConfigVersion.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5ThemeSupport/Qt5ThemeSupportConfig.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5ThemeSupport/Qt5ThemeSupportConfigVersion.cmake
+usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5VulkanSupport/Qt5VulkanSupportConfig.cmake
+usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5VulkanSupport/Qt5VulkanSupportConfigVersion.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5XcbQpa/Qt5XcbQpaConfig.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5XcbQpa/Qt5XcbQpaConfigVersion.cmake
 usr/lib/${DEB_HOST_MULTIARCH}/cmake/Qt5XkbCommonSupport/Qt5XkbCommonSupportConfig.cmake
@@ -163,5 +161,7 @@ usr/lib/${DEB_HOST_MULTIARCH}/libQt5ServiceSupport.a
 usr/lib/${DEB_HOST_MULTIARCH}/libQt5ServiceSupport.prl
 usr/lib/${DEB_HOST_MULTIARCH}/libQt5ThemeSupport.a
 usr/lib/${DEB_HOST_MULTIARCH}/libQt5ThemeSupport.prl
+usr/lib/${DEB_HOST_MULTIARCH}/libQt5VulkanSupport.a
+usr/lib/${DEB_HOST_MULTIARCH}/libQt5VulkanSupport.prl
 usr/lib/${DEB_HOST_MULTIARCH}/libQt5XkbCommonSupport.a
 usr/lib/${DEB_HOST_MULTIARCH}/libQt5XkbCommonSupport.prl

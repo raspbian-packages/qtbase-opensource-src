@@ -24,7 +24,6 @@
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_eglfs_kms_support_private.pri
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_eglfsdeviceintegration_private.pri
 [linux-any] usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_kms_support_private.pri
-[linux-any] usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_vulkan_support_private.pri
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtConcurrent/QtConcurrent
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtConcurrent/QtConcurrentDepends
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtConcurrent/QtConcurrentFilter
@@ -1785,6 +1784,7 @@ usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_sql_private.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_testlib.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_testlib_private.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_theme_support_private.pri
+usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_vulkan_support_private.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_widgets.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_widgets_private.pri
 usr/lib/${DEB_HOST_MULTIARCH}/qt5/mkspecs/modules/qt_lib_xcb_qpa_lib_private.pri
