@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.8+dfsg-11+rpi1+deb12u2) bookworm-staging; urgency=medium
+qtbase-opensource-src (5.15.8+dfsg-11+rpi1+deb12u3) bookworm-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -6,7 +6,16 @@ qtbase-opensource-src (5.15.8+dfsg-11+rpi1+deb12u2) bookworm-staging; urgency=me
   [changes introduced in 5.9.1+dfsg-9+rpi1 by Peter Michael Green]
   * Disable neon (-no-neon no longer seems to work, so edit configure.json instead)
 
- -- Raspbian forward porter <root@raspbian.org>  Sun, 30 Jun 2024 21:30:20 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Tue, 20 May 2025 17:40:04 +0000
+
+qtbase-opensource-src (5.15.8+dfsg-11+deb12u3) bookworm; urgency=medium
+
+  * Backport upstream patch to add null checks in table iface methods in
+    linuxaccessibility/atspiadaptor.cpp (closes: #1081682).
+  * Backport upstream patch to delay any communication until encrypted() can
+    be responded to (CVE-2024-39936, closes: #1076293).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 27 Mar 2025 14:24:29 +0300
 
 qtbase-opensource-src (5.15.8+dfsg-11+deb12u2) bookworm; urgency=medium
 
