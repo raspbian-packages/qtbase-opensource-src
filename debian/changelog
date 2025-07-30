@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.15+dfsg-5+rpi1) trixie-staging; urgency=medium
+qtbase-opensource-src (5.15.15+dfsg-6+rpi1) trixie-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -9,7 +9,14 @@ qtbase-opensource-src (5.15.15+dfsg-5+rpi1) trixie-staging; urgency=medium
   [changes introduced in 5.15.13+dfsg-2+rpi1 by Peter Michael Green]
   * Add build-conflicts on libts-dev to avoid unwanted extra files.
 
- -- Raspbian forward porter <root@raspbian.org>  Wed, 02 Apr 2025 10:46:32 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 30 Jul 2025 20:37:06 +0000
+
+qtbase-opensource-src (5.15.15+dfsg-6) unstable; urgency=medium
+
+  * Backport upstream patch to fix assertion errors in data: URL parsing
+    (CVE-2025-5455, closes: #1108475).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sun, 29 Jun 2025 22:50:45 +0300
 
 qtbase-opensource-src (5.15.15+dfsg-5) unstable; urgency=medium
 
