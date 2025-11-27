@@ -228,7 +228,7 @@ bool IoUtils::touchFile(const QString &targetFileName, const QString &referenceF
         *errorString = fL1S("Cannot stat() reference file %1: %2.").arg(referenceFileName, fL1S(strerror(errno)));
         return false;
     }
-#    if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809L
+#    if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200809L && defined(UTIME_NOW)
     const struct timespec times[2] = { { 0, UTIME_NOW }, st.st_mtim };
     const bool utimeError = utimensat(AT_FDCWD, targetFileName.toLocal8Bit().constData(), times, 0) < 0;
 #    else
