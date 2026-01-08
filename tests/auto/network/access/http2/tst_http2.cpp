@@ -111,6 +111,8 @@ private slots:
     void connectToHost();
     void maxFrameSize();
 
+    void abortOnEncrypted();
+
 protected slots:
     // Slots to listen to our in-process server:
     void serverStarted(quint16 port);
@@ -267,6 +269,10 @@ void tst_Http2::singleRequest()
     request.setAttribute(h2Attribute, QVariant(true));
 
     auto reply = manager->get(request);
+#if QT_CONFIG(ssl)
+    QSignalSpy encSpy(reply, &QNetworkReply::encrypted);
+#endif // QT_CONFIG(ssl)
+
     connect(reply, &QNetworkReply::finished, this, &tst_Http2::replyFinished);
     // Since we're using self-signed certificates,
     // ignore SSL errors:
@@ -281,6 +287,11 @@ void tst_Http2::singleRequest()
 
     QCOMPARE(reply->error(), QNetworkReply::NoError);
     QVERIFY(reply->isFinished());
+
+#if QT_CONFIG(ssl)
+    if (connectionType == H2Type::h2Alpn || connectionType == H2Type::h2Direct)
+        QCOMPARE(encSpy.count(), 1);
+#endif // QT_CONFIG(ssl)
 }
 
 void tst_Http2::multipleRequests()
@@ -765,6 +776,48 @@ void tst_Http2::maxFrameSize()
     QVERIFY(nRequests == 0);
     QVERIFY(prefaceOK);
     QVERIFY(serverGotSettingsACK);
+}
+
+void tst_Http2::abortOnEncrypted()
+{
+#if !QT_CONFIG(ssl)
+    QSKIP("TLS support is needed for this test");
+#else
+    clearHTTP2State();
+    serverPort = 0;
+
+    ServerPtr targetServer(newServer(defaultServerSettings, H2Type::h2Direct));
+
+    QMetaObject::invokeMethod(targetServer.data(), "startServer", Qt::QueuedConnection);
+    runEventLoop();
+
+    nRequests = 1;
+    nSentRequests = 0;
+
+    const auto url = requestUrl(H2Type::h2Direct);
+    QNetworkRequest request(url);
+    request.setAttribute(QNetworkRequest::Http2DirectAttribute, true);
+
+    std::unique_ptr<QNetworkReply> reply{manager->get(request)};
+    reply->ignoreSslErrors();
+    connect(reply.get(), &QNetworkReply::encrypted, reply.get(), [reply = reply.get()](){
+        reply->abort();
+    });
+    connect(reply.get(), &QNetworkReply::errorOccurred, this, &tst_Http2::replyFinishedWithError);
+
+    runEventLoop();
+    STOP_ON_FAILURE
+
+    QCOMPARE(nRequests, 0);
+    QCOMPARE(reply->error(), QNetworkReply::OperationCanceledError);
+
+    const bool res = QTest::qWaitFor(
+            [this, server = targetServer.get()]() {
+                return serverGotSettingsACK || prefaceOK || nSentRequests > 0;
+            },
+            500);
+    QVERIFY(!res);
+#endif // QT_CONFIG(ssl)
 }
 
 void tst_Http2::serverStarted(quint16 port)

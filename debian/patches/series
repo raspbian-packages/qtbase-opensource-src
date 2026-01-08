@@ -19,6 +19,9 @@ CVE-2023-38197.diff
 CVE-2023-34410.diff
 CVE-2023-33285.diff
 
+CVE-2024-39936-prereq.diff
+CVE-2024-39936.diff
+
 # Debian specific.
 gnukfreebsd.diff
 no_htmlinfo_example.diff
