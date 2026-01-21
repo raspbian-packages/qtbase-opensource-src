@@ -1,23 +1,7 @@
-# SymbolsHelper-Confirmed: 5.15.15 alpha amd64 i386 loong64 powerpc sh4
+# SymbolsHelper-Confirmed: 5.15.17 amd64 arm64 armel armhf hppa hurd-amd64 hurd-i386 i386 loong64 mips64el powerpc ppc64 ppc64el s390x sh4 sparc64 x32
 libQt5PrintSupport.so.5 libqt5printsupport5t64 #MINVER#
-| libqt5printsupport5t64 #MINVER#, qtbase-abi-5-15-15
+| libqt5printsupport5t64 #MINVER#, qtbase-abi-5-15-17
 * Build-Depends-Package: qtbase5-dev
- Qt_5.0@Qt_5.0 5.6.0~beta
- Qt_5.10@Qt_5.10 5.10.0
- Qt_5.11@Qt_5.11 5.11.0~rc1
- Qt_5.12@Qt_5.12 5.12.0
- Qt_5.13@Qt_5.13 5.14.1
- Qt_5.14@Qt_5.14 5.14.1
- Qt_5.15@Qt_5.15 5.15.1
- Qt_5.1@Qt_5.1 5.6.0~beta
- Qt_5.2@Qt_5.2 5.6.0~beta
- Qt_5.3@Qt_5.3 5.6.0~beta
- Qt_5.4@Qt_5.4 5.6.0~beta
- Qt_5.5@Qt_5.5 5.6.0~beta
- Qt_5.6@Qt_5.6 5.6.0~beta
- Qt_5.7@Qt_5.7 5.7.0
- Qt_5.8@Qt_5.8 5.8.0
- Qt_5.9@Qt_5.9 5.9.0~beta
  Qt_5@Qt_5 5.6.0~beta
  (symver)Qt_5_PRIVATE_API 0 1
  _Z19qt_printerPaperSizeN8QPrinter11OrientationEN17QPagedPaintDevice8PageSizeENS_4UnitEi@Qt_5 5.0.2
@@ -254,7 +238,8 @@ libQt5PrintSupport.so.5 libqt5printsupport5t64 #MINVER#
  _ZNK8QPrinter9paperRectEv@Qt_5 5.0.2
  _ZNK8QPrinter9paperSizeENS_4UnitE@Qt_5 5.0.2
  _ZNK8QPrinter9paperSizeEv@Qt_5 5.0.2
- (optional=templinst)_ZNSt6vectorISt4pairIiiESaIS1_EE17_M_realloc_appendIJS1_EEEvDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=!amd64 !arm64 !hurd-amd64 !hurd-i386 !i386 !loong64 !m68k !powerpc !ppc64 !ppc64el !s390x !sh4 !x32)_ZNSt6vectorISt4pairIiiESaIS1_EE17_M_realloc_appendIJS1_EEEvDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorISt4pairIiiESaIS1_EE17_M_realloc_insertIJS1_EEEvN9__gnu_cxx17__normal_iteratorIPS1_S3_EEDpOT_@Qt_5 5.15.13
  _ZTI12QPrintDialog@Qt_5 5.0.2
  _ZTI12QPrintEngine@Qt_5 5.0.2
  _ZTI16QPageSetupDialog@Qt_5 5.0.2

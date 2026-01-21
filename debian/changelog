@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.15+dfsg-6+rpi1) trixie-staging; urgency=medium
+qtbase-opensource-src (5.15.17+dfsg-6+rpi1) forky-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -9,7 +9,81 @@ qtbase-opensource-src (5.15.15+dfsg-6+rpi1) trixie-staging; urgency=medium
   [changes introduced in 5.15.13+dfsg-2+rpi1 by Peter Michael Green]
   * Add build-conflicts on libts-dev to avoid unwanted extra files.
 
- -- Raspbian forward porter <root@raspbian.org>  Wed, 30 Jul 2025 20:37:06 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 21 Jan 2026 07:20:23 +0000
+
+qtbase-opensource-src (5.15.17+dfsg-6) unstable; urgency=medium
+
+  * Backport upstream patch to stop calling QXcbVirtualDesktop::dpi()
+    function from QXcbScreen::logicalDpi() (closes: #1107294).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Wed, 31 Dec 2025 13:28:57 +0300
+
+qtbase-opensource-src (5.15.17+dfsg-5) unstable; urgency=medium
+
+  * Drop armv4.diff. No longer needed, as armel was removed.
+  * Backport two upstream patches to fix data races in QReadWriteLock
+    (closes: #1122641).
+  * Update symbols files from the logs of buildds.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 15 Dec 2025 00:32:45 +0300
+
+qtbase-opensource-src (5.15.17+dfsg-4) unstable; urgency=medium
+
+  [ Patrick Franz ]
+  * Do not use the firebird-database on m68k and x32.
+
+ -- Pino Toscano <pino@debian.org>  Mon, 29 Sep 2025 13:04:46 +0200
+
+qtbase-opensource-src (5.15.17+dfsg-3) unstable; urgency=medium
+
+  * Update symbols files for GCC 15 and IEEE long double on ppc64el.
+  * Drop obsolete Breaks and Replaces.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Wed, 10 Sep 2025 22:30:59 +0300
+
+qtbase-opensource-src (5.15.17+dfsg-2) unstable; urgency=medium
+
+  * Merge 5.15.15+dfsg-6 upload from unstable.
+  * Update debian/libqt5gui5t64.symbols for sh4.
+  * Bump Standards-Version to 4.7.2, no changes needed.
+  * Upload to unstable.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 01 Sep 2025 22:45:42 +0300
+
+qtbase-opensource-src (5.15.17+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Merge 5.15.15+dfsg-5 upload from unstable.
+  * Drop patches, included in the new release:
+    - CVE-2023-51714.diff
+    - CVE-2024-25580.diff
+    - gcc_14.diff
+  * Refresh CVE-2024-39936.diff.
+  * Bump ABI version to qtbase-abi-5-15-17.
+  * Update debian/copyright.
+  * Remove logic for Perl shebang rewriting, dh_perl now does that.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 24 May 2025 22:32:13 +0300
+
+qtbase-opensource-src (5.15.16+dfsg-2) experimental; urgency=medium
+
+  * Merge changes from 5.15.15+dfsg-3.
+
+ -- Pino Toscano <pino@debian.org>  Fri, 07 Feb 2025 07:46:08 +0100
+
+qtbase-opensource-src (5.15.16+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop libxkbcommon_1.6.0.diff, included in the new release.
+  * Update symbols files from buildds’ and current build logs.
+    - Qt_5.x symbols are now defined only in libqt5core5t64.
+  * Bump ABI version to qtbase-abi-5-15-16.
+  * Exclude non-free util/update_public_suffix_list.sh from the tarball.
+  * Update debian/copyright.
+  * Remove unused package-name-doesnt-match-sonames Lintian overrides.
+    - Lintian >= 2.117.1 does not complain about t64 package names.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 24 Jan 2025 22:26:02 +0300
 
 qtbase-opensource-src (5.15.15+dfsg-6) unstable; urgency=medium
 

@@ -26,6 +26,7 @@ DEFINES += HB_EXTERN=
 DEFINES += HAVE_ATEXIT
 unix: DEFINES += HAVE_PTHREAD HAVE_SCHED_H HAVE_SCHED_YIELD
 win32: DEFINES += HB_NO_WIN1256
+msvc:winrt: QMAKE_CXXFLAGS += /bigobj    # prevent error C1128
 
 #Workaround https://code.google.com/p/android/issues/detail?id=194631
 android: DEFINES += _POSIX_C_SOURCE=200112L
@@ -62,6 +63,7 @@ SOURCES += \
     $$PWD/src/hb-subset-cff1.cc \
     $$PWD/src/hb-subset-cff2.cc \
     $$PWD/src/hb-subset-input.cc \
+    $$PWD/src/hb-subset-instancer-iup.cc \
     $$PWD/src/hb-subset-instancer-solver.cc \
     $$PWD/src/hb-subset-plan.cc \
     $$PWD/src/hb-subset-repacker.cc \
@@ -91,6 +93,8 @@ HEADERS += \
     $$PWD/src/hb-shaper-impl.hh \
     $$PWD/src/hb-shaper-list.hh \
     $$PWD/src/hb-string-array.hh \
+    $$PWD/src/hb-subset-instancer-iup.hh \
+    $$PWD/src/hb-subset-plan-member-list.hh \
     $$PWD/src/hb-subset-repacker.h \
     $$PWD/src/hb-unicode.hh
 

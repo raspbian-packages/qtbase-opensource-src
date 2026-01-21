@@ -551,7 +551,15 @@ static int keysymToQtKey_internal(xkb_keysym_t keysym, Qt::KeyboardModifiers mod
         // numeric keypad keys
         qtKey = Qt::Key_0 + (keysym - XKB_KEY_KP_0);
     } else if (QXkbCommon::isLatin1(keysym)) {
+        // Upper-case first, since Qt::Keys are defined in terms of their
+        // upper-case versions.
         qtKey = QXkbCommon::qxkbcommon_xkb_keysym_to_upper(keysym);
+        // Upper-casing a Latin1 character might move it out of Latin1 range,
+        // for example U+00B5 MICRO SIGN, which upper-case equivalent is
+        // U+039C GREEK CAPITAL LETTER MU. If that's the case, then map the
+        // original lower-case character.
+        if (!QXkbCommon::isLatin1(qtKey))
+            qtKey = keysym;
     } else {
         // check if we have a direct mapping
         xkb2qt_t searchKey{keysym, 0};
@@ -758,6 +766,8 @@ xkb_keysym_t QXkbCommon::lookupLatinKeysym(xkb_state *state, xkb_keycode_t keyco
 {
     xkb_layout_index_t layout;
     xkb_keysym_t sym = XKB_KEY_NoSymbol;
+    if (!state)
+        return sym;
     xkb_keymap *keymap = xkb_state_get_keymap(state);
     const xkb_layout_index_t layoutCount = xkb_keymap_num_layouts_for_key(keymap, keycode);
     const xkb_layout_index_t currentLayout = xkb_state_key_get_layout(state, keycode);

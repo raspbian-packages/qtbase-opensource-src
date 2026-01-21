@@ -1,23 +1,7 @@
-# SymbolsHelper-Confirmed: 5.15.15 alpha amd64 i386 loong64 powerpc sh4
+# SymbolsHelper-Confirmed: 5.15.17 amd64 arm64 armel armhf hppa hurd-amd64 i386 loong64 mips64el ppc64 ppc64el s390x sparc64
 libQt5Network.so.5 libqt5network5t64 #MINVER#
-| libqt5network5t64 #MINVER#, qtbase-abi-5-15-15
+| libqt5network5t64 #MINVER#, qtbase-abi-5-15-17
 * Build-Depends-Package: qtbase5-dev
- Qt_5.0@Qt_5.0 5.6.0~beta
- Qt_5.10@Qt_5.10 5.10.0
- Qt_5.11@Qt_5.11 5.11.0~rc1
- Qt_5.12@Qt_5.12 5.12.0
- Qt_5.13@Qt_5.13 5.14.1
- Qt_5.14@Qt_5.14 5.14.1
- Qt_5.15@Qt_5.15 5.15.1
- Qt_5.1@Qt_5.1 5.6.0~beta
- Qt_5.2@Qt_5.2 5.6.0~beta
- Qt_5.3@Qt_5.3 5.6.0~beta
- Qt_5.4@Qt_5.4 5.6.0~beta
- Qt_5.5@Qt_5.5 5.6.0~beta
- Qt_5.6@Qt_5.6 5.6.0~beta
- Qt_5.7@Qt_5.7 5.7.0
- Qt_5.8@Qt_5.8 5.8.0
- Qt_5.9@Qt_5.9 5.9.0~beta
  Qt_5@Qt_5 5.6.0~beta
  (symver)Qt_5_PRIVATE_API 0 1
  _Z19qt_qhostinfo_lookupRK7QStringP7QObjectPKcPbPi@Qt_5 5.0.2
@@ -1343,12 +1327,17 @@ libQt5Network.so.5 libqt5network5t64 #MINVER#
  (optional=templinst|subst)_ZNSt5dequeIjSaIjEE17_M_reallocate_mapE{size_t}b@Qt_5 5.8.0
  (optional=templinst)_ZNSt5dequeIjSaIjEE8_M_eraseESt15_Deque_iteratorIjRjPjE@Qt_5 5.8.0
  (optional=templinst)_ZNSt5dequeIjSaIjEE8_M_eraseESt15_Deque_iteratorIjRjPjES5_@Qt_5 5.8.0
- (optional=templinst)_ZNSt6vectorIN24QNetworkReplyImplPrivate21InternalNotificationsESaIS1_EE17_M_realloc_appendIJRKS1_EEEvDpOT_@Qt_5 5.15.13
- (optional=templinst)_ZNSt6vectorIN24QNetworkReplyImplPrivate21InternalNotificationsESaIS1_EE17_M_realloc_appendIJS1_EEEvDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorIN24QNetworkReplyImplPrivate21InternalNotificationsESaIS1_EE17_M_realloc_insertIJRKS1_EEEvN9__gnu_cxx17__normal_iteratorIPS1_S3_EEDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorIN24QNetworkReplyImplPrivate21InternalNotificationsESaIS1_EE17_M_realloc_insertIJS1_EEEvN9__gnu_cxx17__normal_iteratorIPS1_S3_EEDpOT_@Qt_5 5.15.13
  (optional=templinst|subst)_ZNSt6vectorIhSaIhEE17_M_default_appendE{size_t}@Qt_5 5.8.0
- (optional=templinst)_ZNSt6vectorIhSaIhEE17_M_realloc_appendIJhEEEvDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorIhSaIhEE17_M_realloc_insertIJRKhEEEvN9__gnu_cxx17__normal_iteratorIPhS1_EEDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorIhSaIhEE17_M_realloc_insertIJhEEEvN9__gnu_cxx17__normal_iteratorIPhS1_EEDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorIiSaIiEE17_M_realloc_insertIJRKiEEEvN9__gnu_cxx17__normal_iteratorIPiS1_EEDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorIjSaIjEE17_M_realloc_insertIJRKjEEEvN9__gnu_cxx17__normal_iteratorIPjS1_EEDpOT_@Qt_5 5.15.13
  (optional=templinst)_ZSt14__copy_move_a1ILb1EPjjEN9__gnu_cxx11__enable_ifIXsrSt23__is_random_access_iterIT0_NSt15iterator_traitsIS4_E17iterator_categoryEE7__valueESt15_Deque_iteratorIT1_RSA_PSA_EE6__typeES4_S4_SD_@Qt_5 5.14.2
+ (optional=templinst|arch=m68k)_ZSt15__copy_move_ditILb1EjRjPjSt15_Deque_iteratorIjS0_S1_EET3_S2_IT0_T1_T2_ES8_S4_@Qt_5 5.15.13
  (optional=templinst)_ZSt23__copy_move_backward_a1ILb1EPjjEN9__gnu_cxx11__enable_ifIXsrSt23__is_random_access_iterIT0_NSt15iterator_traitsIS4_E17iterator_categoryEE7__valueESt15_Deque_iteratorIT1_RSA_PSA_EE6__typeES4_S4_SD_@Qt_5 5.14.2
+ (optional=templinst|arch=m68k)_ZSt24__copy_move_backward_ditILb1EjRjPjSt15_Deque_iteratorIjS0_S1_EET3_S2_IT0_T1_T2_ES8_S4_@Qt_5 5.15.13
  _ZTI10QDnsLookup@Qt_5 5.0.2
  _ZTI10QSslSocket@Qt_5 5.0.2
  _ZTI10QTcpServer@Qt_5 5.0.2

@@ -1,24 +1,8 @@
-# SymbolsHelper-Confirmed: 5.15.15 alpha amd64 hurd-amd64 i386 loong64 powerpc sh4
+# SymbolsHelper-Confirmed: 5.15.17 amd64 riscv64 sh4
 libQt5Gui.so.5 libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#
-| libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#, qtbase-abi-5-15-15
+| libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#, qtbase-abi-5-15-17
 | libqt5gui5t64 #MINVER#
 * Build-Depends-Package: qtbase5-dev
- Qt_5.0@Qt_5.0 5.6.0~beta
- Qt_5.10@Qt_5.10 5.10.0
- Qt_5.11@Qt_5.11 5.11.0~rc1
- Qt_5.12@Qt_5.12 5.12.0
- Qt_5.13@Qt_5.13 5.14.1
- Qt_5.14@Qt_5.14 5.14.1
- Qt_5.15@Qt_5.15 5.15.1
- Qt_5.1@Qt_5.1 5.6.0~beta
- Qt_5.2@Qt_5.2 5.6.0~beta
- Qt_5.3@Qt_5.3 5.6.0~beta
- Qt_5.4@Qt_5.4 5.6.0~beta
- Qt_5.5@Qt_5.5 5.6.0~beta
- Qt_5.6@Qt_5.6 5.6.0~beta
- Qt_5.7@Qt_5.7 5.7.0
- Qt_5.8@Qt_5.8 5.8.0
- Qt_5.9@Qt_5.9 5.9.0~beta
  Qt_5@Qt_5 5.6.0~beta
  (symver)Qt_5_PRIVATE_API 0 1
  _Z11qDrawBorderP8QPainterRK5QRectPKN4QCss11BorderStyleEPKiPK6QBrushPK5QSize@Qt_5 5.0.2
@@ -1562,7 +1546,7 @@ libQt5Gui.so.5 libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#
  _ZN16QDoubleValidatorD0Ev@Qt_5 5.0.2
  _ZN16QDoubleValidatorD1Ev@Qt_5 5.0.2
  _ZN16QDoubleValidatorD2Ev@Qt_5 5.0.2
- (optional=inline|arch=!hppa !ia64 !powerpc !ppc64 !s390x !sparc64)_ZN16QOpenGLFunctions17glBindFramebufferEjj@Qt_5 5.15.2
+ (optional=inline|arch=!hppa !ia64 !powerpc !ppc64 !riscv64 !s390x !sparc64)_ZN16QOpenGLFunctions17glBindFramebufferEjj@Qt_5 5.15.2
  _ZN16QOpenGLFunctions25initializeOpenGLFunctionsEv@Qt_5 5.0.2
  _ZN16QOpenGLFunctionsC1EP14QOpenGLContext@Qt_5 5.0.2
  _ZN16QOpenGLFunctionsC1Ev@Qt_5 5.0.2
@@ -5042,8 +5026,10 @@ libQt5Gui.so.5 libqt5gui5t64 #MINVER# | libqt5gui5-gles #MINVER#
  _ZNK9QVector4D16toVector3DAffineEv@Qt_5 5.0.2
  _ZNK9QVector4D6lengthEv@Qt_5 5.0.2
  _ZNK9QVector4Dcv8QVariantEv@Qt_5 5.0.2
+ (optional=templinst|arch=m68k|subst)_ZNSt6vectorIiSaIiEE14_M_fill_assignE{size_t}RKi@Qt_5 5.15.13
  (optional=templinst|subst)_ZNSt6vectorIiSaIiEE14_M_fill_insertEN9__gnu_cxx17__normal_iteratorIPiS1_EE{size_t}RKi@Qt_5 5.15.3
- (optional=templinst)_ZNSt6vectorIiSaIiEE17_M_realloc_appendIJRKiEEEvDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=!m68k)_ZNSt6vectorIiSaIiEE17_M_realloc_appendIJRKiEEEvDpOT_@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorIiSaIiEE17_M_realloc_insertIJRKiEEEvN9__gnu_cxx17__normal_iteratorIPiS1_EEDpOT_@Qt_5 5.15.13
  _ZTI10QClipboard@Qt_5 5.0.2
  _ZTI10QDropEvent@Qt_5 5.0.2
  _ZTI10QHelpEvent@Qt_5 5.0.2

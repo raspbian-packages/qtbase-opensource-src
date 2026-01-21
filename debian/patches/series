@@ -9,24 +9,22 @@ sql_odbc_more_unicode_checks.diff
 a11y_root.diff
 dont_use_O_PATH.diff
 fix_qdbusmacros_h.diff
-libxkbcommon_1.6.0.diff
 loongarch.diff
-CVE-2023-51714.diff
-CVE-2024-25580.diff
 CVE-2024-39936.diff
-gcc_14.diff
 revert_statusnotifierhost_checking.diff
 dont_fallback_to_x11_tray_on_non_x11.diff
 check_dbus_tray_availability_every_time.diff
 a11y_null_checks.diff
 CVE-2025-5455.diff
+qreadwritelock_data_race.diff
+qreadwritelock_data_race_2.diff
+dont_use_physical_dpi.diff
 
 # Debian specific.
 no_htmlinfo_example.diff
 remove_privacy_breaches.diff
 link_fbclient.diff
 gnukfreebsd_linker_warnings.diff
-armv4.diff
 qdoc_default_incdirs.diff
 path_max.diff
 qstorageinfo_linux.diff

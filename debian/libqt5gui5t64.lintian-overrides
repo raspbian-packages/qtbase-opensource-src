@@ -24,4 +24,3 @@ libqt5gui5t64: ships-undeclared-shared-library libQt5XcbQpa 5 for usr/lib/*/libQ
 libqt5gui5t64: shared-library-symbols-not-tracked libQt5EglFSDeviceIntegration 5 for usr/lib/*/libQt5EglFSDeviceIntegration.so.5.*
 libqt5gui5t64: shared-library-symbols-not-tracked libQt5EglFsKmsSupport 5 for usr/lib/*/libQt5EglFsKmsSupport.so.5.*
 libqt5gui5t64: shared-library-symbols-not-tracked libQt5XcbQpa 5 for usr/lib/*/libQt5XcbQpa.so.5.*
-libqt5gui5t64: package-name-doesnt-match-sonames libQt5EglFSDeviceIntegration5 libQt5EglFsKmsSupport5 libQt5Gui5 libQt5XcbQpa5

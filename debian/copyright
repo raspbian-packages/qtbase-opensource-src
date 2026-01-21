@@ -17,6 +17,7 @@ Files-Excluded: bin/licheck*
                 tests/manual/network_stresstest/qtest
                 tests/testserver/apache2/testdata/www/htdocs/protected/rfc3252.txt
                 tests/testserver/apache2/testdata/www/htdocs/rfcs/rfc2616.html
+                util/update_public_suffix_list.sh
 # Removed non-free files:
 # * RFCs (see QTBUG-30544 and QTBUG-30545)
 # * htmlinfo example which contains non-free websites snapshots
@@ -24,6 +25,7 @@ Files-Excluded: bin/licheck*
 # * src/3rdparty/iaccessible2 — not preferred form of modification
 # * src/3rdparty/sqlite — not preferred form of modification
 # * src/3rdparty/wintab — license does not permit modification
+# * util/update_public_suffix_list.sh — commercial-only license (QTBUG-133229)
 
 # Manual rules for The Qt Company copyrights
 
@@ -67,7 +69,7 @@ Copyright: 2007-2013 Fathi Boudra <fabo@debian.org>
            2005-2007 Brian Nelson <pyro@debian.org>
            2012-2013 Zoltán Balogh <zoltan.balogh@canonical.com>
            2012-2013 Timo Jyrinki <timo.jyrinki@canonical.com>
-           2013-2024 Dmitry Shachnev <mitya57@debian.org>
+           2013-2025 Dmitry Shachnev <mitya57@debian.org>
            2018 Simon Quigley <tsimonq2@ubuntu.com>
 License: LGPL-3 or GPL-2+
 
@@ -2077,7 +2079,7 @@ Copyright: 1998-2005 David Turner
 License: Harfbuzz
 
 Files: src/3rdparty/harfbuzz-ng/*
-Copyright: 2010-2022 Google, Inc.
+Copyright: 2010-2024 Google, Inc.
            2015-2020 Ebrahim Byagowi
            2019-2020 Facebook, Inc.
            2012-2015 Mozilla Foundation
@@ -2097,7 +2099,14 @@ Copyright: 2010-2022 Google, Inc.
            2018-2021 Khaled Hosny
            2018-2020 Adobe, Inc
            2013-2015 Alexei Podtelezhnikov
+           2022 Red Hat, Inc.
 License: Harfbuzz
+
+Files: src/3rdparty/harfbuzz-ng/src/hb-algs.hh
+Copyright: 2017 Google, Inc.
+           2019 Facebook, Inc.
+           2012 Zilong Tan <eric.zltan@gmail.com>
+License: Harfbuzz and Expat
 
 License: Harfbuzz
  Permission is hereby granted, without written agreement and without
@@ -2185,7 +2194,7 @@ License: ICC
  profile.
 
 Files: src/3rdparty/libjpeg/src/*
-Copyright: 2009-2023 D. R. Commander
+Copyright: 2009-2024 D. R. Commander
            2011-2016 Siarhei Siamashka
            2015-2022 Matthieu Darbois
            2015 Intel Corporation
@@ -2200,12 +2209,13 @@ Copyright: 2009-2023 D. R. Commander
            2018 Matthias Räncker
            2019-2020 Arm Limited
            2021 Alex Richardson
+           2014 Olle Liljenzin
 License: libjpeg and BSD-3-clause and Zlib
 
 Files: src/3rdparty/libpng/*.c
        src/3rdparty/libpng/*.h
-Copyright: 1995-2023 The PNG Reference Library Authors.
-           2018-2023 Cosmin Truta
+Copyright: 1995-2024 The PNG Reference Library Authors
+           2018-2024 Cosmin Truta
            2000-2018 Glenn Randers-Pehrson
            1996-1997 Andreas Dilger
            1995-1996 Guy Eric Schalnat, Group 42, Inc.
@@ -2245,12 +2255,12 @@ Copyright: 2005 The Android Open Source Project
 License: Apache-2.0
 
 Files: src/3rdparty/pcre2/src/*
-Copyright: 1997-2022 University of Cambridge
-           2009-2022 Zoltan Herczeg
+Copyright: 1997-2024 University of Cambridge
+           2009-2024 Zoltan Herczeg
 License: BSD-3-clause
 
 Files: src/3rdparty/pcre2/src/sljit/*
-Copyright: 2009-2022 Zoltan Herczeg <hzmester@freemail.hu>
+Copyright: 2009-2024 Zoltan Herczeg <hzmester@freemail.hu>
 License: BSD-2-clause
 
 Files: src/3rdparty/pixman/*
@@ -2308,12 +2318,12 @@ License: Bitstream
 
 Files: src/3rdparty/freetype/src/gzip/*
        src/3rdparty/zlib/src/*
-Copyright: 1995-2022 Jean-loup Gailly
-           1995-2022 Mark Adler
+Copyright: 1995-2024 Jean-loup Gailly
+           1995-2024 Mark Adler
 License: Zlib
 
 Files: src/3rdparty/md4c/*
-Copyright: 2016-2020 Martin Mitáš
+Copyright: 2016-2024 Martin Mitáš
 License: Expat
 
 Files: src/3rdparty/VulkanMemoryAllocator/*

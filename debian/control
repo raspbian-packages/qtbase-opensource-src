@@ -11,7 +11,7 @@ Build-Depends: debhelper-compat (= 13),
                default-libmysqlclient-dev,
                dh-exec,
                dpkg-dev (>= 1.22.5),
-               firebird-dev [linux-any],
+               firebird-dev [!hurd-any !m68k !x32],
                freetds-dev,
                libasound2-dev [linux-any],
                libatspi2.0-dev,
@@ -78,7 +78,7 @@ Build-Conflicts:
 Build-Depends-Indep: qdoc-qt5 (>= 5.15~) <!nodoc>,
                      qhelpgenerator-qt5 (>= 5.15~) <!nodoc>,
                      qtattributionsscanner-qt5 <!nodoc>
-Standards-Version: 4.7.0
+Standards-Version: 4.7.2
 Homepage: https://www.qt.io/developers/
 Vcs-Git: https://salsa.debian.org/qt-kde-team/qt/qtbase.git
 Vcs-Browser: https://salsa.debian.org/qt-kde-team/qt/qtbase
@@ -90,7 +90,7 @@ Architecture: any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 X-Time64-Compat: libqt5core5a
-Provides: qtbase-abi-5-15-15, ${t64:Provides}
+Provides: qtbase-abi-5-15-17, ${t64:Provides}
 Depends: shared-mime-info, ${misc:Depends}, ${shlibs:Depends}
 Recommends: qttranslations5-l10n
 Suggests: libthai0
@@ -246,7 +246,7 @@ Description: Qt 5 FreeTDS database driver
  MS SQL or Sybase SQL server.
 
 Package: libqt5sql5-ibase
-Architecture: linux-any
+Architecture: amd64 arm64 armel armhf i386 mips64el ppc64el riscv64 s390x alpha hppa loong64 powerpc ppc64 sh4 sparc64
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${misc:Depends}, ${shlibs:Depends}
@@ -380,7 +380,6 @@ Suggests: default-libmysqlclient-dev,
           libpq-dev,
           libsqlite3-dev,
           unixodbc-dev
-Breaks: qt5-default (<< 5.15.1+dfsg-2~)
 Conflicts: qtbase5-gles-dev
 Description: Qt 5 base development files
  Qt is a cross-platform C++ application framework. Qt's primary feature
@@ -480,7 +479,6 @@ Section: devel
 Depends: qt5-qmake-bin (= ${binary:Version}),
          qtchooser (>= 55-gc9562a1-1~),
          ${misc:Depends}
-Replaces: qt5-qmake-bin (<< 5.11.2+dfsg-3~)
 Description: Qt 5 qmake Makefile generator tool
  Qt is a cross-platform C++ application framework. Qt's primary feature
  is its rich set of widgets that provide standard GUI functionality.

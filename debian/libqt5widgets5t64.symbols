@@ -1,23 +1,7 @@
-# SymbolsHelper-Confirmed: 5.15.15 alpha amd64 i386 loong64 powerpc sh4
+# SymbolsHelper-Confirmed: 5.15.17 amd64 arm64 armel armhf hppa hurd-amd64 i386 loong64 mips64el ppc64 ppc64el s390x sparc64
 libQt5Widgets.so.5 libqt5widgets5t64 #MINVER#
-| libqt5widgets5t64 #MINVER#, qtbase-abi-5-15-15
+| libqt5widgets5t64 #MINVER#, qtbase-abi-5-15-17
 * Build-Depends-Package: qtbase5-dev
- Qt_5.0@Qt_5.0 5.6.0~beta
- Qt_5.10@Qt_5.10 5.10.0
- Qt_5.11@Qt_5.11 5.11.0~rc1
- Qt_5.12@Qt_5.12 5.12.0
- Qt_5.13@Qt_5.13 5.14.1
- Qt_5.14@Qt_5.14 5.14.1
- Qt_5.15@Qt_5.15 5.15.1
- Qt_5.1@Qt_5.1 5.6.0~beta
- Qt_5.2@Qt_5.2 5.6.0~beta
- Qt_5.3@Qt_5.3 5.6.0~beta
- Qt_5.4@Qt_5.4 5.6.0~beta
- Qt_5.5@Qt_5.5 5.6.0~beta
- Qt_5.6@Qt_5.6 5.6.0~beta
- Qt_5.7@Qt_5.7 5.7.0
- Qt_5.8@Qt_5.8 5.8.0
- Qt_5.9@Qt_5.9 5.9.0~beta
  Qt_5@Qt_5 5.6.0~beta
  (symver)Qt_5_PRIVATE_API 0 1
  _Z11qFadeEffectP7QWidgeti@Qt_5 5.0.2
@@ -6808,6 +6792,12 @@ libQt5Widgets.so.5 libqt5widgets5t64 #MINVER#
  _ZNK9QUndoView5groupEv@Qt_5 5.0.2
  _ZNK9QUndoView5stackEv@Qt_5 5.0.2
  _ZNK9QUndoView9cleanIconEv@Qt_5 5.0.2
+ (optional=templinst)_ZNSt10_HashtableIP15QTreeWidgetItemS1_NSt3pmr21polymorphic_allocatorIS1_EENSt8__detail9_IdentityESt8equal_toIS1_ESt4hashIS1_ENS5_18_Mod_range_hashingENS5_20_Default_ranged_hashENS5_20_Prime_rehash_policyENS5_17_Hashtable_traitsILb0ELb1ELb1EEEE15_M_emplace_uniqIJRKS1_EEESt4pairINS5_14_Node_iteratorIS1_Lb1ELb0EEEbEDpOT_@Qt_5 5.15.17
+ (optional=templinst|arch=m68k)_ZNSt10_HashtableIP15QTreeWidgetItemS1_NSt3pmr21polymorphic_allocatorIS1_EENSt8__detail9_IdentityESt8equal_toIS1_ESt4hashIS1_ENS5_18_Mod_range_hashingENS5_20_Default_ranged_hashENS5_20_Prime_rehash_policyENS5_17_Hashtable_traitsILb0ELb1ELb1EEEED1Ev@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt10_HashtableIP15QTreeWidgetItemS1_NSt3pmr21polymorphic_allocatorIS1_EENSt8__detail9_IdentityESt8equal_toIS1_ESt4hashIS1_ENS5_18_Mod_range_hashingENS5_20_Default_ranged_hashENS5_20_Prime_rehash_policyENS5_17_Hashtable_traitsILb0ELb1ELb1EEEED2Ev@Qt_5 5.15.13
+ (optional=templinst|arch=m68k|subst)_ZNSt17_Temporary_bufferIP5QRectS0_EC1ES1_{ssize_t}@Qt_5 5.15.13
+ (optional=templinst|arch=m68k|subst)_ZNSt17_Temporary_bufferIP5QRectS0_EC2ES1_{ssize_t}@Qt_5 5.15.13
+ (optional=templinst|arch=m68k)_ZNSt6vectorISt10unique_ptrI20QPlatformTextureListSt14default_deleteIS1_EESaIS4_EE17_M_realloc_insertIJS4_EEEvN9__gnu_cxx17__normal_iteratorIPS4_S6_EEDpOT_@Qt_5 5.15.13
  (optional=templinst|subst)_ZNSt8__detail16_Hashtable_allocINSt3pmr21polymorphic_allocatorINS_10_Hash_nodeIP15QTreeWidgetItemLb0EEEEEE19_M_allocate_bucketsE{size_t}@Qt_5 5.15.6
  _ZTI10QBoxLayout@Qt_5 5.0.2
  _ZTI10QCompleter@Qt_5 5.0.2
