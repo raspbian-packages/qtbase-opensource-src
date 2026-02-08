@@ -19,6 +19,7 @@ CVE-2025-5455.diff
 qreadwritelock_data_race.diff
 qreadwritelock_data_race_2.diff
 dont_use_physical_dpi.diff
+revert_simplify_locking.diff
 
 # Debian specific.
 no_htmlinfo_example.diff

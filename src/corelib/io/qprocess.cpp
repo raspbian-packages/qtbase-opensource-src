@@ -202,7 +202,6 @@ void QProcessEnvironmentPrivate::insert(const QProcessEnvironmentPrivate &other)
         vars.insert(it.key(), it.value());
 
 #ifdef Q_OS_UNIX
-    const OrderedNameMapMutexLocker locker(this, &other);
     auto nit = other.nameMap.constBegin();
     const auto nend = other.nameMap.constEnd();
     for ( ; nit != nend; ++nit)
@@ -276,6 +275,7 @@ bool QProcessEnvironment::operator==(const QProcessEnvironment &other) const
         return true;
     if (d) {
         if (other.d) {
+            QProcessEnvironmentPrivate::OrderedMutexLocker locker(d, other.d);
             return d->vars == other.d->vars;
         } else {
             return isEmpty();
@@ -322,6 +322,7 @@ bool QProcessEnvironment::contains(const QString &name) const
 {
     if (!d)
         return false;
+    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->vars.contains(d->prepareName(name));
 }
 
@@ -372,6 +373,7 @@ QString QProcessEnvironment::value(const QString &name, const QString &defaultVa
     if (!d)
         return defaultValue;
 
+    QProcessEnvironmentPrivate::MutexLocker locker(d);
     const auto it = d->vars.constFind(d->prepareName(name));
     if (it == d->vars.constEnd())
         return defaultValue;
@@ -396,6 +398,7 @@ QStringList QProcessEnvironment::toStringList() const
 {
     if (!d)
         return QStringList();
+    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->toList();
 }
 
@@ -409,6 +412,7 @@ QStringList QProcessEnvironment::keys() const
 {
     if (!d)
         return QStringList();
+    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->keys();
 }
 
@@ -425,6 +429,7 @@ void QProcessEnvironment::insert(const QProcessEnvironment &e)
         return;
 
     // our re-impl of detach() detaches from null
+    QProcessEnvironmentPrivate::MutexLocker locker(e.d);
     d->insert(*e.d);
 }
 
