@@ -1,0 +1,19 @@
+Description: QFutureInterface: fix build with GCC14/C++20: template-id not allowed
+ When declaring a constructor, you must use the injected name, not a
+ template.
+ .
+ qfutureinterface.h:472:37: error: template-id not allowed for constructor in C++20 [-Werror=template-id-cdtor]
+Origin: upstream, https://code.qt.io/cgit/qt/qtbase.git/commit/?id=111c08d0eaa13465
+Last-Update: 2024-07-24
+
+--- a/src/corelib/thread/qfutureinterface.h
++++ b/src/corelib/thread/qfutureinterface.h
+@@ -281,7 +281,7 @@ template <>
+ class QFutureInterface<void> : public QFutureInterfaceBase
+ {
+ public:
+-    explicit QFutureInterface<void>(State initialState = NoState)
++    explicit QFutureInterface(State initialState = NoState)
+         : QFutureInterfaceBase(initialState)
+     { }
+ 

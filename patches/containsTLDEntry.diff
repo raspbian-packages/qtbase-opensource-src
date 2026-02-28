@@ -1,0 +1,20 @@
+Description: fix containsTLDEntry crash when there are three or more chunks
+ tldChunks[N] contains total size of chunks from 0 to N, not just the Nth one.
+Author: Dmitry Shachnev <mitya57@debian.org>
+Forwarded: no
+Bug-Debian: https://bugs.debian.org/1095423
+Last-Update: 2025-02-08
+
+--- a/src/corelib/io/qtldurl.cpp
++++ b/src/corelib/io/qtldurl.cpp
+@@ -86,8 +86,8 @@ static bool containsTLDEntry(QStringView
+ 
+     // Find which chunk contains the tldGroupOffset
+     while (tldGroupOffset >= tldChunks[chunk]) {
+-        chunkIndex -= tldChunks[chunk];
+-        offset += tldChunks[chunk];
++        chunkIndex = tldIndices[index] - tldChunks[chunk];
++        offset = tldChunks[chunk];
+         chunk++;
+ 
+         // We can not go above the number of chunks we have, since all our
