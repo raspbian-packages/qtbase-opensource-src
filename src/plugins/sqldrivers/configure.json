@@ -67,6 +67,7 @@
             },
             "headers": "mysql.h",
             "sources": [
+                { "type": "pkgConfig", "args": "mysqlclient" },
                 { "type": "mysqlConfig", "query": "--libs_r", "cleanlibs": true },
                 { "type": "mysqlConfig", "query": "--libs", "cleanlibs": true },
                 { "type": "mysqlConfig", "query": "--libs_r", "cleanlibs": false },
