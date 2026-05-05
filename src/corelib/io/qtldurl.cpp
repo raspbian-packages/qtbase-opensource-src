@@ -86,8 +86,8 @@ static bool containsTLDEntry(QStringView entry, TLDMatchType match)
 
     // Find which chunk contains the tldGroupOffset
     while (tldGroupOffset >= tldChunks[chunk]) {
-        chunkIndex -= tldChunks[chunk];
-        offset += tldChunks[chunk];
+        chunkIndex = tldIndices[index] - tldChunks[chunk];
+        offset = tldChunks[chunk];
         chunk++;
 
         // We can not go above the number of chunks we have, since all our
