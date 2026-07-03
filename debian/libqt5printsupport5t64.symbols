@@ -1,6 +1,6 @@
 # SymbolsHelper-Confirmed: 5.15.17 amd64 arm64 armel armhf hppa hurd-amd64 hurd-i386 i386 loong64 mips64el powerpc ppc64 ppc64el s390x sh4 sparc64 x32
 libQt5PrintSupport.so.5 libqt5printsupport5t64 #MINVER#
-| libqt5printsupport5t64 #MINVER#, qtbase-abi-5-15-17
+| libqt5printsupport5t64 #MINVER#, qtbase-abi-5-15-19
 * Build-Depends-Package: qtbase5-dev
  Qt_5@Qt_5 5.6.0~beta
  (symver)Qt_5_PRIVATE_API 0 1

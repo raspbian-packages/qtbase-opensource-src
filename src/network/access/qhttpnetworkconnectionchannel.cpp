@@ -1329,11 +1329,9 @@ void QHttpNetworkConnectionChannel::_q_encrypted()
     }
 }
 
-
 void QHttpNetworkConnectionChannel::checkAndResumeCommunication()
 {
-    Q_ASSERT(connection->connectionType() == QHttpNetworkConnection::ConnectionTypeHTTP2
-             || connection->connectionType() == QHttpNetworkConnection::ConnectionTypeHTTP2Direct);
+    Q_ASSERT(connection->connectionType() > QHttpNetworkConnection::ConnectionTypeHTTP);
 
     // Because HTTP/2 requires that we send a SETTINGS frame as the first thing we do, and respond
     // to a SETTINGS frame with an ACK, we need to delay any handling until we can ensure that any

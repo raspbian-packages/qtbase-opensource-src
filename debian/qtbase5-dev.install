@@ -388,6 +388,7 @@ usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/QtNumeric
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/QtPlugin
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/QtPluginInstanceFunction
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/QtPluginMetaDataFunction
+usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/QtStdLibDetection
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qabstractanimation.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qabstracteventdispatcher.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qabstractitemmodel.h
@@ -545,6 +546,7 @@ usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qstack.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qstandardpaths.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qstate.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qstatemachine.h
+usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qstdlibdetection.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qstorageinfo.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qstring.h
 usr/include/${DEB_HOST_MULTIARCH}/qt5/QtCore/qstringalgorithms.h

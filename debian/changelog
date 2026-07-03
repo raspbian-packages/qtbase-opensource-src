@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.17+dfsg-8+rpi1) forky-staging; urgency=medium
+qtbase-opensource-src (5.15.19+dfsg-3+rpi1) forky-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -9,7 +9,61 @@ qtbase-opensource-src (5.15.17+dfsg-8+rpi1) forky-staging; urgency=medium
   [changes introduced in 5.15.13+dfsg-2+rpi1 by Peter Michael Green]
   * Add build-conflicts on libts-dev to avoid unwanted extra files.
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 28 May 2026 21:30:55 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Fri, 03 Jul 2026 08:15:50 +0000
+
+qtbase-opensource-src (5.15.19+dfsg-3) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Thu, 18 Jun 2026 14:20:31 +0300
+
+qtbase-opensource-src (5.15.19+dfsg-2) experimental; urgency=medium
+
+  * Replace default-libmysqlclient-dev with libmariadb-dev (closes:
+    #1137755).
+  * Update cross_build_mysql.diff to use mariadb.pc.
+  * Backport two upstream patches to fix build with OpenSSL 4
+    (closes: #1137599, LP: #2154840).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Wed, 10 Jun 2026 19:12:36 +0300
+
+qtbase-opensource-src (5.15.19+dfsg-1) experimental; urgency=medium
+
+  * Merge 5.15.17+dfsg-8 upload from unstable.
+  * New upstream release.
+  * Bump ABI version to qtbase-abi-5-15-19.
+  * Drop patches, included in the new release:
+    - fix_qdbusmacros_h.diff
+    - CVE-2025-5455.diff
+  * Refresh other patches.
+  * Update debian/copyright.
+  * Install the new qstdlibdetection.h header.
+  * Bump Standards-Version to 4.7.4, no changes needed.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Mon, 25 May 2026 00:45:59 +0300
+
+qtbase-opensource-src (5.15.18+dfsg-2) experimental; urgency=medium
+
+  * Merge 5.15.17+dfsg-7 upload from unstable.
+  * Stop excluding util/update_public_suffix_list.sh, it is GPL now.
+  * Drop ‘Priority: optional’, it became default in dpkg 1.22.12.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Fri, 30 Jan 2026 11:56:22 +0300
+
+qtbase-opensource-src (5.15.18+dfsg-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Drop patches, included in the new release:
+    - CVE-2024-39936.diff
+    - a11y_null_checks.diff
+    - containsTLDEntry.diff
+  * Refresh mime_globs.diff.
+  * Update debian/copyright.
+  * Bump ABI version to qtbase-abi-5-15-18.
+  * Update debian/watch to version 5.
+  * Bump Standards-Version to 4.7.3, no changes needed.
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Sat, 27 Dec 2025 22:27:48 +0300
 
 qtbase-opensource-src (5.15.17+dfsg-8) unstable; urgency=medium
 

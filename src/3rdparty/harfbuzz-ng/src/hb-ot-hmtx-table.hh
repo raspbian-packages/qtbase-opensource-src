@@ -30,6 +30,7 @@
 #include "hb-open-type.hh"
 #include "hb-ot-maxp-table.hh"
 #include "hb-ot-hhea-table.hh"
+#include "hb-ot-os2-table.hh"
 #include "hb-ot-var-hvar-table.hh"
 #include "hb-ot-var-mvar-table.hh"
 #include "hb-ot-metrics.hh"
@@ -181,7 +182,7 @@ struct hmtxvmtx
 	   hb_requires (hb_is_iterator (Iterator))>
   void serialize (hb_serialize_context_t *c,
 		  Iterator it,
-		  const hb_vector_t<hb_codepoint_pair_t> new_to_old_gid_list,
+		  hb_array_t<const hb_codepoint_pair_t> new_to_old_gid_list,
 		  unsigned num_long_metrics,
                   unsigned total_num_metrics)
   {
@@ -358,7 +359,13 @@ struct hmtxvmtx
 	return true;
       }
 
-      return _glyf_get_leading_bearing_with_var_unscaled (font, glyph, T::tableTag == HB_OT_TAG_vmtx, lsb);
+      // If there's no vmtx data, the phantom points from glyf table are not accurate,
+      // so we cannot take the next path.
+      bool is_vertical = T::tableTag == HB_OT_TAG_vmtx;
+      if (is_vertical && !has_data ())
+        return false;
+
+      return _glyf_get_leading_bearing_with_var_unscaled (font, glyph, is_vertical, lsb);
 #else
       return false;
 #endif
@@ -410,7 +417,8 @@ struct hmtxvmtx
 									font->coords, font->num_coords,
 									store_cache));
 
-      return _glyf_get_advance_with_var_unscaled (font, glyph, T::tableTag == HB_OT_TAG_vmtx);
+      unsigned glyf_advance = _glyf_get_advance_with_var_unscaled (font, glyph, T::tableTag == HB_OT_TAG_vmtx);
+      return glyf_advance ? glyf_advance : advance;
 #else
       return advance;
 #endif

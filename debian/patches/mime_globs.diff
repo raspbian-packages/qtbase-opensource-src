@@ -7,7 +7,7 @@ Last-Update: 2021-06-12
 
 --- a/src/corelib/mimetypes/qmimedatabase.cpp
 +++ b/src/corelib/mimetypes/qmimedatabase.cpp
-@@ -389,20 +389,23 @@ QMimeType QMimeDatabasePrivate::mimeType
+@@ -398,20 +398,23 @@ QMimeType QMimeDatabasePrivate::mimeType
          // Disambiguate conflicting extensions (if magic matching found something)
          if (candidateByData.isValid() && magicAccuracy > 0) {
              const QString sniffedMime = candidateByData.name();

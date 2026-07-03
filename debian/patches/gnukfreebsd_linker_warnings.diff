@@ -14,7 +14,7 @@ Last-Update: 2019-03-02
 
 --- a/src/corelib/configure.json
 +++ b/src/corelib/configure.json
-@@ -331,6 +331,7 @@
+@@ -337,6 +337,7 @@
              "label": "O_CLOEXEC",
              "type": "compile",
              "test": {
@@ -22,7 +22,7 @@ Last-Update: 2019-03-02
                  "head": "#define _GNU_SOURCE 1",
                  "include": [ "sys/types.h", "sys/socket.h", "fcntl.h", "unistd.h" ],
                  "main": [
-@@ -386,6 +387,7 @@
+@@ -392,6 +393,7 @@
                  "include": "sys/stat.h",
                  "main": "futimens(-1, 0);",
                  "qmake": [
@@ -30,7 +30,7 @@ Last-Update: 2019-03-02
                      "# Block futimens() on Apple platforms unless it's available on ALL",
                      "# deployment targets. This simplifies the logic at the call site",
                      "# dramatically, as it isn't strictly needed compared to futimes().",
-@@ -414,6 +416,7 @@
+@@ -420,6 +422,7 @@
              "label": "getentropy()",
              "type": "compile",
              "test": {

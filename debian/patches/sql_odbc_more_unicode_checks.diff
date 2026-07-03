@@ -13,7 +13,7 @@ Last-Update: 2024-05-25
 
 --- a/src/plugins/sqldrivers/odbc/qsql_odbc.cpp
 +++ b/src/plugins/sqldrivers/odbc/qsql_odbc.cpp
-@@ -2110,9 +2110,18 @@ void QODBCDriverPrivate::checkUnicode()
+@@ -2115,9 +2115,18 @@ void QODBCDriverPrivate::checkUnicode()
                                    hDbc,
                                    &hStmt);
  
