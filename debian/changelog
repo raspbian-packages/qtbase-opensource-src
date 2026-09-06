@@ -1,4 +1,4 @@
-qtbase-opensource-src (5.15.19+dfsg-3+rpi1) forky-staging; urgency=medium
+qtbase-opensource-src (5.15.19+dfsg-4+rpi1) forky-staging; urgency=medium
 
   [changes introduced in 5.6.1+dfsg-2+rpi1] by Peter Michael Green]
   * Partially fix clean target.
@@ -9,7 +9,14 @@ qtbase-opensource-src (5.15.19+dfsg-3+rpi1) forky-staging; urgency=medium
   [changes introduced in 5.15.13+dfsg-2+rpi1 by Peter Michael Green]
   * Add build-conflicts on libts-dev to avoid unwanted extra files.
 
- -- Raspbian forward porter <root@raspbian.org>  Fri, 03 Jul 2026 08:15:50 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sun, 06 Sep 2026 06:37:36 +0000
+
+qtbase-opensource-src (5.15.19+dfsg-4) unstable; urgency=medium
+
+  * Backport upstream patch to avoid read-past-buffer in
+    QTextCodec::codecForName() (CVE-2026-9499, closes: #1142691).
+
+ -- Dmitry Shachnev <mitya57@debian.org>  Wed, 29 Jul 2026 11:26:16 +0300
 
 qtbase-opensource-src (5.15.19+dfsg-3) unstable; urgency=medium
 
