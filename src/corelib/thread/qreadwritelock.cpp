@@ -258,7 +258,10 @@ bool QReadWriteLock::tryLockForRead(int timeout)
             d = val;
         }
         Q_ASSERT(!isUncontendedLocked(d));
-        // d is an actual pointer;
+        // d is an actual pointer; acquire its contents
+        d = d_ptr.loadAcquire();
+        if (!d || isUncontendedLocked(d))
+            continue;
 
         if (d->recursive)
             return d->recursiveLockForRead(timeout);
@@ -365,7 +368,10 @@ bool QReadWriteLock::tryLockForWrite(int timeout)
             d = val;
         }
         Q_ASSERT(!isUncontendedLocked(d));
-        // d is an actual pointer;
+        // d is an actual pointer; acquire its contents
+        d = d_ptr.loadAcquire();
+        if (!d || isUncontendedLocked(d))
+            continue;
 
         if (d->recursive)
             return d->recursiveLockForWrite(timeout);
