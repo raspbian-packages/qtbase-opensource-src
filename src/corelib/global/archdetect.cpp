@@ -59,6 +59,10 @@
 #  define ARCH_PROCESSOR "x86_64"
 #elif defined(Q_PROCESSOR_IA64)
 #  define ARCH_PROCESSOR "ia64"
+#elif defined(Q_PROCESSOR_LOONGARCH_32)
+#  define ARCH_PROCESSOR "loongarch32"
+#elif defined(Q_PROCESSOR_LOONGARCH_64)
+#  define ARCH_PROCESSOR "loongarch64"
 #elif defined(Q_PROCESSOR_MIPS_64)
 #  define ARCH_PROCESSOR "mips64"
 #elif defined(Q_PROCESSOR_MIPS)
