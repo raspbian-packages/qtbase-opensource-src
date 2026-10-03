@@ -20,6 +20,7 @@ balign.diff
 asn1_time_to_tm.diff
 openssl4.diff
 CVE-2026-9499.diff
+CVE-2026-19248.diff
 
 # Debian specific.
 no_htmlinfo_example.diff
